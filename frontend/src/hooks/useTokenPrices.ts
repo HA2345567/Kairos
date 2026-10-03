@@ -26,28 +26,52 @@ let lastFetchedMints = "";
 let lastFetchTime = 0;
 let inFlight: Promise<PriceMap> | null = null;
 
-async function fetchJupiterPrices(mints: string[]): Promise<PriceMap> {
-  const ids = mints.join(",");
-  const url = `${JUP_PRICE_URL}?ids=${ids}&showExtraInfo=true`;
-
-  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  if (!res.ok) throw new Error(`Jupiter Price API ${res.status}`);
-
-  const json = await res.json();
+async function fetchLiveTokenPrices(mints: string[]): Promise<PriceMap> {
   const out: PriceMap = {};
+  if (mints.length === 0) return out;
 
-  for (const mint of mints) {
-    const entry = json?.data?.[mint];
-    if (!entry) continue;
-
-    const priceUsd = parseFloat(entry.price ?? "0");
-    // extraInfo.last24hChange.price is the absolute $ change over 24h
-    const raw24hAbsolute: number = entry?.extraInfo?.last24hChange?.price ?? 0;
-    const change24h =
-      priceUsd > 0 ? (raw24hAbsolute / (priceUsd - raw24hAbsolute)) * 100 : 0;
-
-    out[mint] = { mint, priceUsd, change24h };
+  // DexScreener allows batches up to 30 addresses per request
+  const batchSize = 30;
+  const batches: string[][] = [];
+  for (let i = 0; i < mints.length; i += batchSize) {
+    batches.push(mints.slice(i, i + batchSize));
   }
+
+  await Promise.all(
+    batches.map(async (batch) => {
+      try {
+        const url = `https://api.dexscreener.com/latest/dex/tokens/${batch.join(",")}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+        if (!res.ok) return;
+
+        const data = await res.json();
+        const pairs = data?.pairs || [];
+
+        // Track highest liquidity pair for each token address
+        const bestPairByMint: Record<string, any> = {};
+        for (const pair of pairs) {
+          const addr = pair.baseToken?.address;
+          if (!addr) continue;
+
+          const currentLiq = pair.liquidity?.usd || 0;
+          if (!bestPairByMint[addr] || currentLiq > (bestPairByMint[addr].liquidity?.usd || 0)) {
+            bestPairByMint[addr] = pair;
+          }
+        }
+
+        for (const mint of batch) {
+          const pair = bestPairByMint[mint];
+          if (pair && pair.priceUsd) {
+            const priceUsd = parseFloat(pair.priceUsd) || 0;
+            const change24h = typeof pair.priceChange?.h24 === "number" ? pair.priceChange.h24 : 0;
+            out[mint] = { mint, priceUsd, change24h };
+          }
+        }
+      } catch (err: any) {
+        console.warn("[useTokenPrices] DexScreener batch error:", err?.message);
+      }
+    })
+  );
 
   return out;
 }
@@ -81,7 +105,7 @@ export function useTokenPrices(mints: string[]): {
 
     // Deduplicate concurrent requests
     if (!inFlight) {
-      inFlight = fetchJupiterPrices(mints).finally(() => {
+      inFlight = fetchLiveTokenPrices(mints).finally(() => {
         inFlight = null;
       });
     }

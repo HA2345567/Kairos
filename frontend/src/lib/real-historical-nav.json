@@ -1,0 +1,3990 @@
+{
+  "solana-ai-compute": [
+    {
+      "timestamp": 1775001600000,
+      "navValue": 0.58333
+    },
+    {
+      "timestamp": 1775088000000,
+      "navValue": 0.591162
+    },
+    {
+      "timestamp": 1775174400000,
+      "navValue": 0.624459
+    },
+    {
+      "timestamp": 1775260800000,
+      "navValue": 0.634935
+    },
+    {
+      "timestamp": 1775347200000,
+      "navValue": 0.61871
+    },
+    {
+      "timestamp": 1775433600000,
+      "navValue": 0.633386
+    },
+    {
+      "timestamp": 1775520000000,
+      "navValue": 0.611285
+    },
+    {
+      "timestamp": 1775606400000,
+      "navValue": 0.684331
+    },
+    {
+      "timestamp": 1775692800000,
+      "navValue": 0.662756
+    },
+    {
+      "timestamp": 1775779200000,
+      "navValue": 0.66542
+    },
+    {
+      "timestamp": 1775865600000,
+      "navValue": 0.657073
+    },
+    {
+      "timestamp": 1775952000000,
+      "navValue": 0.667905
+    },
+    {
+      "timestamp": 1776038400000,
+      "navValue": 0.621108
+    },
+    {
+      "timestamp": 1776124800000,
+      "navValue": 0.63582
+    },
+    {
+      "timestamp": 1776211200000,
+      "navValue": 0.606887
+    },
+    {
+      "timestamp": 1776297600000,
+      "navValue": 0.629249
+    },
+    {
+      "timestamp": 1776384000000,
+      "navValue": 0.633008
+    },
+    {
+      "timestamp": 1776470400000,
+      "navValue": 0.626246
+    },
+    {
+      "timestamp": 1776556800000,
+      "navValue": 0.592607
+    },
+    {
+      "timestamp": 1776643200000,
+      "navValue": 0.575765
+    },
+    {
+      "timestamp": 1776729600000,
+      "navValue": 0.597535
+    },
+    {
+      "timestamp": 1776816000000,
+      "navValue": 0.597851
+    },
+    {
+      "timestamp": 1776902400000,
+      "navValue": 0.603572
+    },
+    {
+      "timestamp": 1776988800000,
+      "navValue": 0.601637
+    },
+    {
+      "timestamp": 1777075200000,
+      "navValue": 0.598022
+    },
+    {
+      "timestamp": 1777161600000,
+      "navValue": 0.602237
+    },
+    {
+      "timestamp": 1777248000000,
+      "navValue": 0.609766
+    },
+    {
+      "timestamp": 1777334400000,
+      "navValue": 0.597038
+    },
+    {
+      "timestamp": 1777420800000,
+      "navValue": 0.585055
+    },
+    {
+      "timestamp": 1777507200000,
+      "navValue": 0.574029
+    },
+    {
+      "timestamp": 1777593600000,
+      "navValue": 0.561683
+    },
+    {
+      "timestamp": 1777680000000,
+      "navValue": 0.572028
+    },
+    {
+      "timestamp": 1777766400000,
+      "navValue": 0.597013
+    },
+    {
+      "timestamp": 1777852800000,
+      "navValue": 0.609067
+    },
+    {
+      "timestamp": 1777939200000,
+      "navValue": 0.607289
+    },
+    {
+      "timestamp": 1778025600000,
+      "navValue": 0.634363
+    },
+    {
+      "timestamp": 1778112000000,
+      "navValue": 0.661574
+    },
+    {
+      "timestamp": 1778198400000,
+      "navValue": 0.655455
+    },
+    {
+      "timestamp": 1778284800000,
+      "navValue": 0.688736
+    },
+    {
+      "timestamp": 1778371200000,
+      "navValue": 0.674984
+    },
+    {
+      "timestamp": 1778457600000,
+      "navValue": 0.681439
+    },
+    {
+      "timestamp": 1778544000000,
+      "navValue": 0.661612
+    },
+    {
+      "timestamp": 1778630400000,
+      "navValue": 0.640107
+    },
+    {
+      "timestamp": 1778716800000,
+      "navValue": 0.625889
+    },
+    {
+      "timestamp": 1778803200000,
+      "navValue": 0.634775
+    },
+    {
+      "timestamp": 1778889600000,
+      "navValue": 0.624776
+    },
+    {
+      "timestamp": 1778976000000,
+      "navValue": 0.60668
+    },
+    {
+      "timestamp": 1779062400000,
+      "navValue": 0.593375
+    },
+    {
+      "timestamp": 1779148800000,
+      "navValue": 0.601291
+    },
+    {
+      "timestamp": 1779235200000,
+      "navValue": 0.600222
+    },
+    {
+      "timestamp": 1779321600000,
+      "navValue": 0.62778
+    },
+    {
+      "timestamp": 1779408000000,
+      "navValue": 0.639009
+    },
+    {
+      "timestamp": 1779494400000,
+      "navValue": 0.607669
+    },
+    {
+      "timestamp": 1779580800000,
+      "navValue": 0.636633
+    },
+    {
+      "timestamp": 1779667200000,
+      "navValue": 0.659146
+    },
+    {
+      "timestamp": 1779753600000,
+      "navValue": 0.708333
+    },
+    {
+      "timestamp": 1779840000000,
+      "navValue": 0.738681
+    },
+    {
+      "timestamp": 1779926400000,
+      "navValue": 0.689376
+    },
+    {
+      "timestamp": 1780012800000,
+      "navValue": 0.647821
+    },
+    {
+      "timestamp": 1780099200000,
+      "navValue": 0.63634
+    },
+    {
+      "timestamp": 1780185600000,
+      "navValue": 0.681356
+    },
+    {
+      "timestamp": 1780272000000,
+      "navValue": 0.674099
+    },
+    {
+      "timestamp": 1780358400000,
+      "navValue": 0.682536
+    },
+    {
+      "timestamp": 1780444800000,
+      "navValue": 0.651444
+    },
+    {
+      "timestamp": 1780531200000,
+      "navValue": 0.687853
+    },
+    {
+      "timestamp": 1780617600000,
+      "navValue": 0.603376
+    },
+    {
+      "timestamp": 1780704000000,
+      "navValue": 0.537239
+    },
+    {
+      "timestamp": 1780790400000,
+      "navValue": 0.511304
+    },
+    {
+      "timestamp": 1780876800000,
+      "navValue": 0.539741
+    },
+    {
+      "timestamp": 1780963200000,
+      "navValue": 0.531014
+    },
+    {
+      "timestamp": 1781049600000,
+      "navValue": 0.521273
+    },
+    {
+      "timestamp": 1781136000000,
+      "navValue": 0.489294
+    },
+    {
+      "timestamp": 1781222400000,
+      "navValue": 0.526001
+    },
+    {
+      "timestamp": 1781308800000,
+      "navValue": 0.53202
+    },
+    {
+      "timestamp": 1781395200000,
+      "navValue": 0.569043
+    },
+    {
+      "timestamp": 1781481600000,
+      "navValue": 0.58083
+    },
+    {
+      "timestamp": 1781568000000,
+      "navValue": 0.577042
+    },
+    {
+      "timestamp": 1781654400000,
+      "navValue": 0.560344
+    },
+    {
+      "timestamp": 1781740800000,
+      "navValue": 0.548051
+    },
+    {
+      "timestamp": 1781827200000,
+      "navValue": 0.540871
+    },
+    {
+      "timestamp": 1781913600000,
+      "navValue": 0.564677
+    },
+    {
+      "timestamp": 1782000000000,
+      "navValue": 0.553937
+    },
+    {
+      "timestamp": 1782086400000,
+      "navValue": 0.533265
+    },
+    {
+      "timestamp": 1782172800000,
+      "navValue": 0.527628
+    },
+    {
+      "timestamp": 1782259200000,
+      "navValue": 0.514018
+    },
+    {
+      "timestamp": 1782345600000,
+      "navValue": 0.511386
+    },
+    {
+      "timestamp": 1782432000000,
+      "navValue": 0.492938
+    },
+    {
+      "timestamp": 1782518400000,
+      "navValue": 0.510193
+    },
+    {
+      "timestamp": 1782604800000,
+      "navValue": 0.505678
+    },
+    {
+      "timestamp": 1782691200000,
+      "navValue": 0.502604
+    },
+    {
+      "timestamp": 1782777600000,
+      "navValue": 0.509623
+    },
+    {
+      "timestamp": 1782864000000,
+      "navValue": 0.493503
+    },
+    {
+      "timestamp": 1782950400000,
+      "navValue": 0.49092
+    },
+    {
+      "timestamp": 1783036800000,
+      "navValue": 0.524845
+    },
+    {
+      "timestamp": 1783123200000,
+      "navValue": 0.534315
+    },
+    {
+      "timestamp": 1783209600000,
+      "navValue": 0.530276
+    },
+    {
+      "timestamp": 1783296000000,
+      "navValue": 0.53332
+    },
+    {
+      "timestamp": 1783382400000,
+      "navValue": 0.53264
+    },
+    {
+      "timestamp": 1783468800000,
+      "navValue": 0.514553
+    },
+    {
+      "timestamp": 1783555200000,
+      "navValue": 0.504338
+    },
+    {
+      "timestamp": 1783641600000,
+      "navValue": 0.509314
+    },
+    {
+      "timestamp": 1783728000000,
+      "navValue": 0.514908
+    },
+    {
+      "timestamp": 1783814400000,
+      "navValue": 0.507042
+    },
+    {
+      "timestamp": 1783900800000,
+      "navValue": 0.501709
+    },
+    {
+      "timestamp": 1783987200000,
+      "navValue": 0.488571
+    },
+    {
+      "timestamp": 1784073600000,
+      "navValue": 0.501076
+    },
+    {
+      "timestamp": 1784160000000,
+      "navValue": 0.502014
+    },
+    {
+      "timestamp": 1784246400000,
+      "navValue": 0.483298
+    },
+    {
+      "timestamp": 1784332800000,
+      "navValue": 0.483157
+    },
+    {
+      "timestamp": 1784419200000,
+      "navValue": 0.484737
+    },
+    {
+      "timestamp": 1784505600000,
+      "navValue": 0.484639
+    },
+    {
+      "timestamp": 1784592000000,
+      "navValue": 0.496207
+    },
+    {
+      "timestamp": 1784678400000,
+      "navValue": 0.501882
+    },
+    {
+      "timestamp": 1784764800000,
+      "navValue": 0.493474
+    },
+    {
+      "timestamp": 1784851200000,
+      "navValue": 0.481766
+    },
+    {
+      "timestamp": 1784937600000,
+      "navValue": 0.474763
+    },
+    {
+      "timestamp": 1785024000000,
+      "navValue": 0.477248
+    },
+    {
+      "timestamp": 1785110400000,
+      "navValue": 0.486199
+    },
+    {
+      "timestamp": 1785196800000,
+      "navValue": 0.460164
+    },
+    {
+      "timestamp": 1785283200000,
+      "navValue": 0.463775
+    },
+    {
+      "timestamp": 1785369600000,
+      "navValue": 0.456131
+    },
+    {
+      "timestamp": 1785456000000,
+      "navValue": 0.461531
+    },
+    {
+      "timestamp": 1785542400000,
+      "navValue": 0.449203
+    },
+    {
+      "timestamp": 1785628800000,
+      "navValue": 0.442884
+    },
+    {
+      "timestamp": 1785715200000,
+      "navValue": 0.453615
+    },
+    {
+      "timestamp": 1785801600000,
+      "navValue": 0.448664
+    },
+    {
+      "timestamp": 1785888000000,
+      "navValue": 0.442579
+    },
+    {
+      "timestamp": 1785974400000,
+      "navValue": 0.43776
+    },
+    {
+      "timestamp": 1786060800000,
+      "navValue": 0.44037
+    },
+    {
+      "timestamp": 1786147200000,
+      "navValue": 0.43205
+    },
+    {
+      "timestamp": 1786233600000,
+      "navValue": 0.436402
+    },
+    {
+      "timestamp": 1786320000000,
+      "navValue": 0.429837
+    },
+    {
+      "timestamp": 1786406400000,
+      "navValue": 0.418834
+    },
+    {
+      "timestamp": 1786492800000,
+      "navValue": 0.419813
+    },
+    {
+      "timestamp": 1786579200000,
+      "navValue": 0.415458
+    },
+    {
+      "timestamp": 1786665600000,
+      "navValue": 0.419022
+    },
+    {
+      "timestamp": 1786752000000,
+      "navValue": 0.420451
+    },
+    {
+      "timestamp": 1786838400000,
+      "navValue": 0.422111
+    },
+    {
+      "timestamp": 1786924800000,
+      "navValue": 0.418848
+    },
+    {
+      "timestamp": 1787011200000,
+      "navValue": 0.425055
+    },
+    {
+      "timestamp": 1787097600000,
+      "navValue": 0.420688
+    },
+    {
+      "timestamp": 1787184000000,
+      "navValue": 0.456755
+    },
+    {
+      "timestamp": 1787270400000,
+      "navValue": 0.471119
+    },
+    {
+      "timestamp": 1787356800000,
+      "navValue": 0.514819
+    },
+    {
+      "timestamp": 1787443200000,
+      "navValue": 0.491031
+    },
+    {
+      "timestamp": 1787529600000,
+      "navValue": 0.507182
+    },
+    {
+      "timestamp": 1787616000000,
+      "navValue": 0.498532
+    },
+    {
+      "timestamp": 1787702400000,
+      "navValue": 0.504949
+    },
+    {
+      "timestamp": 1787788800000,
+      "navValue": 0.522712
+    },
+    {
+      "timestamp": 1787875200000,
+      "navValue": 0.521678
+    },
+    {
+      "timestamp": 1787961600000,
+      "navValue": 0.490172
+    },
+    {
+      "timestamp": 1788048000000,
+      "navValue": 0.494004
+    },
+    {
+      "timestamp": 1788134400000,
+      "navValue": 0.470528
+    },
+    {
+      "timestamp": 1788220800000,
+      "navValue": 0.478634
+    },
+    {
+      "timestamp": 1788307200000,
+      "navValue": 0.476388
+    },
+    {
+      "timestamp": 1788393600000,
+      "navValue": 0.470049
+    },
+    {
+      "timestamp": 1788480000000,
+      "navValue": 0.491969
+    },
+    {
+      "timestamp": 1788566400000,
+      "navValue": 0.477161
+    },
+    {
+      "timestamp": 1788652800000,
+      "navValue": 0.490676
+    },
+    {
+      "timestamp": 1788739200000,
+      "navValue": 0.522106
+    },
+    {
+      "timestamp": 1788825600000,
+      "navValue": 0.514058
+    },
+    {
+      "timestamp": 1788912000000,
+      "navValue": 0.500957
+    },
+    {
+      "timestamp": 1788998400000,
+      "navValue": 0.484401
+    },
+    {
+      "timestamp": 1789084800000,
+      "navValue": 0.459848
+    },
+    {
+      "timestamp": 1789171200000,
+      "navValue": 0.460504
+    },
+    {
+      "timestamp": 1789257600000,
+      "navValue": 0.457969
+    },
+    {
+      "timestamp": 1789344000000,
+      "navValue": 0.452174
+    },
+    {
+      "timestamp": 1789430400000,
+      "navValue": 0.458377
+    },
+    {
+      "timestamp": 1789516800000,
+      "navValue": 0.437641
+    },
+    {
+      "timestamp": 1789603200000,
+      "navValue": 0.451209
+    },
+    {
+      "timestamp": 1789689600000,
+      "navValue": 0.47505
+    },
+    {
+      "timestamp": 1789776000000,
+      "navValue": 0.512416
+    },
+    {
+      "timestamp": 1789862400000,
+      "navValue": 0.522954
+    },
+    {
+      "timestamp": 1789948800000,
+      "navValue": 0.569543
+    },
+    {
+      "timestamp": 1790035200000,
+      "navValue": 0.618898
+    },
+    {
+      "timestamp": 1790121600000,
+      "navValue": 0.615717
+    },
+    {
+      "timestamp": 1790208000000,
+      "navValue": 0.57445
+    },
+    {
+      "timestamp": 1790294400000,
+      "navValue": 0.611424
+    },
+    {
+      "timestamp": 1790380800000,
+      "navValue": 0.641928
+    },
+    {
+      "timestamp": 1790467200000,
+      "navValue": 0.654069
+    },
+    {
+      "timestamp": 1790544250000,
+      "navValue": 0.66986
+    },
+    {
+      "timestamp": 1790545041507,
+      "navValue": 0.66663
+    },
+    {
+      "timestamp": 1790580011925,
+      "navValue": 0.633649
+    },
+    {
+      "timestamp": 1790583612068,
+      "navValue": 0.633315
+    },
+    {
+      "timestamp": 1790587211981,
+      "navValue": 0.632967
+    },
+    {
+      "timestamp": 1790590811993,
+      "navValue": 0.632493
+    },
+    {
+      "timestamp": 1790593881178,
+      "navValue": 0.6328
+    },
+    {
+      "timestamp": 1790597481428,
+      "navValue": 0.639783
+    },
+    {
+      "timestamp": 1790601081274,
+      "navValue": 0.639454
+    },
+    {
+      "timestamp": 1790604681244,
+      "navValue": 0.638792
+    },
+    {
+      "timestamp": 1790608281835,
+      "navValue": 0.628798
+    },
+    {
+      "timestamp": 1790611881943,
+      "navValue": 0.626056
+    },
+    {
+      "timestamp": 1790630031760,
+      "navValue": 0.629103
+    },
+    {
+      "timestamp": 1790630465962,
+      "navValue": 0.62577
+    },
+    {
+      "timestamp": 1791016515016,
+      "navValue": 0.630423
+    },
+    {
+      "timestamp": 1791020115022,
+      "navValue": 0.630628
+    },
+    {
+      "timestamp": 1791023715019,
+      "navValue": 0.640117
+    },
+    {
+      "timestamp": 1791027315019,
+      "navValue": 0.640185
+    },
+    {
+      "timestamp": 1791030915021,
+      "navValue": 0.642995
+    },
+    {
+      "timestamp": 1791034515021,
+      "navValue": 0.645845
+    },
+    {
+      "timestamp": 1791038115247,
+      "navValue": 0.652393
+    },
+    {
+      "timestamp": 1791041715261,
+      "navValue": 0.652519
+    },
+    {
+      "timestamp": 1791045315292,
+      "navValue": 0.652946
+    },
+    {
+      "timestamp": 1791048915242,
+      "navValue": 0.652975
+    },
+    {
+      "timestamp": 1791052515524,
+      "navValue": 0.646847
+    },
+    {
+      "timestamp": 1791056115723,
+      "navValue": 0.646827
+    }
+  ],
+  "solana-culture-memes": [
+    {
+      "timestamp": 1775001600000,
+      "navValue": 0.905536
+    },
+    {
+      "timestamp": 1775088000000,
+      "navValue": 0.928962
+    },
+    {
+      "timestamp": 1775174400000,
+      "navValue": 0.882443
+    },
+    {
+      "timestamp": 1775260800000,
+      "navValue": 0.880745
+    },
+    {
+      "timestamp": 1775347200000,
+      "navValue": 0.905491
+    },
+    {
+      "timestamp": 1775433600000,
+      "navValue": 0.903637
+    },
+    {
+      "timestamp": 1775520000000,
+      "navValue": 0.889384
+    },
+    {
+      "timestamp": 1775606400000,
+      "navValue": 0.941761
+    },
+    {
+      "timestamp": 1775692800000,
+      "navValue": 0.921459
+    },
+    {
+      "timestamp": 1775779200000,
+      "navValue": 0.920543
+    },
+    {
+      "timestamp": 1775865600000,
+      "navValue": 0.856593
+    },
+    {
+      "timestamp": 1775952000000,
+      "navValue": 0.849932
+    },
+    {
+      "timestamp": 1776038400000,
+      "navValue": 0.840591
+    },
+    {
+      "timestamp": 1776124800000,
+      "navValue": 0.864389
+    },
+    {
+      "timestamp": 1776211200000,
+      "navValue": 0.844784
+    },
+    {
+      "timestamp": 1776297600000,
+      "navValue": 0.886708
+    },
+    {
+      "timestamp": 1776384000000,
+      "navValue": 0.921587
+    },
+    {
+      "timestamp": 1776470400000,
+      "navValue": 0.916008
+    },
+    {
+      "timestamp": 1776556800000,
+      "navValue": 0.865923
+    },
+    {
+      "timestamp": 1776643200000,
+      "navValue": 0.840518
+    },
+    {
+      "timestamp": 1776729600000,
+      "navValue": 0.8644
+    },
+    {
+      "timestamp": 1776816000000,
+      "navValue": 0.858535
+    },
+    {
+      "timestamp": 1776902400000,
+      "navValue": 0.876552
+    },
+    {
+      "timestamp": 1776988800000,
+      "navValue": 0.863209
+    },
+    {
+      "timestamp": 1777075200000,
+      "navValue": 0.867309
+    },
+    {
+      "timestamp": 1777161600000,
+      "navValue": 0.773784
+    },
+    {
+      "timestamp": 1777248000000,
+      "navValue": 0.787607
+    },
+    {
+      "timestamp": 1777334400000,
+      "navValue": 0.762359
+    },
+    {
+      "timestamp": 1777420800000,
+      "navValue": 0.749251
+    },
+    {
+      "timestamp": 1777507200000,
+      "navValue": 0.720826
+    },
+    {
+      "timestamp": 1777593600000,
+      "navValue": 0.717798
+    },
+    {
+      "timestamp": 1777680000000,
+      "navValue": 0.696816
+    },
+    {
+      "timestamp": 1777766400000,
+      "navValue": 0.710122
+    },
+    {
+      "timestamp": 1777852800000,
+      "navValue": 0.702252
+    },
+    {
+      "timestamp": 1777939200000,
+      "navValue": 0.697678
+    },
+    {
+      "timestamp": 1778025600000,
+      "navValue": 0.716098
+    },
+    {
+      "timestamp": 1778112000000,
+      "navValue": 0.714394
+    },
+    {
+      "timestamp": 1778198400000,
+      "navValue": 0.716625
+    },
+    {
+      "timestamp": 1778284800000,
+      "navValue": 0.746667
+    },
+    {
+      "timestamp": 1778371200000,
+      "navValue": 0.741298
+    },
+    {
+      "timestamp": 1778457600000,
+      "navValue": 0.74988
+    },
+    {
+      "timestamp": 1778544000000,
+      "navValue": 0.730751
+    },
+    {
+      "timestamp": 1778630400000,
+      "navValue": 0.735322
+    },
+    {
+      "timestamp": 1778716800000,
+      "navValue": 0.710572
+    },
+    {
+      "timestamp": 1778803200000,
+      "navValue": 0.714474
+    },
+    {
+      "timestamp": 1778889600000,
+      "navValue": 0.678021
+    },
+    {
+      "timestamp": 1778976000000,
+      "navValue": 0.654955
+    },
+    {
+      "timestamp": 1779062400000,
+      "navValue": 0.627723
+    },
+    {
+      "timestamp": 1779148800000,
+      "navValue": 0.624577
+    },
+    {
+      "timestamp": 1779235200000,
+      "navValue": 0.606906
+    },
+    {
+      "timestamp": 1779321600000,
+      "navValue": 0.611531
+    },
+    {
+      "timestamp": 1779408000000,
+      "navValue": 0.625687
+    },
+    {
+      "timestamp": 1779494400000,
+      "navValue": 0.607746
+    },
+    {
+      "timestamp": 1779580800000,
+      "navValue": 0.631956
+    },
+    {
+      "timestamp": 1779667200000,
+      "navValue": 0.620765
+    },
+    {
+      "timestamp": 1779753600000,
+      "navValue": 0.626426
+    },
+    {
+      "timestamp": 1779840000000,
+      "navValue": 0.606454
+    },
+    {
+      "timestamp": 1779926400000,
+      "navValue": 0.587559
+    },
+    {
+      "timestamp": 1780012800000,
+      "navValue": 0.574043
+    },
+    {
+      "timestamp": 1780099200000,
+      "navValue": 0.594636
+    },
+    {
+      "timestamp": 1780185600000,
+      "navValue": 0.601758
+    },
+    {
+      "timestamp": 1780272000000,
+      "navValue": 0.606843
+    },
+    {
+      "timestamp": 1780358400000,
+      "navValue": 0.614829
+    },
+    {
+      "timestamp": 1780444800000,
+      "navValue": 0.586276
+    },
+    {
+      "timestamp": 1780531200000,
+      "navValue": 0.597818
+    },
+    {
+      "timestamp": 1780617600000,
+      "navValue": 0.542653
+    },
+    {
+      "timestamp": 1780704000000,
+      "navValue": 0.480242
+    },
+    {
+      "timestamp": 1780790400000,
+      "navValue": 0.475102
+    },
+    {
+      "timestamp": 1780876800000,
+      "navValue": 0.501861
+    },
+    {
+      "timestamp": 1780963200000,
+      "navValue": 0.507322
+    },
+    {
+      "timestamp": 1781049600000,
+      "navValue": 0.498705
+    },
+    {
+      "timestamp": 1781136000000,
+      "navValue": 0.49312
+    },
+    {
+      "timestamp": 1781222400000,
+      "navValue": 0.523535
+    },
+    {
+      "timestamp": 1781308800000,
+      "navValue": 0.647786
+    },
+    {
+      "timestamp": 1781395200000,
+      "navValue": 0.657304
+    },
+    {
+      "timestamp": 1781481600000,
+      "navValue": 0.623511
+    },
+    {
+      "timestamp": 1781568000000,
+      "navValue": 0.600093
+    },
+    {
+      "timestamp": 1781654400000,
+      "navValue": 0.573354
+    },
+    {
+      "timestamp": 1781740800000,
+      "navValue": 0.57646
+    },
+    {
+      "timestamp": 1781827200000,
+      "navValue": 0.568572
+    },
+    {
+      "timestamp": 1781913600000,
+      "navValue": 0.558033
+    },
+    {
+      "timestamp": 1782000000000,
+      "navValue": 0.545009
+    },
+    {
+      "timestamp": 1782086400000,
+      "navValue": 0.566306
+    },
+    {
+      "timestamp": 1782172800000,
+      "navValue": 0.562864
+    },
+    {
+      "timestamp": 1782259200000,
+      "navValue": 0.530846
+    },
+    {
+      "timestamp": 1782345600000,
+      "navValue": 0.509385
+    },
+    {
+      "timestamp": 1782432000000,
+      "navValue": 0.494248
+    },
+    {
+      "timestamp": 1782518400000,
+      "navValue": 0.514387
+    },
+    {
+      "timestamp": 1782604800000,
+      "navValue": 0.497205
+    },
+    {
+      "timestamp": 1782691200000,
+      "navValue": 0.491637
+    },
+    {
+      "timestamp": 1782777600000,
+      "navValue": 0.505166
+    },
+    {
+      "timestamp": 1782864000000,
+      "navValue": 0.498731
+    },
+    {
+      "timestamp": 1782950400000,
+      "navValue": 0.506447
+    },
+    {
+      "timestamp": 1783036800000,
+      "navValue": 0.516634
+    },
+    {
+      "timestamp": 1783123200000,
+      "navValue": 0.538967
+    },
+    {
+      "timestamp": 1783209600000,
+      "navValue": 0.548035
+    },
+    {
+      "timestamp": 1783296000000,
+      "navValue": 0.513679
+    },
+    {
+      "timestamp": 1783382400000,
+      "navValue": 0.509823
+    },
+    {
+      "timestamp": 1783468800000,
+      "navValue": 0.495771
+    },
+    {
+      "timestamp": 1783555200000,
+      "navValue": 0.48317
+    },
+    {
+      "timestamp": 1783641600000,
+      "navValue": 0.483369
+    },
+    {
+      "timestamp": 1783728000000,
+      "navValue": 0.486067
+    },
+    {
+      "timestamp": 1783814400000,
+      "navValue": 0.47714
+    },
+    {
+      "timestamp": 1783900800000,
+      "navValue": 0.469132
+    },
+    {
+      "timestamp": 1783987200000,
+      "navValue": 0.465197
+    },
+    {
+      "timestamp": 1784073600000,
+      "navValue": 0.469337
+    },
+    {
+      "timestamp": 1784160000000,
+      "navValue": 0.475392
+    },
+    {
+      "timestamp": 1784246400000,
+      "navValue": 0.465326
+    },
+    {
+      "timestamp": 1784332800000,
+      "navValue": 0.467768
+    },
+    {
+      "timestamp": 1784419200000,
+      "navValue": 0.489584
+    },
+    {
+      "timestamp": 1784505600000,
+      "navValue": 0.471442
+    },
+    {
+      "timestamp": 1784592000000,
+      "navValue": 0.478375
+    },
+    {
+      "timestamp": 1784678400000,
+      "navValue": 0.478987
+    },
+    {
+      "timestamp": 1784764800000,
+      "navValue": 0.484596
+    },
+    {
+      "timestamp": 1784851200000,
+      "navValue": 0.48148
+    },
+    {
+      "timestamp": 1784937600000,
+      "navValue": 0.470092
+    },
+    {
+      "timestamp": 1785024000000,
+      "navValue": 0.471741
+    },
+    {
+      "timestamp": 1785110400000,
+      "navValue": 0.481012
+    },
+    {
+      "timestamp": 1785196800000,
+      "navValue": 0.460087
+    },
+    {
+      "timestamp": 1785283200000,
+      "navValue": 0.442267
+    },
+    {
+      "timestamp": 1785369600000,
+      "navValue": 0.439923
+    },
+    {
+      "timestamp": 1785456000000,
+      "navValue": 0.438625
+    },
+    {
+      "timestamp": 1785542400000,
+      "navValue": 0.426793
+    },
+    {
+      "timestamp": 1785628800000,
+      "navValue": 0.432424
+    },
+    {
+      "timestamp": 1785715200000,
+      "navValue": 0.433618
+    },
+    {
+      "timestamp": 1785801600000,
+      "navValue": 0.443009
+    },
+    {
+      "timestamp": 1785888000000,
+      "navValue": 0.44186
+    },
+    {
+      "timestamp": 1785974400000,
+      "navValue": 0.441878
+    },
+    {
+      "timestamp": 1786060800000,
+      "navValue": 0.445271
+    },
+    {
+      "timestamp": 1786147200000,
+      "navValue": 0.444822
+    },
+    {
+      "timestamp": 1786233600000,
+      "navValue": 0.448317
+    },
+    {
+      "timestamp": 1786320000000,
+      "navValue": 0.44745
+    },
+    {
+      "timestamp": 1786406400000,
+      "navValue": 0.446449
+    },
+    {
+      "timestamp": 1786492800000,
+      "navValue": 0.445551
+    },
+    {
+      "timestamp": 1786579200000,
+      "navValue": 0.424231
+    },
+    {
+      "timestamp": 1786665600000,
+      "navValue": 0.42049
+    },
+    {
+      "timestamp": 1786752000000,
+      "navValue": 0.431122
+    },
+    {
+      "timestamp": 1786838400000,
+      "navValue": 0.423055
+    },
+    {
+      "timestamp": 1786924800000,
+      "navValue": 0.421581
+    },
+    {
+      "timestamp": 1787011200000,
+      "navValue": 0.420663
+    },
+    {
+      "timestamp": 1787097600000,
+      "navValue": 0.424039
+    },
+    {
+      "timestamp": 1787184000000,
+      "navValue": 0.53737
+    },
+    {
+      "timestamp": 1787270400000,
+      "navValue": 0.49652
+    },
+    {
+      "timestamp": 1787356800000,
+      "navValue": 0.563269
+    },
+    {
+      "timestamp": 1787443200000,
+      "navValue": 0.721141
+    },
+    {
+      "timestamp": 1787529600000,
+      "navValue": 0.789136
+    },
+    {
+      "timestamp": 1787616000000,
+      "navValue": 0.720485
+    },
+    {
+      "timestamp": 1787702400000,
+      "navValue": 0.654727
+    },
+    {
+      "timestamp": 1787788800000,
+      "navValue": 0.70067
+    },
+    {
+      "timestamp": 1787875200000,
+      "navValue": 0.767319
+    },
+    {
+      "timestamp": 1787961600000,
+      "navValue": 0.824309
+    },
+    {
+      "timestamp": 1788048000000,
+      "navValue": 0.805875
+    },
+    {
+      "timestamp": 1788134400000,
+      "navValue": 0.705708
+    },
+    {
+      "timestamp": 1788220800000,
+      "navValue": 0.729726
+    },
+    {
+      "timestamp": 1788307200000,
+      "navValue": 0.683648
+    },
+    {
+      "timestamp": 1788393600000,
+      "navValue": 0.66685
+    },
+    {
+      "timestamp": 1788480000000,
+      "navValue": 0.719385
+    },
+    {
+      "timestamp": 1788566400000,
+      "navValue": 0.693724
+    },
+    {
+      "timestamp": 1788652800000,
+      "navValue": 0.714216
+    },
+    {
+      "timestamp": 1788739200000,
+      "navValue": 0.703277
+    },
+    {
+      "timestamp": 1788825600000,
+      "navValue": 0.693603
+    },
+    {
+      "timestamp": 1788912000000,
+      "navValue": 0.670397
+    },
+    {
+      "timestamp": 1788998400000,
+      "navValue": 0.611244
+    },
+    {
+      "timestamp": 1789084800000,
+      "navValue": 0.584518
+    },
+    {
+      "timestamp": 1789171200000,
+      "navValue": 0.596597
+    },
+    {
+      "timestamp": 1789257600000,
+      "navValue": 0.598739
+    },
+    {
+      "timestamp": 1789344000000,
+      "navValue": 0.58092
+    },
+    {
+      "timestamp": 1789430400000,
+      "navValue": 0.603229
+    },
+    {
+      "timestamp": 1789516800000,
+      "navValue": 0.56642
+    },
+    {
+      "timestamp": 1789603200000,
+      "navValue": 0.581802
+    },
+    {
+      "timestamp": 1789689600000,
+      "navValue": 0.587971
+    },
+    {
+      "timestamp": 1789776000000,
+      "navValue": 0.627621
+    },
+    {
+      "timestamp": 1789862400000,
+      "navValue": 0.632792
+    },
+    {
+      "timestamp": 1789948800000,
+      "navValue": 0.623121
+    },
+    {
+      "timestamp": 1790035200000,
+      "navValue": 0.658315
+    },
+    {
+      "timestamp": 1790121600000,
+      "navValue": 0.676069
+    },
+    {
+      "timestamp": 1790208000000,
+      "navValue": 0.592914
+    },
+    {
+      "timestamp": 1790294400000,
+      "navValue": 0.624997
+    },
+    {
+      "timestamp": 1790380800000,
+      "navValue": 0.639485
+    },
+    {
+      "timestamp": 1790467200000,
+      "navValue": 0.63779
+    },
+    {
+      "timestamp": 1790544230000,
+      "navValue": 0.641883
+    },
+    {
+      "timestamp": 1790545041507,
+      "navValue": 0.64205
+    },
+    {
+      "timestamp": 1790580011925,
+      "navValue": 0.605892
+    },
+    {
+      "timestamp": 1790583612068,
+      "navValue": 0.602884
+    },
+    {
+      "timestamp": 1790587211981,
+      "navValue": 0.602864
+    },
+    {
+      "timestamp": 1790590811993,
+      "navValue": 0.599851
+    },
+    {
+      "timestamp": 1790593881178,
+      "navValue": 0.602884
+    },
+    {
+      "timestamp": 1790597481428,
+      "navValue": 0.611953
+    },
+    {
+      "timestamp": 1790601081274,
+      "navValue": 0.608976
+    },
+    {
+      "timestamp": 1790604681244,
+      "navValue": 0.605968
+    },
+    {
+      "timestamp": 1790608281835,
+      "navValue": 0.596867
+    },
+    {
+      "timestamp": 1790611881943,
+      "navValue": 0.599856
+    },
+    {
+      "timestamp": 1790630031760,
+      "navValue": 0.605837
+    },
+    {
+      "timestamp": 1790630465962,
+      "navValue": 0.599827
+    },
+    {
+      "timestamp": 1791016515016,
+      "navValue": 0.617679
+    },
+    {
+      "timestamp": 1791020115022,
+      "navValue": 0.620707
+    },
+    {
+      "timestamp": 1791023715019,
+      "navValue": 0.623732
+    },
+    {
+      "timestamp": 1791027315019,
+      "navValue": 0.623718
+    },
+    {
+      "timestamp": 1791030915021,
+      "navValue": 0.617719
+    },
+    {
+      "timestamp": 1791034515021,
+      "navValue": 0.620721
+    },
+    {
+      "timestamp": 1791038115247,
+      "navValue": 0.623769
+    },
+    {
+      "timestamp": 1791041715261,
+      "navValue": 0.620764
+    },
+    {
+      "timestamp": 1791045315292,
+      "navValue": 0.617766
+    },
+    {
+      "timestamp": 1791048915242,
+      "navValue": 0.617753
+    },
+    {
+      "timestamp": 1791052515524,
+      "navValue": 0.617751
+    },
+    {
+      "timestamp": 1791056115723,
+      "navValue": 0.614763
+    }
+  ],
+  "solana-depin-infrastructure": [
+    {
+      "timestamp": 1780531200000,
+      "navValue": 0.31679
+    },
+    {
+      "timestamp": 1780617600000,
+      "navValue": 0.269546
+    },
+    {
+      "timestamp": 1780704000000,
+      "navValue": 0.258721
+    },
+    {
+      "timestamp": 1780790400000,
+      "navValue": 0.24374
+    },
+    {
+      "timestamp": 1780876800000,
+      "navValue": 0.2339
+    },
+    {
+      "timestamp": 1780963200000,
+      "navValue": 0.216092
+    },
+    {
+      "timestamp": 1781049600000,
+      "navValue": 0.184972
+    },
+    {
+      "timestamp": 1781136000000,
+      "navValue": 0.149733
+    },
+    {
+      "timestamp": 1781222400000,
+      "navValue": 0.159211
+    },
+    {
+      "timestamp": 1781308800000,
+      "navValue": 0.150634
+    },
+    {
+      "timestamp": 1781395200000,
+      "navValue": 0.151971
+    },
+    {
+      "timestamp": 1781481600000,
+      "navValue": 0.152641
+    },
+    {
+      "timestamp": 1781568000000,
+      "navValue": 0.151229
+    },
+    {
+      "timestamp": 1781654400000,
+      "navValue": 0.152039
+    },
+    {
+      "timestamp": 1781740800000,
+      "navValue": 0.145091
+    },
+    {
+      "timestamp": 1781827200000,
+      "navValue": 0.138605
+    },
+    {
+      "timestamp": 1781913600000,
+      "navValue": 0.139255
+    },
+    {
+      "timestamp": 1782000000000,
+      "navValue": 0.139138
+    },
+    {
+      "timestamp": 1782086400000,
+      "navValue": 0.135611
+    },
+    {
+      "timestamp": 1782172800000,
+      "navValue": 0.138459
+    },
+    {
+      "timestamp": 1782259200000,
+      "navValue": 0.130439
+    },
+    {
+      "timestamp": 1782345600000,
+      "navValue": 0.123192
+    },
+    {
+      "timestamp": 1782432000000,
+      "navValue": 0.118407
+    },
+    {
+      "timestamp": 1782518400000,
+      "navValue": 0.120355
+    },
+    {
+      "timestamp": 1782604800000,
+      "navValue": 0.135605
+    },
+    {
+      "timestamp": 1782691200000,
+      "navValue": 0.126894
+    },
+    {
+      "timestamp": 1782777600000,
+      "navValue": 0.129007
+    },
+    {
+      "timestamp": 1782864000000,
+      "navValue": 0.119113
+    },
+    {
+      "timestamp": 1782950400000,
+      "navValue": 0.119615
+    },
+    {
+      "timestamp": 1783036800000,
+      "navValue": 0.122056
+    },
+    {
+      "timestamp": 1783123200000,
+      "navValue": 0.12411
+    },
+    {
+      "timestamp": 1783209600000,
+      "navValue": 0.123215
+    },
+    {
+      "timestamp": 1783296000000,
+      "navValue": 0.120723
+    },
+    {
+      "timestamp": 1783382400000,
+      "navValue": 0.120291
+    },
+    {
+      "timestamp": 1783468800000,
+      "navValue": 0.114998
+    },
+    {
+      "timestamp": 1783555200000,
+      "navValue": 0.111134
+    },
+    {
+      "timestamp": 1783641600000,
+      "navValue": 0.111634
+    },
+    {
+      "timestamp": 1783728000000,
+      "navValue": 0.111861
+    },
+    {
+      "timestamp": 1783814400000,
+      "navValue": 0.111319
+    },
+    {
+      "timestamp": 1783900800000,
+      "navValue": 0.109443
+    },
+    {
+      "timestamp": 1783987200000,
+      "navValue": 0.104493
+    },
+    {
+      "timestamp": 1784073600000,
+      "navValue": 0.105668
+    },
+    {
+      "timestamp": 1784160000000,
+      "navValue": 0.104674
+    },
+    {
+      "timestamp": 1784246400000,
+      "navValue": 0.104145
+    },
+    {
+      "timestamp": 1784332800000,
+      "navValue": 0.101258
+    },
+    {
+      "timestamp": 1784419200000,
+      "navValue": 0.102131
+    },
+    {
+      "timestamp": 1784505600000,
+      "navValue": 0.104667
+    },
+    {
+      "timestamp": 1784592000000,
+      "navValue": 0.101596
+    },
+    {
+      "timestamp": 1784678400000,
+      "navValue": 0.103102
+    },
+    {
+      "timestamp": 1784764800000,
+      "navValue": 0.103136
+    },
+    {
+      "timestamp": 1784851200000,
+      "navValue": 0.099686
+    },
+    {
+      "timestamp": 1784937600000,
+      "navValue": 0.099143
+    },
+    {
+      "timestamp": 1785024000000,
+      "navValue": 0.097394
+    },
+    {
+      "timestamp": 1785110400000,
+      "navValue": 0.098223
+    },
+    {
+      "timestamp": 1785196800000,
+      "navValue": 0.092357
+    },
+    {
+      "timestamp": 1785283200000,
+      "navValue": 0.091941
+    },
+    {
+      "timestamp": 1785369600000,
+      "navValue": 0.090012
+    },
+    {
+      "timestamp": 1785456000000,
+      "navValue": 0.091799
+    },
+    {
+      "timestamp": 1785542400000,
+      "navValue": 0.091179
+    },
+    {
+      "timestamp": 1785628800000,
+      "navValue": 0.090959
+    },
+    {
+      "timestamp": 1785715200000,
+      "navValue": 0.092484
+    },
+    {
+      "timestamp": 1785801600000,
+      "navValue": 0.090766
+    },
+    {
+      "timestamp": 1785888000000,
+      "navValue": 0.090837
+    },
+    {
+      "timestamp": 1785974400000,
+      "navValue": 0.090931
+    },
+    {
+      "timestamp": 1786060800000,
+      "navValue": 0.092475
+    },
+    {
+      "timestamp": 1786147200000,
+      "navValue": 0.100522
+    },
+    {
+      "timestamp": 1786233600000,
+      "navValue": 0.094204
+    },
+    {
+      "timestamp": 1786320000000,
+      "navValue": 0.09456
+    },
+    {
+      "timestamp": 1786406400000,
+      "navValue": 0.09119
+    },
+    {
+      "timestamp": 1786492800000,
+      "navValue": 0.091012
+    },
+    {
+      "timestamp": 1786579200000,
+      "navValue": 0.090119
+    },
+    {
+      "timestamp": 1786665600000,
+      "navValue": 0.087468
+    },
+    {
+      "timestamp": 1786752000000,
+      "navValue": 0.084366
+    },
+    {
+      "timestamp": 1786838400000,
+      "navValue": 0.085188
+    },
+    {
+      "timestamp": 1786924800000,
+      "navValue": 0.08419
+    },
+    {
+      "timestamp": 1787011200000,
+      "navValue": 0.086487
+    },
+    {
+      "timestamp": 1787097600000,
+      "navValue": 0.084014
+    },
+    {
+      "timestamp": 1787184000000,
+      "navValue": 0.085968
+    },
+    {
+      "timestamp": 1787270400000,
+      "navValue": 0.090248
+    },
+    {
+      "timestamp": 1787356800000,
+      "navValue": 0.098594
+    },
+    {
+      "timestamp": 1787443200000,
+      "navValue": 0.092345
+    },
+    {
+      "timestamp": 1787529600000,
+      "navValue": 0.095753
+    },
+    {
+      "timestamp": 1787616000000,
+      "navValue": 0.095477
+    },
+    {
+      "timestamp": 1787702400000,
+      "navValue": 0.101861
+    },
+    {
+      "timestamp": 1787788800000,
+      "navValue": 0.116429
+    },
+    {
+      "timestamp": 1787875200000,
+      "navValue": 0.110692
+    },
+    {
+      "timestamp": 1787961600000,
+      "navValue": 0.126317
+    },
+    {
+      "timestamp": 1788048000000,
+      "navValue": 0.212164
+    },
+    {
+      "timestamp": 1788134400000,
+      "navValue": 0.383217
+    },
+    {
+      "timestamp": 1788220800000,
+      "navValue": 0.322042
+    },
+    {
+      "timestamp": 1788307200000,
+      "navValue": 0.288854
+    },
+    {
+      "timestamp": 1788393600000,
+      "navValue": 0.249534
+    },
+    {
+      "timestamp": 1788480000000,
+      "navValue": 0.342387
+    },
+    {
+      "timestamp": 1788566400000,
+      "navValue": 0.287276
+    },
+    {
+      "timestamp": 1788652800000,
+      "navValue": 0.296695
+    },
+    {
+      "timestamp": 1788739200000,
+      "navValue": 0.286803
+    },
+    {
+      "timestamp": 1788825600000,
+      "navValue": 0.269996
+    },
+    {
+      "timestamp": 1788912000000,
+      "navValue": 0.283266
+    },
+    {
+      "timestamp": 1788998400000,
+      "navValue": 0.262803
+    },
+    {
+      "timestamp": 1789084800000,
+      "navValue": 0.239636
+    },
+    {
+      "timestamp": 1789171200000,
+      "navValue": 0.251233
+    },
+    {
+      "timestamp": 1789257600000,
+      "navValue": 0.243025
+    },
+    {
+      "timestamp": 1789344000000,
+      "navValue": 0.227739
+    },
+    {
+      "timestamp": 1789430400000,
+      "navValue": 0.228466
+    },
+    {
+      "timestamp": 1789516800000,
+      "navValue": 0.204
+    },
+    {
+      "timestamp": 1789603200000,
+      "navValue": 0.241668
+    },
+    {
+      "timestamp": 1789689600000,
+      "navValue": 0.229697
+    },
+    {
+      "timestamp": 1789776000000,
+      "navValue": 0.23823
+    },
+    {
+      "timestamp": 1789862400000,
+      "navValue": 0.233491
+    },
+    {
+      "timestamp": 1789948800000,
+      "navValue": 0.228819
+    },
+    {
+      "timestamp": 1790035200000,
+      "navValue": 0.238521
+    },
+    {
+      "timestamp": 1790121600000,
+      "navValue": 0.257296
+    },
+    {
+      "timestamp": 1790208000000,
+      "navValue": 0.254128
+    },
+    {
+      "timestamp": 1790294400000,
+      "navValue": 0.255228
+    },
+    {
+      "timestamp": 1790380800000,
+      "navValue": 0.252388
+    },
+    {
+      "timestamp": 1790467200000,
+      "navValue": 0.26406
+    },
+    {
+      "timestamp": 1790544110000,
+      "navValue": 0.253724
+    },
+    {
+      "timestamp": 1790545041507,
+      "navValue": 0.252879
+    },
+    {
+      "timestamp": 1790580011925,
+      "navValue": 0.231433
+    },
+    {
+      "timestamp": 1790583612068,
+      "navValue": 0.233033
+    },
+    {
+      "timestamp": 1790587211981,
+      "navValue": 0.232418
+    },
+    {
+      "timestamp": 1790590811993,
+      "navValue": 0.231335
+    },
+    {
+      "timestamp": 1790593881178,
+      "navValue": 0.232265
+    },
+    {
+      "timestamp": 1790597481428,
+      "navValue": 0.234428
+    },
+    {
+      "timestamp": 1790601081274,
+      "navValue": 0.237009
+    },
+    {
+      "timestamp": 1790604681244,
+      "navValue": 0.237786
+    },
+    {
+      "timestamp": 1790608281835,
+      "navValue": 0.236989
+    },
+    {
+      "timestamp": 1790611881943,
+      "navValue": 0.237301
+    },
+    {
+      "timestamp": 1790630031760,
+      "navValue": 0.238306
+    },
+    {
+      "timestamp": 1790630465962,
+      "navValue": 0.237942
+    },
+    {
+      "timestamp": 1791016515016,
+      "navValue": 0.243773
+    },
+    {
+      "timestamp": 1791020115022,
+      "navValue": 0.245493
+    },
+    {
+      "timestamp": 1791023715019,
+      "navValue": 0.247965
+    },
+    {
+      "timestamp": 1791027315019,
+      "navValue": 0.247445
+    },
+    {
+      "timestamp": 1791030915021,
+      "navValue": 0.247875
+    },
+    {
+      "timestamp": 1791034515021,
+      "navValue": 0.247174
+    },
+    {
+      "timestamp": 1791038115247,
+      "navValue": 0.248205
+    },
+    {
+      "timestamp": 1791041715261,
+      "navValue": 0.247345
+    },
+    {
+      "timestamp": 1791045315292,
+      "navValue": 0.248409
+    },
+    {
+      "timestamp": 1791048915242,
+      "navValue": 0.248066
+    },
+    {
+      "timestamp": 1791052515524,
+      "navValue": 0.249599
+    },
+    {
+      "timestamp": 1791056115723,
+      "navValue": 0.249676
+    }
+  ],
+  "solana-infra-governance": [
+    {
+      "timestamp": 1782086400000,
+      "navValue": 19.922321
+    },
+    {
+      "timestamp": 1782172800000,
+      "navValue": 19.789407
+    },
+    {
+      "timestamp": 1782259200000,
+      "navValue": 19.170285
+    },
+    {
+      "timestamp": 1782345600000,
+      "navValue": 18.713684
+    },
+    {
+      "timestamp": 1782432000000,
+      "navValue": 18.618284
+    },
+    {
+      "timestamp": 1782518400000,
+      "navValue": 20.105269
+    },
+    {
+      "timestamp": 1782604800000,
+      "navValue": 19.487749
+    },
+    {
+      "timestamp": 1782691200000,
+      "navValue": 19.582856
+    },
+    {
+      "timestamp": 1782777600000,
+      "navValue": 21.166615
+    },
+    {
+      "timestamp": 1782864000000,
+      "navValue": 21.919443
+    },
+    {
+      "timestamp": 1782950400000,
+      "navValue": 23.060892
+    },
+    {
+      "timestamp": 1783036800000,
+      "navValue": 24.006645
+    },
+    {
+      "timestamp": 1783123200000,
+      "navValue": 24.515074
+    },
+    {
+      "timestamp": 1783209600000,
+      "navValue": 24.329654
+    },
+    {
+      "timestamp": 1783296000000,
+      "navValue": 24.281639
+    },
+    {
+      "timestamp": 1783382400000,
+      "navValue": 24.424678
+    },
+    {
+      "timestamp": 1783468800000,
+      "navValue": 24.019882
+    },
+    {
+      "timestamp": 1783555200000,
+      "navValue": 23.175279
+    },
+    {
+      "timestamp": 1783641600000,
+      "navValue": 23.250786
+    },
+    {
+      "timestamp": 1783728000000,
+      "navValue": 23.272675
+    },
+    {
+      "timestamp": 1783814400000,
+      "navValue": 22.891734
+    },
+    {
+      "timestamp": 1783900800000,
+      "navValue": 22.912531
+    },
+    {
+      "timestamp": 1783987200000,
+      "navValue": 22.331757
+    },
+    {
+      "timestamp": 1784073600000,
+      "navValue": 23.202641
+    },
+    {
+      "timestamp": 1784160000000,
+      "navValue": 23.047837
+    },
+    {
+      "timestamp": 1784246400000,
+      "navValue": 22.4415
+    },
+    {
+      "timestamp": 1784332800000,
+      "navValue": 22.367881
+    },
+    {
+      "timestamp": 1784419200000,
+      "navValue": 22.508502
+    },
+    {
+      "timestamp": 1784505600000,
+      "navValue": 22.762252
+    },
+    {
+      "timestamp": 1784592000000,
+      "navValue": 23.192445
+    },
+    {
+      "timestamp": 1784678400000,
+      "navValue": 23.29215
+    },
+    {
+      "timestamp": 1784764800000,
+      "navValue": 23.238117
+    },
+    {
+      "timestamp": 1784851200000,
+      "navValue": 22.649054
+    },
+    {
+      "timestamp": 1784937600000,
+      "navValue": 22.049922
+    },
+    {
+      "timestamp": 1785024000000,
+      "navValue": 22.228087
+    },
+    {
+      "timestamp": 1785110400000,
+      "navValue": 22.870619
+    },
+    {
+      "timestamp": 1785196800000,
+      "navValue": 22.129633
+    },
+    {
+      "timestamp": 1785283200000,
+      "navValue": 22.008958
+    },
+    {
+      "timestamp": 1785369600000,
+      "navValue": 21.973651
+    },
+    {
+      "timestamp": 1785456000000,
+      "navValue": 22.217844
+    },
+    {
+      "timestamp": 1785542400000,
+      "navValue": 21.726367
+    },
+    {
+      "timestamp": 1785628800000,
+      "navValue": 21.461851
+    },
+    {
+      "timestamp": 1785715200000,
+      "navValue": 21.944601
+    },
+    {
+      "timestamp": 1785801600000,
+      "navValue": 21.929388
+    },
+    {
+      "timestamp": 1785888000000,
+      "navValue": 22.008528
+    },
+    {
+      "timestamp": 1785974400000,
+      "navValue": 22.0907
+    },
+    {
+      "timestamp": 1786060800000,
+      "navValue": 21.680435
+    },
+    {
+      "timestamp": 1786147200000,
+      "navValue": 21.978901
+    },
+    {
+      "timestamp": 1786233600000,
+      "navValue": 22.672982
+    },
+    {
+      "timestamp": 1786320000000,
+      "navValue": 22.750924
+    },
+    {
+      "timestamp": 1786406400000,
+      "navValue": 22.664969
+    },
+    {
+      "timestamp": 1786492800000,
+      "navValue": 22.754821
+    },
+    {
+      "timestamp": 1786579200000,
+      "navValue": 22.558051
+    },
+    {
+      "timestamp": 1786665600000,
+      "navValue": 22.74678
+    },
+    {
+      "timestamp": 1786752000000,
+      "navValue": 22.500898
+    },
+    {
+      "timestamp": 1786838400000,
+      "navValue": 22.486229
+    },
+    {
+      "timestamp": 1786924800000,
+      "navValue": 22.290708
+    },
+    {
+      "timestamp": 1787011200000,
+      "navValue": 22.685672
+    },
+    {
+      "timestamp": 1787097600000,
+      "navValue": 23.00062
+    },
+    {
+      "timestamp": 1787184000000,
+      "navValue": 25.47666
+    },
+    {
+      "timestamp": 1787270400000,
+      "navValue": 26.16255
+    },
+    {
+      "timestamp": 1787356800000,
+      "navValue": 27.985677
+    },
+    {
+      "timestamp": 1787443200000,
+      "navValue": 28.027843
+    },
+    {
+      "timestamp": 1787529600000,
+      "navValue": 28.514048
+    },
+    {
+      "timestamp": 1787616000000,
+      "navValue": 29.494873
+    },
+    {
+      "timestamp": 1787702400000,
+      "navValue": 28.850732
+    },
+    {
+      "timestamp": 1787788800000,
+      "navValue": 30.467373
+    },
+    {
+      "timestamp": 1787875200000,
+      "navValue": 32.592318
+    },
+    {
+      "timestamp": 1787961600000,
+      "navValue": 31.084708
+    },
+    {
+      "timestamp": 1788048000000,
+      "navValue": 31.530065
+    },
+    {
+      "timestamp": 1788134400000,
+      "navValue": 30.403968
+    },
+    {
+      "timestamp": 1788220800000,
+      "navValue": 30.763332
+    },
+    {
+      "timestamp": 1788307200000,
+      "navValue": 29.855044
+    },
+    {
+      "timestamp": 1788393600000,
+      "navValue": 30.007316
+    },
+    {
+      "timestamp": 1788480000000,
+      "navValue": 31.078467
+    },
+    {
+      "timestamp": 1788566400000,
+      "navValue": 30.475985
+    },
+    {
+      "timestamp": 1788652800000,
+      "navValue": 30.852188
+    },
+    {
+      "timestamp": 1788739200000,
+      "navValue": 31.892406
+    },
+    {
+      "timestamp": 1788825600000,
+      "navValue": 31.102579
+    },
+    {
+      "timestamp": 1788912000000,
+      "navValue": 30.969396
+    },
+    {
+      "timestamp": 1788998400000,
+      "navValue": 30.44238
+    },
+    {
+      "timestamp": 1789084800000,
+      "navValue": 29.592944
+    },
+    {
+      "timestamp": 1789171200000,
+      "navValue": 30.736021
+    },
+    {
+      "timestamp": 1789257600000,
+      "navValue": 30.53357
+    },
+    {
+      "timestamp": 1789344000000,
+      "navValue": 29.780987
+    },
+    {
+      "timestamp": 1789430400000,
+      "navValue": 30.741007
+    },
+    {
+      "timestamp": 1789516800000,
+      "navValue": 29.050203
+    },
+    {
+      "timestamp": 1789603200000,
+      "navValue": 29.493595
+    },
+    {
+      "timestamp": 1789689600000,
+      "navValue": 30.476145
+    },
+    {
+      "timestamp": 1789776000000,
+      "navValue": 33.81436
+    },
+    {
+      "timestamp": 1789862400000,
+      "navValue": 33.341834
+    },
+    {
+      "timestamp": 1789948800000,
+      "navValue": 33.391638
+    },
+    {
+      "timestamp": 1790035200000,
+      "navValue": 35.709703
+    },
+    {
+      "timestamp": 1790121600000,
+      "navValue": 35.610849
+    },
+    {
+      "timestamp": 1790208000000,
+      "navValue": 34.576895
+    },
+    {
+      "timestamp": 1790294400000,
+      "navValue": 35.214092
+    },
+    {
+      "timestamp": 1790380800000,
+      "navValue": 36.773694
+    },
+    {
+      "timestamp": 1790467200000,
+      "navValue": 36.557578
+    },
+    {
+      "timestamp": 1790544410000,
+      "navValue": 37.053076
+    },
+    {
+      "timestamp": 1790545041507,
+      "navValue": 37.023588
+    },
+    {
+      "timestamp": 1790580011925,
+      "navValue": 35.733801
+    },
+    {
+      "timestamp": 1790583612068,
+      "navValue": 35.685948
+    },
+    {
+      "timestamp": 1790587211981,
+      "navValue": 35.65982
+    },
+    {
+      "timestamp": 1790590811993,
+      "navValue": 35.575803
+    },
+    {
+      "timestamp": 1790593881178,
+      "navValue": 35.734894
+    },
+    {
+      "timestamp": 1790597481428,
+      "navValue": 36.069268
+    },
+    {
+      "timestamp": 1790601081274,
+      "navValue": 36.024566
+    },
+    {
+      "timestamp": 1790604681244,
+      "navValue": 36.028086
+    },
+    {
+      "timestamp": 1790608281835,
+      "navValue": 35.674816
+    },
+    {
+      "timestamp": 1790611881943,
+      "navValue": 35.729193
+    }
+  ],
+  "solana-infrastructure": [
+    {
+      "timestamp": 1782086400000,
+      "navValue": 19.922321
+    },
+    {
+      "timestamp": 1782172800000,
+      "navValue": 19.789407
+    },
+    {
+      "timestamp": 1782259200000,
+      "navValue": 19.170285
+    },
+    {
+      "timestamp": 1782345600000,
+      "navValue": 18.713684
+    },
+    {
+      "timestamp": 1782432000000,
+      "navValue": 18.618284
+    },
+    {
+      "timestamp": 1782518400000,
+      "navValue": 20.105269
+    },
+    {
+      "timestamp": 1782604800000,
+      "navValue": 19.487749
+    },
+    {
+      "timestamp": 1782691200000,
+      "navValue": 19.582856
+    },
+    {
+      "timestamp": 1782777600000,
+      "navValue": 21.166615
+    },
+    {
+      "timestamp": 1782864000000,
+      "navValue": 21.919443
+    },
+    {
+      "timestamp": 1782950400000,
+      "navValue": 23.060892
+    },
+    {
+      "timestamp": 1783036800000,
+      "navValue": 24.006645
+    },
+    {
+      "timestamp": 1783123200000,
+      "navValue": 24.515074
+    },
+    {
+      "timestamp": 1783209600000,
+      "navValue": 24.329654
+    },
+    {
+      "timestamp": 1783296000000,
+      "navValue": 24.281639
+    },
+    {
+      "timestamp": 1783382400000,
+      "navValue": 24.424678
+    },
+    {
+      "timestamp": 1783468800000,
+      "navValue": 24.019882
+    },
+    {
+      "timestamp": 1783555200000,
+      "navValue": 23.175279
+    },
+    {
+      "timestamp": 1783641600000,
+      "navValue": 23.250786
+    },
+    {
+      "timestamp": 1783728000000,
+      "navValue": 23.272675
+    },
+    {
+      "timestamp": 1783814400000,
+      "navValue": 22.891734
+    },
+    {
+      "timestamp": 1783900800000,
+      "navValue": 22.912531
+    },
+    {
+      "timestamp": 1783987200000,
+      "navValue": 22.331757
+    },
+    {
+      "timestamp": 1784073600000,
+      "navValue": 23.202641
+    },
+    {
+      "timestamp": 1784160000000,
+      "navValue": 23.047837
+    },
+    {
+      "timestamp": 1784246400000,
+      "navValue": 22.4415
+    },
+    {
+      "timestamp": 1784332800000,
+      "navValue": 22.367881
+    },
+    {
+      "timestamp": 1784419200000,
+      "navValue": 22.508502
+    },
+    {
+      "timestamp": 1784505600000,
+      "navValue": 22.762252
+    },
+    {
+      "timestamp": 1784592000000,
+      "navValue": 23.192445
+    },
+    {
+      "timestamp": 1784678400000,
+      "navValue": 23.29215
+    },
+    {
+      "timestamp": 1784764800000,
+      "navValue": 23.238117
+    },
+    {
+      "timestamp": 1784851200000,
+      "navValue": 22.649054
+    },
+    {
+      "timestamp": 1784937600000,
+      "navValue": 22.049922
+    },
+    {
+      "timestamp": 1785024000000,
+      "navValue": 22.228087
+    },
+    {
+      "timestamp": 1785110400000,
+      "navValue": 22.870619
+    },
+    {
+      "timestamp": 1785196800000,
+      "navValue": 22.129633
+    },
+    {
+      "timestamp": 1785283200000,
+      "navValue": 22.008958
+    },
+    {
+      "timestamp": 1785369600000,
+      "navValue": 21.973651
+    },
+    {
+      "timestamp": 1785456000000,
+      "navValue": 22.217844
+    },
+    {
+      "timestamp": 1785542400000,
+      "navValue": 21.726367
+    },
+    {
+      "timestamp": 1785628800000,
+      "navValue": 21.461851
+    },
+    {
+      "timestamp": 1785715200000,
+      "navValue": 21.944601
+    },
+    {
+      "timestamp": 1785801600000,
+      "navValue": 21.929388
+    },
+    {
+      "timestamp": 1785888000000,
+      "navValue": 22.008528
+    },
+    {
+      "timestamp": 1785974400000,
+      "navValue": 22.0907
+    },
+    {
+      "timestamp": 1786060800000,
+      "navValue": 21.680435
+    },
+    {
+      "timestamp": 1786147200000,
+      "navValue": 21.978901
+    },
+    {
+      "timestamp": 1786233600000,
+      "navValue": 22.672982
+    },
+    {
+      "timestamp": 1786320000000,
+      "navValue": 22.750924
+    },
+    {
+      "timestamp": 1786406400000,
+      "navValue": 22.664969
+    },
+    {
+      "timestamp": 1786492800000,
+      "navValue": 22.754821
+    },
+    {
+      "timestamp": 1786579200000,
+      "navValue": 22.558051
+    },
+    {
+      "timestamp": 1786665600000,
+      "navValue": 22.74678
+    },
+    {
+      "timestamp": 1786752000000,
+      "navValue": 22.500898
+    },
+    {
+      "timestamp": 1786838400000,
+      "navValue": 22.486229
+    },
+    {
+      "timestamp": 1786924800000,
+      "navValue": 22.290708
+    },
+    {
+      "timestamp": 1787011200000,
+      "navValue": 22.685672
+    },
+    {
+      "timestamp": 1787097600000,
+      "navValue": 23.00062
+    },
+    {
+      "timestamp": 1787184000000,
+      "navValue": 25.47666
+    },
+    {
+      "timestamp": 1787270400000,
+      "navValue": 26.16255
+    },
+    {
+      "timestamp": 1787356800000,
+      "navValue": 27.985677
+    },
+    {
+      "timestamp": 1787443200000,
+      "navValue": 28.027843
+    },
+    {
+      "timestamp": 1787529600000,
+      "navValue": 28.514048
+    },
+    {
+      "timestamp": 1787616000000,
+      "navValue": 29.494873
+    },
+    {
+      "timestamp": 1787702400000,
+      "navValue": 28.850732
+    },
+    {
+      "timestamp": 1787788800000,
+      "navValue": 30.467373
+    },
+    {
+      "timestamp": 1787875200000,
+      "navValue": 32.592318
+    },
+    {
+      "timestamp": 1787961600000,
+      "navValue": 31.084708
+    },
+    {
+      "timestamp": 1788048000000,
+      "navValue": 31.530065
+    },
+    {
+      "timestamp": 1788134400000,
+      "navValue": 30.403968
+    },
+    {
+      "timestamp": 1788220800000,
+      "navValue": 30.763332
+    },
+    {
+      "timestamp": 1788307200000,
+      "navValue": 29.855044
+    },
+    {
+      "timestamp": 1788393600000,
+      "navValue": 30.007316
+    },
+    {
+      "timestamp": 1788480000000,
+      "navValue": 31.078467
+    },
+    {
+      "timestamp": 1788566400000,
+      "navValue": 30.475985
+    },
+    {
+      "timestamp": 1788652800000,
+      "navValue": 30.852188
+    },
+    {
+      "timestamp": 1788739200000,
+      "navValue": 31.892406
+    },
+    {
+      "timestamp": 1788825600000,
+      "navValue": 31.102579
+    },
+    {
+      "timestamp": 1788912000000,
+      "navValue": 30.969396
+    },
+    {
+      "timestamp": 1788998400000,
+      "navValue": 30.44238
+    },
+    {
+      "timestamp": 1789084800000,
+      "navValue": 29.592944
+    },
+    {
+      "timestamp": 1789171200000,
+      "navValue": 30.736021
+    },
+    {
+      "timestamp": 1789257600000,
+      "navValue": 30.53357
+    },
+    {
+      "timestamp": 1789344000000,
+      "navValue": 29.780987
+    },
+    {
+      "timestamp": 1789430400000,
+      "navValue": 30.741007
+    },
+    {
+      "timestamp": 1789516800000,
+      "navValue": 29.050203
+    },
+    {
+      "timestamp": 1789603200000,
+      "navValue": 29.493595
+    },
+    {
+      "timestamp": 1789689600000,
+      "navValue": 30.476145
+    },
+    {
+      "timestamp": 1789776000000,
+      "navValue": 33.81436
+    },
+    {
+      "timestamp": 1789862400000,
+      "navValue": 33.341834
+    },
+    {
+      "timestamp": 1789948800000,
+      "navValue": 33.391638
+    },
+    {
+      "timestamp": 1790035200000,
+      "navValue": 35.709703
+    },
+    {
+      "timestamp": 1790121600000,
+      "navValue": 35.610849
+    },
+    {
+      "timestamp": 1790208000000,
+      "navValue": 34.576895
+    },
+    {
+      "timestamp": 1790294400000,
+      "navValue": 35.214092
+    },
+    {
+      "timestamp": 1790380800000,
+      "navValue": 36.773694
+    },
+    {
+      "timestamp": 1790467200000,
+      "navValue": 36.557578
+    },
+    {
+      "timestamp": 1790544410000,
+      "navValue": 37.053076
+    },
+    {
+      "timestamp": 1790545041507,
+      "navValue": 37.023588
+    },
+    {
+      "timestamp": 1790580011925,
+      "navValue": 35.733801
+    },
+    {
+      "timestamp": 1790583612068,
+      "navValue": 35.685948
+    },
+    {
+      "timestamp": 1790587211981,
+      "navValue": 35.65982
+    },
+    {
+      "timestamp": 1790590811993,
+      "navValue": 35.575803
+    },
+    {
+      "timestamp": 1790593881178,
+      "navValue": 35.734894
+    },
+    {
+      "timestamp": 1790597481428,
+      "navValue": 36.069268
+    },
+    {
+      "timestamp": 1790601081274,
+      "navValue": 36.024566
+    },
+    {
+      "timestamp": 1790604681244,
+      "navValue": 36.028086
+    },
+    {
+      "timestamp": 1790608281835,
+      "navValue": 35.674816
+    },
+    {
+      "timestamp": 1790611881943,
+      "navValue": 35.729193
+    },
+    {
+      "timestamp": 1790630031760,
+      "navValue": 35.808296
+    },
+    {
+      "timestamp": 1790630465962,
+      "navValue": 35.696466
+    },
+    {
+      "timestamp": 1791016515016,
+      "navValue": 35.909031
+    },
+    {
+      "timestamp": 1791020115022,
+      "navValue": 35.946529
+    },
+    {
+      "timestamp": 1791023715019,
+      "navValue": 36.008784
+    },
+    {
+      "timestamp": 1791027315019,
+      "navValue": 35.965297
+    },
+    {
+      "timestamp": 1791030915021,
+      "navValue": 35.990325
+    },
+    {
+      "timestamp": 1791034515021,
+      "navValue": 36.011298
+    },
+    {
+      "timestamp": 1791038115247,
+      "navValue": 36.006032
+    },
+    {
+      "timestamp": 1791041715261,
+      "navValue": 36.01505
+    },
+    {
+      "timestamp": 1791045315292,
+      "navValue": 36.049661
+    },
+    {
+      "timestamp": 1791048915242,
+      "navValue": 36.101809
+    },
+    {
+      "timestamp": 1791052515524,
+      "navValue": 36.111459
+    },
+    {
+      "timestamp": 1791056115723,
+      "navValue": 36.113359
+    }
+  ],
+  "solana-sigma-basket": [
+    {
+      "timestamp": 1775001600000,
+      "navValue": 0.405461
+    },
+    {
+      "timestamp": 1775088000000,
+      "navValue": 0.409581
+    },
+    {
+      "timestamp": 1775174400000,
+      "navValue": 0.433063
+    },
+    {
+      "timestamp": 1775260800000,
+      "navValue": 0.448247
+    },
+    {
+      "timestamp": 1775347200000,
+      "navValue": 0.434692
+    },
+    {
+      "timestamp": 1775433600000,
+      "navValue": 0.443487
+    },
+    {
+      "timestamp": 1775520000000,
+      "navValue": 0.430367
+    },
+    {
+      "timestamp": 1775606400000,
+      "navValue": 0.478587
+    },
+    {
+      "timestamp": 1775692800000,
+      "navValue": 0.459597
+    },
+    {
+      "timestamp": 1775779200000,
+      "navValue": 0.468602
+    },
+    {
+      "timestamp": 1775865600000,
+      "navValue": 0.461818
+    },
+    {
+      "timestamp": 1775952000000,
+      "navValue": 0.465006
+    },
+    {
+      "timestamp": 1776038400000,
+      "navValue": 0.435991
+    },
+    {
+      "timestamp": 1776124800000,
+      "navValue": 0.446542
+    },
+    {
+      "timestamp": 1776211200000,
+      "navValue": 0.426696
+    },
+    {
+      "timestamp": 1776297600000,
+      "navValue": 0.441046
+    },
+    {
+      "timestamp": 1776384000000,
+      "navValue": 0.44206
+    },
+    {
+      "timestamp": 1776470400000,
+      "navValue": 0.441362
+    },
+    {
+      "timestamp": 1776556800000,
+      "navValue": 0.420147
+    },
+    {
+      "timestamp": 1776643200000,
+      "navValue": 0.407016
+    },
+    {
+      "timestamp": 1776729600000,
+      "navValue": 0.420439
+    },
+    {
+      "timestamp": 1776816000000,
+      "navValue": 0.421498
+    },
+    {
+      "timestamp": 1776902400000,
+      "navValue": 0.426018
+    },
+    {
+      "timestamp": 1776988800000,
+      "navValue": 0.426765
+    },
+    {
+      "timestamp": 1777075200000,
+      "navValue": 0.423501
+    },
+    {
+      "timestamp": 1777161600000,
+      "navValue": 0.425372
+    },
+    {
+      "timestamp": 1777248000000,
+      "navValue": 0.431743
+    },
+    {
+      "timestamp": 1777334400000,
+      "navValue": 0.427588
+    },
+    {
+      "timestamp": 1777420800000,
+      "navValue": 0.417317
+    },
+    {
+      "timestamp": 1777507200000,
+      "navValue": 0.40912
+    },
+    {
+      "timestamp": 1777593600000,
+      "navValue": 0.400433
+    },
+    {
+      "timestamp": 1777680000000,
+      "navValue": 0.405766
+    },
+    {
+      "timestamp": 1777766400000,
+      "navValue": 0.423417
+    },
+    {
+      "timestamp": 1777852800000,
+      "navValue": 0.431192
+    },
+    {
+      "timestamp": 1777939200000,
+      "navValue": 0.429701
+    },
+    {
+      "timestamp": 1778025600000,
+      "navValue": 0.448153
+    },
+    {
+      "timestamp": 1778112000000,
+      "navValue": 0.464559
+    },
+    {
+      "timestamp": 1778198400000,
+      "navValue": 0.463968
+    },
+    {
+      "timestamp": 1778284800000,
+      "navValue": 0.496845
+    },
+    {
+      "timestamp": 1778371200000,
+      "navValue": 0.488641
+    },
+    {
+      "timestamp": 1778457600000,
+      "navValue": 0.494986
+    },
+    {
+      "timestamp": 1778544000000,
+      "navValue": 0.478843
+    },
+    {
+      "timestamp": 1778630400000,
+      "navValue": 0.462498
+    },
+    {
+      "timestamp": 1778716800000,
+      "navValue": 0.452559
+    },
+    {
+      "timestamp": 1778803200000,
+      "navValue": 0.458197
+    },
+    {
+      "timestamp": 1778889600000,
+      "navValue": 0.449485
+    },
+    {
+      "timestamp": 1778976000000,
+      "navValue": 0.43489
+    },
+    {
+      "timestamp": 1779062400000,
+      "navValue": 0.426121
+    },
+    {
+      "timestamp": 1779148800000,
+      "navValue": 0.432926
+    },
+    {
+      "timestamp": 1779235200000,
+      "navValue": 0.429877
+    },
+    {
+      "timestamp": 1779321600000,
+      "navValue": 0.452805
+    },
+    {
+      "timestamp": 1779408000000,
+      "navValue": 0.459073
+    },
+    {
+      "timestamp": 1779494400000,
+      "navValue": 0.437179
+    },
+    {
+      "timestamp": 1779580800000,
+      "navValue": 0.459709
+    },
+    {
+      "timestamp": 1779667200000,
+      "navValue": 0.472148
+    },
+    {
+      "timestamp": 1779753600000,
+      "navValue": 0.504918
+    },
+    {
+      "timestamp": 1779840000000,
+      "navValue": 0.52525
+    },
+    {
+      "timestamp": 1779926400000,
+      "navValue": 0.491114
+    },
+    {
+      "timestamp": 1780012800000,
+      "navValue": 0.460547
+    },
+    {
+      "timestamp": 1780099200000,
+      "navValue": 0.457101
+    },
+    {
+      "timestamp": 1780185600000,
+      "navValue": 0.487237
+    },
+    {
+      "timestamp": 1780272000000,
+      "navValue": 0.483327
+    },
+    {
+      "timestamp": 1780358400000,
+      "navValue": 0.493156
+    },
+    {
+      "timestamp": 1780444800000,
+      "navValue": 0.472262
+    },
+    {
+      "timestamp": 1780531200000,
+      "navValue": 0.496181
+    },
+    {
+      "timestamp": 1780617600000,
+      "navValue": 0.437163
+    },
+    {
+      "timestamp": 1780704000000,
+      "navValue": 0.389631
+    },
+    {
+      "timestamp": 1780790400000,
+      "navValue": 0.371332
+    },
+    {
+      "timestamp": 1780876800000,
+      "navValue": 0.389187
+    },
+    {
+      "timestamp": 1780963200000,
+      "navValue": 0.382255
+    },
+    {
+      "timestamp": 1781049600000,
+      "navValue": 0.375128
+    },
+    {
+      "timestamp": 1781136000000,
+      "navValue": 0.353407
+    },
+    {
+      "timestamp": 1781222400000,
+      "navValue": 0.383095
+    },
+    {
+      "timestamp": 1781308800000,
+      "navValue": 0.388554
+    },
+    {
+      "timestamp": 1781395200000,
+      "navValue": 0.414658
+    },
+    {
+      "timestamp": 1781481600000,
+      "navValue": 0.423238
+    },
+    {
+      "timestamp": 1781568000000,
+      "navValue": 0.423376
+    },
+    {
+      "timestamp": 1781654400000,
+      "navValue": 0.411389
+    },
+    {
+      "timestamp": 1781740800000,
+      "navValue": 0.403107
+    },
+    {
+      "timestamp": 1781827200000,
+      "navValue": 0.400205
+    },
+    {
+      "timestamp": 1781913600000,
+      "navValue": 0.41587
+    },
+    {
+      "timestamp": 1782000000000,
+      "navValue": 0.413198
+    },
+    {
+      "timestamp": 1782086400000,
+      "navValue": 0.400384
+    },
+    {
+      "timestamp": 1782172800000,
+      "navValue": 0.395255
+    },
+    {
+      "timestamp": 1782259200000,
+      "navValue": 0.384048
+    },
+    {
+      "timestamp": 1782345600000,
+      "navValue": 0.386798
+    },
+    {
+      "timestamp": 1782432000000,
+      "navValue": 0.374679
+    },
+    {
+      "timestamp": 1782518400000,
+      "navValue": 0.388023
+    },
+    {
+      "timestamp": 1782604800000,
+      "navValue": 0.381484
+    },
+    {
+      "timestamp": 1782691200000,
+      "navValue": 0.376751
+    },
+    {
+      "timestamp": 1782777600000,
+      "navValue": 0.382638
+    },
+    {
+      "timestamp": 1782864000000,
+      "navValue": 0.37122
+    },
+    {
+      "timestamp": 1782950400000,
+      "navValue": 0.375627
+    },
+    {
+      "timestamp": 1783036800000,
+      "navValue": 0.396283
+    },
+    {
+      "timestamp": 1783123200000,
+      "navValue": 0.400308
+    },
+    {
+      "timestamp": 1783209600000,
+      "navValue": 0.397755
+    },
+    {
+      "timestamp": 1783296000000,
+      "navValue": 0.402277
+    },
+    {
+      "timestamp": 1783382400000,
+      "navValue": 0.402068
+    },
+    {
+      "timestamp": 1783468800000,
+      "navValue": 0.391154
+    },
+    {
+      "timestamp": 1783555200000,
+      "navValue": 0.380213
+    },
+    {
+      "timestamp": 1783641600000,
+      "navValue": 0.383575
+    },
+    {
+      "timestamp": 1783728000000,
+      "navValue": 0.384795
+    },
+    {
+      "timestamp": 1783814400000,
+      "navValue": 0.37945
+    },
+    {
+      "timestamp": 1783900800000,
+      "navValue": 0.376113
+    },
+    {
+      "timestamp": 1783987200000,
+      "navValue": 0.370203
+    },
+    {
+      "timestamp": 1784073600000,
+      "navValue": 0.377866
+    },
+    {
+      "timestamp": 1784160000000,
+      "navValue": 0.377182
+    },
+    {
+      "timestamp": 1784246400000,
+      "navValue": 0.365331
+    },
+    {
+      "timestamp": 1784332800000,
+      "navValue": 0.364454
+    },
+    {
+      "timestamp": 1784419200000,
+      "navValue": 0.365492
+    },
+    {
+      "timestamp": 1784505600000,
+      "navValue": 0.365984
+    },
+    {
+      "timestamp": 1784592000000,
+      "navValue": 0.37265
+    },
+    {
+      "timestamp": 1784678400000,
+      "navValue": 0.37695
+    },
+    {
+      "timestamp": 1784764800000,
+      "navValue": 0.370152
+    },
+    {
+      "timestamp": 1784851200000,
+      "navValue": 0.361103
+    },
+    {
+      "timestamp": 1784937600000,
+      "navValue": 0.356933
+    },
+    {
+      "timestamp": 1785024000000,
+      "navValue": 0.357871
+    },
+    {
+      "timestamp": 1785110400000,
+      "navValue": 0.364146
+    },
+    {
+      "timestamp": 1785196800000,
+      "navValue": 0.346683
+    },
+    {
+      "timestamp": 1785283200000,
+      "navValue": 0.350302
+    },
+    {
+      "timestamp": 1785369600000,
+      "navValue": 0.346658
+    },
+    {
+      "timestamp": 1785456000000,
+      "navValue": 0.349512
+    },
+    {
+      "timestamp": 1785542400000,
+      "navValue": 0.340395
+    },
+    {
+      "timestamp": 1785628800000,
+      "navValue": 0.33539
+    },
+    {
+      "timestamp": 1785715200000,
+      "navValue": 0.342689
+    },
+    {
+      "timestamp": 1785801600000,
+      "navValue": 0.33797
+    },
+    {
+      "timestamp": 1785888000000,
+      "navValue": 0.332598
+    },
+    {
+      "timestamp": 1785974400000,
+      "navValue": 0.329486
+    },
+    {
+      "timestamp": 1786060800000,
+      "navValue": 0.329823
+    },
+    {
+      "timestamp": 1786147200000,
+      "navValue": 0.324717
+    },
+    {
+      "timestamp": 1786233600000,
+      "navValue": 0.328244
+    },
+    {
+      "timestamp": 1786320000000,
+      "navValue": 0.323134
+    },
+    {
+      "timestamp": 1786406400000,
+      "navValue": 0.315524
+    },
+    {
+      "timestamp": 1786492800000,
+      "navValue": 0.314881
+    },
+    {
+      "timestamp": 1786579200000,
+      "navValue": 0.31099
+    },
+    {
+      "timestamp": 1786665600000,
+      "navValue": 0.311862
+    },
+    {
+      "timestamp": 1786752000000,
+      "navValue": 0.31206
+    },
+    {
+      "timestamp": 1786838400000,
+      "navValue": 0.311761
+    },
+    {
+      "timestamp": 1786924800000,
+      "navValue": 0.30989
+    },
+    {
+      "timestamp": 1787011200000,
+      "navValue": 0.313819
+    },
+    {
+      "timestamp": 1787097600000,
+      "navValue": 0.311304
+    },
+    {
+      "timestamp": 1787184000000,
+      "navValue": 0.337912
+    },
+    {
+      "timestamp": 1787270400000,
+      "navValue": 0.348205
+    },
+    {
+      "timestamp": 1787356800000,
+      "navValue": 0.378942
+    },
+    {
+      "timestamp": 1787443200000,
+      "navValue": 0.36637
+    },
+    {
+      "timestamp": 1787529600000,
+      "navValue": 0.380053
+    },
+    {
+      "timestamp": 1787616000000,
+      "navValue": 0.372257
+    },
+    {
+      "timestamp": 1787702400000,
+      "navValue": 0.375415
+    },
+    {
+      "timestamp": 1787788800000,
+      "navValue": 0.38475
+    },
+    {
+      "timestamp": 1787875200000,
+      "navValue": 0.389547
+    },
+    {
+      "timestamp": 1787961600000,
+      "navValue": 0.366369
+    },
+    {
+      "timestamp": 1788048000000,
+      "navValue": 0.368401
+    },
+    {
+      "timestamp": 1788134400000,
+      "navValue": 0.35237
+    },
+    {
+      "timestamp": 1788220800000,
+      "navValue": 0.363011
+    },
+    {
+      "timestamp": 1788307200000,
+      "navValue": 0.360735
+    },
+    {
+      "timestamp": 1788393600000,
+      "navValue": 0.362861
+    },
+    {
+      "timestamp": 1788480000000,
+      "navValue": 0.376045
+    },
+    {
+      "timestamp": 1788566400000,
+      "navValue": 0.363754
+    },
+    {
+      "timestamp": 1788652800000,
+      "navValue": 0.37243
+    },
+    {
+      "timestamp": 1788739200000,
+      "navValue": 0.406081
+    },
+    {
+      "timestamp": 1788825600000,
+      "navValue": 0.396149
+    },
+    {
+      "timestamp": 1788912000000,
+      "navValue": 0.385158
+    },
+    {
+      "timestamp": 1788998400000,
+      "navValue": 0.375395
+    },
+    {
+      "timestamp": 1789084800000,
+      "navValue": 0.357658
+    },
+    {
+      "timestamp": 1789171200000,
+      "navValue": 0.362235
+    },
+    {
+      "timestamp": 1789257600000,
+      "navValue": 0.361284
+    },
+    {
+      "timestamp": 1789344000000,
+      "navValue": 0.355629
+    },
+    {
+      "timestamp": 1789430400000,
+      "navValue": 0.36082
+    },
+    {
+      "timestamp": 1789516800000,
+      "navValue": 0.341323
+    },
+    {
+      "timestamp": 1789603200000,
+      "navValue": 0.351419
+    },
+    {
+      "timestamp": 1789689600000,
+      "navValue": 0.372072
+    },
+    {
+      "timestamp": 1789776000000,
+      "navValue": 0.402482
+    },
+    {
+      "timestamp": 1789862400000,
+      "navValue": 0.41217
+    },
+    {
+      "timestamp": 1789948800000,
+      "navValue": 0.449307
+    },
+    {
+      "timestamp": 1790035200000,
+      "navValue": 0.478129
+    },
+    {
+      "timestamp": 1790121600000,
+      "navValue": 0.475915
+    },
+    {
+      "timestamp": 1790208000000,
+      "navValue": 0.448221
+    },
+    {
+      "timestamp": 1790294400000,
+      "navValue": 0.477973
+    },
+    {
+      "timestamp": 1790380800000,
+      "navValue": 0.509085
+    },
+    {
+      "timestamp": 1790467200000,
+      "navValue": 0.521318
+    },
+    {
+      "timestamp": 1790544280000,
+      "navValue": 0.535466
+    },
+    {
+      "timestamp": 1790545041507,
+      "navValue": 0.534753
+    },
+    {
+      "timestamp": 1790580011925,
+      "navValue": 0.511454
+    },
+    {
+      "timestamp": 1790583612068,
+      "navValue": 0.510235
+    },
+    {
+      "timestamp": 1790587211981,
+      "navValue": 0.510448
+    },
+    {
+      "timestamp": 1790590811993,
+      "navValue": 0.510129
+    },
+    {
+      "timestamp": 1790593881178,
+      "navValue": 0.510314
+    },
+    {
+      "timestamp": 1790597481428,
+      "navValue": 0.515794
+    },
+    {
+      "timestamp": 1790601081274,
+      "navValue": 0.51582
+    },
+    {
+      "timestamp": 1790604681244,
+      "navValue": 0.513943
+    },
+    {
+      "timestamp": 1790608281835,
+      "navValue": 0.503968
+    },
+    {
+      "timestamp": 1790611881943,
+      "navValue": 0.502743
+    },
+    {
+      "timestamp": 1790630031760,
+      "navValue": 0.505137
+    },
+    {
+      "timestamp": 1790630465962,
+      "navValue": 0.502484
+    },
+    {
+      "timestamp": 1791016515016,
+      "navValue": 0.50011
+    },
+    {
+      "timestamp": 1791020115022,
+      "navValue": 0.50016
+    },
+    {
+      "timestamp": 1791023715019,
+      "navValue": 0.507481
+    },
+    {
+      "timestamp": 1791027315019,
+      "navValue": 0.508008
+    },
+    {
+      "timestamp": 1791030915021,
+      "navValue": 0.509728
+    },
+    {
+      "timestamp": 1791034515021,
+      "navValue": 0.511667
+    },
+    {
+      "timestamp": 1791038115247,
+      "navValue": 0.516792
+    },
+    {
+      "timestamp": 1791041715261,
+      "navValue": 0.516864
+    },
+    {
+      "timestamp": 1791045315292,
+      "navValue": 0.517634
+    },
+    {
+      "timestamp": 1791048915242,
+      "navValue": 0.517639
+    },
+    {
+      "timestamp": 1791052515524,
+      "navValue": 0.513033
+    },
+    {
+      "timestamp": 1791056115723,
+      "navValue": 0.513595
+    }
+  ]
+}

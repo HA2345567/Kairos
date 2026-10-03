@@ -10,6 +10,8 @@ import { LayoutGrid, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./cesto.css";
 
+import { useTokenPrices } from "@/hooks/useTokenPrices";
+
 const CATEGORIES = ["All", ...Array.from(new Set(CURATED_BASKETS.map((b) => b.category)))];
 
 export default function Markets() {
@@ -18,6 +20,14 @@ export default function Markets() {
   const [isLoading, setIsLoading] = useState(true);
   const [investBasket, setInvestBasket] = useState<Basket | null>(null);
   const [investModalOpen, setInvestModalOpen] = useState(false);
+
+  // Aggregate all unique token mints for real-time DexScreener/Jupiter price updates
+  const allConstituentMints = useMemo(() => {
+    return Array.from(
+      new Set(CURATED_BASKETS.flatMap((b) => b.tokens.map((t) => t.priceMint || t.mint)))
+    );
+  }, []);
+  const { prices: livePrices } = useTokenPrices(allConstituentMints);
 
   function handleInvestClick(basket: Basket) {
     setInvestBasket(basket);
@@ -159,6 +169,7 @@ export default function Markets() {
                     index={idx + 1}
                     basket={basket}
                     onInvestClick={handleInvestClick}
+                    livePrices={livePrices}
                   />
                 </Link>
               ))}

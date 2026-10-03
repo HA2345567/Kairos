@@ -13,6 +13,7 @@ import Portfolio from "./pages/Portfolio.tsx";
 import AdminPage from "./pages/Admin.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Labs from "./pages/Labs.tsx";
+import LabsCreate from "./pages/LabsCreate.tsx";
 
 const queryClient = new QueryClient({
   defaultOptions: { 
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/basket/:id" element={<MarketDetail />} />
             <Route path="/positions" element={<Portfolio />} />
             <Route path="/labs" element={<Labs />} />
+            <Route path="/labs/create" element={<LabsCreate />} />
             <Route path="/portfolio" element={<Portfolio />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="*" element={<NotFound />} />

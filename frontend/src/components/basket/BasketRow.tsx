@@ -12,9 +12,10 @@ interface BasketRowProps {
   basket: Basket;
   index: number;
   onInvestClick?: (basket: Basket) => void;
+  livePrices?: Record<string, { priceUsd: number; change24h: number }>;
 }
 
-export function BasketRow({ basket, index, onInvestClick }: BasketRowProps) {
+export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRowProps) {
   const { data: navSummary, isLoading: isNavLoading } = useBasketNavHistory(basket.id);
 
   const hasData = Boolean(navSummary && navSummary.history && navSummary.history.length > 0);
@@ -22,13 +23,22 @@ export function BasketRow({ basket, index, onInvestClick }: BasketRowProps) {
   const isPositive = allTimeReturn !== null ? allTimeReturn >= 0 : true;
   const returnString = allTimeReturn !== null ? `${allTimeReturn >= 0 ? "+" : ""}${allTimeReturn.toFixed(2)}%` : null;
 
-  // Find top performer token for the subline "· PUMP +7.6% today"
+  // Find top performer token for the subline with real-time live prices
   const topToken = useMemo(() => {
     if (!basket.tokens || basket.tokens.length === 0) return null;
-    return [...basket.tokens].sort(
+    const tokensWithLive = basket.tokens.map((t) => {
+      const lookup = t.priceMint ?? t.mint;
+      const live = livePrices?.[lookup] || livePrices?.[t.mint];
+      return {
+        ...t,
+        change24h: live?.change24h !== undefined ? live.change24h : t.change24h,
+        priceUsd: live?.priceUsd !== undefined ? live.priceUsd : t.priceUsd,
+      };
+    });
+    return tokensWithLive.sort(
       (a, b) => Math.abs(b.change24h || 0) - Math.abs(a.change24h || 0)
     )[0];
-  }, [basket.tokens]);
+  }, [basket.tokens, livePrices]);
 
   return (
     <div className="group relative flex items-center justify-between gap-3 sm:gap-6 bg-surface hover:bg-surface-hover px-4 py-3.5 sm:px-6 sm:py-4 transition-colors duration-150">

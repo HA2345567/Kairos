@@ -53,141 +53,19 @@ const donutColors = [
 ];
 
 import { useBasketNavHistory } from "@/hooks/useBasketNavHistory";
+import { TechnicalChart } from "@/components/basket/TechnicalChart";
 
 function PerformanceChart({ basket, mobile = false }: { basket: Basket; mobile?: boolean }) {
-  const [period, setPeriod] = useState("ALL");
-  const periods = ["1W", "1M", "ALL"];
-
-  const { data: navSummary, isLoading: isNavLoading, isError: isNavError } = useBasketNavHistory(basket.id);
-
-  const hasData = Boolean(navSummary && navSummary.history && navSummary.history.length > 0);
-  const points = navSummary?.history || [];
-
-  const allTimeReturn = hasData ? navSummary!.allTimeReturnPct : null;
-  const isPositive = allTimeReturn !== null ? allTimeReturn >= 0 : true;
-  const returnVal = allTimeReturn !== null ? `${allTimeReturn >= 0 ? "+" : ""}${allTimeReturn.toFixed(2)}%` : "No data yet";
-  const returnPeriod = "ALL TIME RETURN";
-
-  // Compute SVG polyline from real historical NAV data points
-  const { pathPoints, areaPoints, dateLabels } = useMemo(() => {
-    if (points.length === 0) return { pathPoints: "", areaPoints: "", dateLabels: [] };
-
-    const minNav = Math.min(...points.map((p) => p.navValue));
-    const maxNav = Math.max(...points.map((p) => p.navValue));
-    const range = maxNav - minNav || 1;
-
-    const coords = points.map((p, i) => {
-      const x = points.length === 1 ? 260 : (i / (points.length - 1)) * 520;
-      const y = 185 - ((p.navValue - minNav) / range) * 155;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    });
-
-    const path = coords.join(" ");
-    const area = `0,210 ${coords.join(" ")} 520,210`;
-
-    // Extract real date labels from first, 33%, 66%, and last point
-    const indices = [0, Math.floor(points.length / 3), Math.floor((points.length * 2) / 3), points.length - 1];
-    const labels = indices.map((idx) => {
-      const d = new Date(points[idx].timestamp);
-      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    });
-
-    return { pathPoints: path, areaPoints: area, dateLabels: labels };
-  }, [points]);
+  const { data: navSummary, isLoading: isNavLoading } = useBasketNavHistory(basket.id);
+  const rawHistory = navSummary?.history || [];
 
   return (
-    <div className={mobile ? "performance performance-mobile" : "performance panel"}>
-      {!mobile && (
-        <div className="section-heading">
-          <h2>Historical NAV Performance</h2>
-          <div className="periods">
-            {periods.map((p) => (
-              <button
-                key={p}
-                className={period === p ? "selected" : ""}
-                onClick={() => setPeriod(p)}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {mobile && (
-        <div className="mobile-performance-head">
-          <div>
-            <small>CURRENT NAV</small>
-            <strong>{navSummary?.currentNav ? `$${navSummary.currentNav.toFixed(4)}` : "—"}</strong>
-          </div>
-          <div>
-            <small>{returnPeriod}</small>
-            <b className={isPositive ? "text-emerald-400" : "text-rose-400"}>{returnVal}</b>
-          </div>
-        </div>
-      )}
-      <div className="chart-wrap">
-        {isNavLoading ? (
-          <div className="w-full h-[210px] flex items-center justify-center bg-foreground/[0.04] rounded-xl border border-foreground/10">
-            <span className="text-xs font-mono text-foreground/50 animate-pulse">Loading real NAV history...</span>
-          </div>
-        ) : !hasData ? (
-          <div className="w-full h-[210px] flex flex-col items-center justify-center bg-foreground/[0.04] rounded-xl border border-foreground/10 p-6 text-center">
-            <p className="text-sm font-semibold text-foreground/75 mb-1">No historical NAV data yet</p>
-            <p className="text-xs font-mono text-foreground/50 max-w-sm">
-              Live NAV data is recorded periodically once market trades and price feeds are live.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="chart-labels">
-              <span>Start</span>
-              <span>1/3</span>
-              <span>2/3</span>
-              <span>Current</span>
-            </div>
-            <svg
-              viewBox="0 0 520 210"
-              preserveAspectRatio="none"
-              role="img"
-              aria-label={`Real NAV performance chart for ${basket.name}`}
-            >
-              <defs>
-                <linearGradient id={mobile ? "chartFillMobile" : "chartFill"} x1="0" y1="0" x2="0" y2="1">
-                  <stop stopColor={isPositive ? "var(--positive)" : "#ef4444"} stopOpacity=".22" />
-                  <stop offset="1" stopColor={isPositive ? "var(--positive)" : "#ef4444"} stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              {[70, 190, 330, 460].map((x) => (
-                <line key={x} x1={x} x2={x} y1="0" y2="210" stroke="var(--border)" strokeDasharray="2 5" />
-              ))}
-              <polygon points={areaPoints} fill={`url(#${mobile ? "chartFillMobile" : "chartFill"})`} />
-              <polyline
-                points={pathPoints}
-                fill="none"
-                stroke={isPositive ? "var(--positive)" : "#ef4444"}
-                strokeWidth="2.2"
-                vectorEffect="non-scaling-stroke"
-              />
-            </svg>
-            <div className="chart-dates">
-              {dateLabels.map((lbl, idx) => (
-                <span key={idx}>{lbl}</span>
-              ))}
-            </div>
-            <div className="chart-legend">
-              <span>
-                <i className={isPositive ? "legend-line green" : "legend-line red"} /> {basket.name} &nbsp;<small>REAL HISTORICAL NAV</small>
-              </span>
-            </div>
-          </>
-        )}
-      </div>
-      {!mobile && (
-        <p className="fine-print">
-          *Real historical and current NAV tracking based on constituent market prices. Past performance does not guarantee future results.
-        </p>
-      )}
-    </div>
+    <TechnicalChart
+      basket={basket}
+      rawHistory={rawHistory}
+      isLoading={isNavLoading}
+      mobile={mobile}
+    />
   );
 }
 
@@ -781,6 +659,7 @@ export default function MarketDetailPage() {
           <div className="tab-content">
             {tab === "About" && (
               <>
+                <PerformanceChart basket={basket} />
                 <Allocation tokens={basket.tokens} />
                 <div className="about-strategy panel">
                   <h2>About This Strategy</h2>
