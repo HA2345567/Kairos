@@ -100,7 +100,12 @@ export function BasketCard({
   const content = (
     <div className="arc-card-theme" data-theme="dark" data-accent="green">
       <ArcCard
-        title={name}
+        title={
+          <div className="flex items-center justify-between gap-2 w-full">
+            <span className="truncate">{name}</span>
+            {points ? <span className="kairos-card-points">{points}</span> : null}
+          </div>
+        }
         description={desc}
         media={
           <img
@@ -129,7 +134,6 @@ export function BasketCard({
             </div>
           ) : null
         }
-        meta={points ? <span className="kairos-card-points">{points}</span> : null}
         action={
           <div className="kairos-card-return">
             <small>{returnPeriodLabel}</small>

@@ -1,49 +1,319 @@
-.card { position: relative; min-width: 0; overflow: hidden; isolation: isolate; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); color: var(--foreground); transition: border-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-standard) var(--ease-standard); }
-/* A pointed-at card floats a little, so the shadow arrives with the lift. Touch and pen never lift. */
-.card[data-hover] { border-color: var(--border-strong); box-shadow: var(--shadow-raised); }
-.card:has(.trigger:focus-visible) { border-color: var(--border-strong); }
-.media { position: relative; overflow: hidden; background: var(--surface-muted); }
-.zoom { display: grid; min-height: 112px; place-items: center; }
-.content { padding: var(--space-5); }
-/* Fit-content width keeps the title's box the shape of its text, so it scales evenly when it grows into the quick look. */
-.title { width: fit-content; max-width: 100%; margin: 0; font-size: var(--text-lg); font-weight: 500; letter-spacing: var(--tracking-body); line-height: 1.3; text-wrap: balance; }
-.trigger { padding: 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-align: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-/* The title's hit area stretches over the whole card, so pointing anywhere opens the quick look while the action stays on top. */
-.trigger::after { content: ""; position: absolute; inset: 0; }
-.trigger:focus-visible { outline: none; }
-.description { max-width: 34ch; margin: var(--space-2) 0 0; color: var(--text-secondary); font-size: var(--text-sm); line-height: var(--leading-body); text-wrap: pretty; }
-.footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-5); }
-.byline { display: flex; flex: 1 1 auto; align-items: center; gap: var(--space-3); min-width: 0; }
-.avatar { display: grid; flex: none; width: var(--space-8); height: var(--space-8); overflow: hidden; border-radius: var(--radius-pill); background: var(--surface-muted); }
-.avatar > * { width: 100%; height: 100%; object-fit: cover; }
-/* A shrinkable column, so a narrow footer truncates the byline instead of sliding it under the action. */
-.bylineText { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; font-size: var(--text-xs); line-height: var(--leading-body); }
-.meta { overflow: hidden; color: var(--foreground); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.status { position: relative; overflow: clip visible; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-/* The line clips sideways only, so a status too long for its column ends in an ellipsis while its words still rise in unclipped. */
-.roll { position: relative; display: block; }
-.line { display: block; overflow: clip visible; text-overflow: ellipsis; }
-.word { display: inline-block; white-space: pre; }
-.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.action { position: relative; z-index: 1; display: flex; flex: none; flex-wrap: wrap; gap: var(--space-3); }
+/* Exact Theme Colors:
+   Background: #141414
+   Surface: #242424
+   Surface Hover: #2A2A2A
+   Text Primary: #F5F5F5
+   Text Secondary: #A0A0A0
+   Text Muted: #737373
+   Border: #292929
+   Border Subtle: #222222
+   Border Strong: #383838
+*/
 
-.overlay { position: fixed; inset: 0; z-index: 50; background: oklch(10% 0 0 / .46); backdrop-filter: blur(7px); }
-/* Centered with auto margins, so transform stays free for the morph. */
-.panel { position: fixed; inset: 0; z-index: 51; width: min(calc(100vw - var(--space-8)), 30rem); height: fit-content; max-height: calc(100dvh - var(--space-8)); margin: auto; overflow: hidden auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: var(--radius-surface); background: var(--surface-raised); color: var(--foreground); box-shadow: var(--shadow-floating); transition: background-color var(--duration-standard) var(--ease-standard), box-shadow var(--duration-standard) var(--ease-standard); }
-.panel:focus { outline: none; }
-/* Closing: the panel takes the card's box and look, so it lands exactly where the card sits and hands back without a seam. */
-.panel[data-returning] { inset: auto; top: var(--landing-top); left: var(--landing-left); width: var(--landing-width); height: var(--landing-height); max-height: none; margin: 0; overflow: hidden; border-color: var(--border); background: var(--surface); box-shadow: none; pointer-events: none; }
-.panel[data-returning] .content { padding: var(--space-5); }
-.panel[data-returning] .title { font-size: var(--text-lg); }
-.panel .content { padding: var(--space-6); }
-.panel .title { font-size: var(--text-xl); }
-.panel .description { max-width: var(--card-measure, 34ch); }
-/* The slot carries the entrance, so the button's own press answers instantly. */
-.closeSlot { position: absolute; top: var(--space-4); right: var(--space-4); z-index: 2; display: grid; }
-.close { display: grid; width: var(--space-8); height: var(--space-8); place-items: center; padding: 0; border: 1px solid color-mix(in oklch, var(--border) 70%, transparent); border-radius: var(--radius-pill); background: color-mix(in oklch, var(--surface-raised) 74%, transparent); backdrop-filter: blur(12px); color: var(--foreground); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background-color var(--duration-fast) var(--ease-standard); }
-@media (hover: hover) and (pointer: fine) { .close:hover { background: var(--surface-raised); } }
-.details { margin-top: var(--space-6); padding-top: var(--space-5); border-top: 1px solid var(--border); color: var(--text-secondary); font-size: var(--text-sm); line-height: var(--leading-body); }
+.card {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid var(--border, #292929);
+  border-radius: var(--radius-panel, 1.25rem);
+  background: #1A1A1A;
+  color: var(--text-primary, #F5F5F5);
+  transition: border-color var(--duration-fast, 160ms) var(--ease-standard, ease),
+              background-color var(--duration-fast, 160ms) var(--ease-standard, ease),
+              box-shadow var(--duration-standard, 240ms) var(--ease-standard, ease);
+}
+
+/* Hover and focus states */
+.card[data-hover],
+.card:hover {
+  background: #242424;
+  border-color: var(--border-strong, #383838);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+.card:has(.trigger:focus-visible) {
+  border-color: var(--border-strong, #383838);
+}
+
+.media {
+  position: relative;
+  overflow: hidden;
+  background: #141414;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  min-height: 200px;
+}
+
+.zoom {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  place-items: center;
+  justify-content: center;
+}
+
+.zoom > * {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.content {
+  padding: var(--space-5, 1.25rem);
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.title {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  font-size: var(--text-base, 1rem);
+  font-weight: 600;
+  letter-spacing: var(--tracking-body, -0.01em);
+  line-height: 1.35;
+  color: var(--text-primary, #F5F5F5);
+}
+
+.trigger {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.trigger::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.trigger:focus-visible {
+  outline: none;
+}
+
+.description {
+  max-width: none;
+  margin: var(--space-2, 0.5rem) 0 0;
+  color: var(--text-secondary, #A0A0A0);
+  font-size: var(--text-xs, 0.75rem);
+  line-height: var(--leading-body, 1.4);
+  text-wrap: pretty;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 0.75rem);
+  margin-top: auto;
+  padding-top: var(--space-4, 1rem);
+}
+
+.byline {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-3, 0.75rem);
+  min-width: 0;
+}
+
+.avatar {
+  display: grid;
+  flex: none;
+  width: var(--space-8, 2rem);
+  height: var(--space-8, 2rem);
+  overflow: hidden;
+  border-radius: var(--radius-pill, 9999px);
+  background: var(--surface-muted, #1E1E1E);
+}
+
+.avatar > * {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bylineText {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  font-size: var(--text-xs, 0.75rem);
+  line-height: var(--leading-body, 1.4);
+}
+
+.meta {
+  overflow: hidden;
+  color: var(--text-primary, #F5F5F5);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  position: relative;
+  overflow: clip visible;
+  color: var(--text-muted, #737373);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.roll {
+  position: relative;
+  display: block;
+}
+
+.line {
+  display: block;
+  overflow: clip visible;
+  text-overflow: ellipsis;
+}
+
+.word {
+  display: inline-block;
+  white-space: pre;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.action {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--space-3, 0.75rem);
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(20, 20, 20, 0.75);
+  backdrop-filter: blur(8px);
+}
+
+.panel {
+  position: fixed;
+  inset: 0;
+  z-index: 51;
+  width: min(calc(100vw - var(--space-8, 2rem)), 30rem);
+  height: fit-content;
+  max-height: calc(100dvh - var(--space-8, 2rem));
+  margin: auto;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border, #292929);
+  border-radius: var(--radius-surface, 1.5rem);
+  background: var(--surface-raised, #2A2A2A);
+  color: var(--text-primary, #F5F5F5);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6);
+  transition: background-color var(--duration-standard, 240ms) var(--ease-standard, ease),
+              box-shadow var(--duration-standard, 240ms) var(--ease-standard, ease);
+}
+
+.panel:focus {
+  outline: none;
+}
+
+.panel[data-returning] {
+  inset: auto;
+  top: var(--landing-top);
+  left: var(--landing-left);
+  width: var(--landing-width);
+  height: var(--landing-height);
+  max-height: none;
+  margin: 0;
+  overflow: hidden;
+  border-color: var(--border, #292929);
+  background: var(--surface, #242424);
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.panel[data-returning] .content {
+  padding: var(--space-5, 1.25rem);
+}
+
+.panel[data-returning] .title {
+  font-size: var(--text-lg, 1.125rem);
+}
+
+.panel .content {
+  padding: var(--space-6, 1.5rem);
+}
+
+.panel .title {
+  font-size: var(--text-xl, 1.375rem);
+}
+
+.panel .description {
+  max-width: var(--card-measure, 34ch);
+}
+
+.closeSlot {
+  position: absolute;
+  top: var(--space-4, 1rem);
+  right: var(--space-4, 1rem);
+  z-index: 2;
+  display: grid;
+}
+
+.close {
+  display: grid;
+  width: var(--space-8, 2rem);
+  height: var(--space-8, 2rem);
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border, #292929);
+  border-radius: var(--radius-pill, 9999px);
+  background: var(--surface-hover, #2A2A2A);
+  backdrop-filter: blur(12px);
+  color: var(--text-primary, #F5F5F5);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--duration-fast, 160ms) var(--ease-standard, ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .close:hover {
+    background: var(--surface, #242424);
+  }
+}
+
+.details {
+  margin-top: var(--space-6, 1.5rem);
+  padding-top: var(--space-5, 1.25rem);
+  border-top: 1px solid var(--border, #292929);
+  color: var(--text-secondary, #A0A0A0);
+  font-size: var(--text-sm, 0.875rem);
+  line-height: var(--leading-body, 1.4);
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .card, .close { transition-duration: var(--duration-instant); }
+  .card, .close {
+    transition-duration: var(--duration-instant, 120ms);
+  }
 }

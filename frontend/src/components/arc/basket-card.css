@@ -1,21 +1,178 @@
-.arc-card-theme { display:block; height:100%; min-width:0; color: var(--foreground); }
-.arc-card-theme .kairos-market-card { display:flex; height:100%; min-width:0; flex-direction:column; border-radius:16px; border:1px solid var(--border); background:var(--surface); color:var(--foreground); box-shadow:var(--shadow-raised); overflow:hidden; transition: transform var(--duration-fast, 160ms) var(--ease-standard, ease), box-shadow var(--duration-fast, 160ms) var(--ease-standard, ease); }
-.arc-card-theme .kairos-market-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-floating); }
-.arc-card-theme .kairos-market-card > div:first-child { flex:none; width:100%; aspect-ratio:4 / 3; background:var(--surface-muted); overflow:hidden; }
-.arc-card-theme .kairos-market-card > div:first-child > div { width:100%; height:100%; min-height:0; }
-.arc-card-theme .kairos-market-card > div:first-child img { display:block; width:100%; height:100%; object-fit:cover; object-position:center center; }
-.arc-card-theme .kairos-market-card > div:last-child { display:flex; flex:1; flex-direction:column; min-width:0; padding:.85rem .95rem; }
-.arc-card-theme .kairos-market-card h3 { display:flex; align-items:center; gap:.5rem; width:100%; min-width:0; margin:0; font-size:clamp(.85rem,1.1vw,1.05rem); font-weight:700; line-height:1.3; color:var(--foreground); }
-.arc-card-theme .kairos-market-card p { display:-webkit-box; min-height:2.9em; max-width:none; margin:.35rem 0 0; overflow:hidden; color:var(--text-secondary); font-size:clamp(.65rem,.8vw,.75rem); line-height:1.45; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
-.arc-card-theme .kairos-market-card [class*=footer] { gap:.5rem; margin-top:auto; padding-top:.6rem; }
-.arc-card-theme .kairos-market-card [class*=avatar] { display:flex; width:auto; height:auto; overflow:visible; border-radius:0; background:transparent; }
-.kairos-token-stack { display:flex; align-items:center; }
-.kairos-token-stack img { width:19px; height:19px; margin-left:-5px; border:1px solid var(--border); border-radius:50%; background:var(--surface); object-fit:cover; }
-.kairos-token-stack img:first-child { margin-left:0; }
-.kairos-token-stack span { margin-left:5px; color:var(--text-muted); font-size:10px; font-weight:600; }
-.kairos-card-points { display:inline-flex; flex:none; align-items:center; padding:3px 8px; border:1px solid var(--border); border-radius:6px; background:var(--surface-hover); color:var(--text-primary); font-family:inherit; font-size:10px; font-weight:700; line-height:1.4; white-space:nowrap; }
-.kairos-card-return { display:flex; flex-direction:column; align-items:flex-end; line-height:1.25; }
-.kairos-card-return small { color:var(--text-muted); font-size:8px; font-weight:600; white-space:nowrap; }
-.kairos-card-return strong { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.85rem; font-weight:750; }
-.kairos-card-return .positive { color:var(--success, #10b981); }
-.kairos-card-return .negative { color:var(--danger, #f87171); }
+.arc-card-theme {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  color: var(--foreground);
+}
+
+.arc-card-theme .kairos-market-card {
+  display: flex;
+  height: 100%;
+  min-height: 425px;
+  min-width: 0;
+  flex-direction: column;
+  border-radius: var(--radius-panel, 1.25rem);
+  border: 1px solid var(--border);
+  background: #1A1A1A;
+  color: var(--foreground);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  transition: transform var(--duration-fast, 160ms) var(--ease-standard, ease),
+              border-color var(--duration-fast, 160ms) var(--ease-standard, ease),
+              background-color var(--duration-fast, 160ms) var(--ease-standard, ease),
+              box-shadow var(--duration-fast, 160ms) var(--ease-standard, ease);
+}
+
+.arc-card-theme .kairos-market-card:hover {
+  transform: translateY(-2px);
+  background: #242424;
+  border-color: var(--border-strong);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+.arc-card-theme .kairos-market-card > div:first-child {
+  flex: none;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  min-height: 220px;
+  background: #141414;
+  overflow: hidden;
+}
+
+.arc-card-theme .kairos-market-card > div:first-child > div {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.arc-card-theme .kairos-market-card > div:first-child img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.arc-card-theme .kairos-market-card > div:last-child {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: 1.15rem 1.25rem;
+  gap: 0.4rem;
+}
+
+.arc-card-theme .kairos-market-card h3 {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  font-size: clamp(0.9rem, 1.15vw, 1.05rem);
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--foreground);
+}
+
+.arc-card-theme .kairos-market-card p {
+  display: -webkit-box;
+  min-height: 3.2em;
+  max-width: none;
+  margin: 0.35rem 0 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: clamp(0.72rem, 0.85vw, 0.82rem);
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.arc-card-theme .kairos-market-card [class*=footer] {
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.arc-card-theme .kairos-market-card [class*=avatar] {
+  display: flex;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+}
+
+.kairos-token-stack {
+  display: flex;
+  align-items: center;
+}
+
+.kairos-token-stack img {
+  width: 20px;
+  height: 20px;
+  margin-left: -5px;
+  border: 1.5px solid var(--surface);
+  border-radius: 50%;
+  background: var(--surface);
+  object-fit: cover;
+}
+
+.kairos-token-stack img:first-child {
+  margin-left: 0;
+}
+
+.kairos-token-stack span {
+  margin-left: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.kairos-card-points {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  padding: 2.5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.kairos-card-return {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+}
+
+.kairos-card-return small {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.kairos-card-return strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.kairos-card-return .positive {
+  color: #10b981;
+}
+
+.kairos-card-return .negative {
+  color: #f87171;
+}

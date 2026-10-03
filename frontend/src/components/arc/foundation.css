@@ -80,17 +80,18 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --background: oklch(19% 0 0);
-  --surface: oklch(21.5% 0 0);
-  --surface-raised: oklch(24% 0 0);
-  /* Keep muted surfaces and hover states distinct from the base surface in dark mode. */
-  --surface-muted: oklch(26% 0 0);
-  --foreground: oklch(96% 0 0);
-  --text-secondary: oklch(77% 0 0);
-  --text-muted: oklch(64% 0 0);
-  --border: oklch(29% 0 0);
-  --border-subtle: oklch(25% 0 0);
-  --border-strong: oklch(40% 0 0);
+  --background: #141414;
+  --surface: #242424;
+  --surface-raised: #2A2A2A;
+  --surface-hover: #2A2A2A;
+  --surface-muted: #1E1E1E;
+  --foreground: #F5F5F5;
+  --text-primary: #F5F5F5;
+  --text-secondary: #A0A0A0;
+  --text-muted: #737373;
+  --border: #292929;
+  --border-subtle: #222222;
+  --border-strong: #383838;
   --focus-ring: transparent;
   --accent: oklch(80% 0 0);
   --accent-strong: oklch(91% 0 0);

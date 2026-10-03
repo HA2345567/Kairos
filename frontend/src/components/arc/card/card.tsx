@@ -6,11 +6,11 @@ import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
 import type { HTMLMotionProps, MotionProps, Transition, Variants } from "motion/react";
 import { X } from "lucide-react";
-import { motionTokens } from "../lib/motion-tokens";
+import { motionTokens } from "@/lib/motion-tokens";
 import styles from "./card.module.css";
 
 export interface CardProps extends HTMLAttributes<HTMLElement> {
-  title: string;
+  title: string | ReactNode;
   description?: string;
   media?: ReactNode;
   action?: ReactNode;

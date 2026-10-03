@@ -32,29 +32,29 @@ export function MarketCard({ market, compact = false }: MarketCardProps) {
     <Link
       to={`/markets/${market.id}`}
       className={cn(
-        "group relative flex flex-col w-full bg-[#0D0D0D] border border-white/[0.04] rounded-2xl p-5 transition-all duration-300 hover:bg-[#121212] hover:border-white/[0.08] hover:shadow-[0_8px_30px_rgb(0,0,0,0.5)]",
+        "group relative flex flex-col w-full min-h-[350px] bg-[#1A1A1A] border border-border rounded-[var(--radius-panel,1.25rem)] p-6 transition-all duration-300 hover:bg-[#242424] hover:border-border-strong hover:shadow-[0_8px_30px_rgb(0,0,0,0.5)]",
         compact ? "max-w-sm" : ""
       )}
     >
       {/* Header: Icon + Category */}
       <div className="flex items-center gap-2 mb-3">
-        <div className="flex h-6 w-6 items-center justify-center rounded-md bg-white/[0.03] ring-1 ring-white/10">
+        <div className="flex h-6 w-6 items-center justify-center rounded-md bg-surface-hover ring-1 ring-border">
           {getCategoryIcon(market.category)}
         </div>
-        <span className="text-[10px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
+        <span className="text-[10px] font-bold uppercase tracking-[0.05em] text-text-muted">
           {market.category}
         </span>
         {market.isLive && (
           <div className="ml-auto flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-            <span className="text-[9px] font-bold uppercase text-success tracking-wider">Live</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[9px] font-bold uppercase text-emerald-400 tracking-wider">Live</span>
           </div>
         )}
       </div>
 
       {/* Question / Title with Image */}
       <div className="flex gap-3 mb-6">
-        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg ring-1 ring-white/10">
+        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg ring-1 ring-border">
           {market.imageUrl ? (
             <img 
               src={market.imageUrl} 
@@ -62,38 +62,38 @@ export function MarketCard({ market, compact = false }: MarketCardProps) {
               alt={market.question} 
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-white/5">
-              <Globe className="h-6 w-6 text-white/20" />
+            <div className="flex h-full w-full items-center justify-center bg-surface-hover">
+              <Globe className="h-6 w-6 text-text-muted" />
             </div>
           )}
         </div>
-        <h3 className="text-base font-semibold text-white/95 leading-tight line-clamp-2 min-h-[2.5rem] group-hover:text-white transition-colors">
+        <h3 className="text-base font-semibold text-text-primary leading-tight line-clamp-2 min-h-[2.5rem] group-hover:text-white transition-colors">
           {market.question}
         </h3>
       </div>
 
-      {/* Outcome Rows (Polymarket Style) */}
+      {/* Outcome Rows */}
       <div className="space-y-2.5 mb-6">
         {/* Yes Outcome */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 flex-1">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.03] border border-white/[0.05] overflow-hidden">
-               <span className="text-[10px] font-bold text-white/40">Y</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover border border-border overflow-hidden">
+               <span className="text-[10px] font-bold text-text-muted">Y</span>
             </div>
             <div className="flex flex-col flex-1">
-              <span className="text-sm font-medium text-white/80">Yes</span>
-              <div className="mt-1 h-1 w-full bg-white/[0.03] rounded-full overflow-hidden">
+              <span className="text-sm font-medium text-text-primary">Yes</span>
+              <div className="mt-1 h-1 w-full bg-surface-hover rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-[#00FFBD] rounded-full transition-all duration-700" 
+                  className="h-full bg-emerald-500 rounded-full transition-all duration-700" 
                   style={{ width: `${yesProb}%` }} 
                 />
               </div>
             </div>
           </div>
           <div className="flex items-center gap-3 ml-4">
-            <span className="text-[11px] font-medium text-muted-foreground/60">{yesMultiplier}x</span>
-            <div className="min-w-[54px] py-1 px-2 rounded-lg bg-[#00FFBD]/[0.08] border border-[#00FFBD]/20 flex items-center justify-center">
-              <span className="text-xs font-bold text-[#00FFBD]">{yesProb}%</span>
+            <span className="text-[11px] font-medium text-text-muted">{yesMultiplier}x</span>
+            <div className="min-w-[54px] py-1 px-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+              <span className="text-xs font-bold text-emerald-400">{yesProb}%</span>
             </div>
           </div>
         </div>
@@ -101,35 +101,35 @@ export function MarketCard({ market, compact = false }: MarketCardProps) {
         {/* No Outcome */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 flex-1">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.03] border border-white/[0.05] overflow-hidden">
-               <span className="text-[10px] font-bold text-white/40">N</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover border border-border overflow-hidden">
+               <span className="text-[10px] font-bold text-text-muted">N</span>
             </div>
             <div className="flex flex-col flex-1">
-              <span className="text-sm font-medium text-white/80">No</span>
-              <div className="mt-1 h-1 w-full bg-white/[0.03] rounded-full overflow-hidden">
+              <span className="text-sm font-medium text-text-primary">No</span>
+              <div className="mt-1 h-1 w-full bg-surface-hover rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-[#FF4F4F] rounded-full transition-all duration-700" 
+                  className="h-full bg-rose-500 rounded-full transition-all duration-700" 
                   style={{ width: `${noProb}%` }} 
                 />
               </div>
             </div>
           </div>
           <div className="flex items-center gap-3 ml-4">
-            <span className="text-[11px] font-medium text-muted-foreground/60">{noMultiplier}x</span>
-            <div className="min-w-[54px] py-1 px-2 rounded-lg bg-white/[0.05] border border-white/10 flex items-center justify-center">
-              <span className="text-xs font-bold text-white/90">{noProb}%</span>
+            <span className="text-[11px] font-medium text-text-muted">{noMultiplier}x</span>
+            <div className="min-w-[54px] py-1 px-2 rounded-lg bg-surface-hover border border-border flex items-center justify-center">
+              <span className="text-xs font-bold text-text-primary">{noProb}%</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Footer Info */}
-      <div className="mt-auto flex items-center justify-between border-t border-white/[0.04] pt-4">
-        <div className="flex items-center gap-1.5 text-muted-foreground/70">
+      <div className="mt-auto flex items-center justify-between border-t border-border pt-4">
+        <div className="flex items-center gap-1.5 text-text-muted">
           <TrendingUp className="h-3 w-3" />
           <span className="text-[11px] font-medium">{formatUsd(market.volume)} vol</span>
         </div>
-        <div className="flex items-center gap-1.5 text-muted-foreground/70">
+        <div className="flex items-center gap-1.5 text-text-muted">
           <Users className="h-3 w-3" />
           <span className="text-[11px] font-medium">{market.participants || 0} markets</span>
         </div>

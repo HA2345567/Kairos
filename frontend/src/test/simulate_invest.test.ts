@@ -6,6 +6,10 @@ import {
   TOTAL_SOLANA_CU_CAP,
 } from "../../../scripts/invest-basket-v0";
 import { FIXED_ROUTER_ACCOUNTS } from "../../../scripts/alt-manager";
+import {
+  fetchJupiterQuote,
+  fetchSwapInstructions,
+} from "../../../scripts/jupiter-client";
 
 describe("Kairos Router - Step 5 Assembly & Simulation Gate Tests", () => {
   // Use public mainnet endpoint for simulation
@@ -19,29 +23,25 @@ describe("Kairos Router - Step 5 Assembly & Simulation Gate Tests", () => {
     "assembles Versioned Transaction (v0) with ALT and validates Compute Unit ceiling",
     async () => {
       // 1. Live simulation of the combined dual-swap instructions using Jupiter ALTs
-      const solQuote = await fetch("https://api.jup.ag/swap/v1/quote?inputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&outputMint=So11111111111111111111111111111111111111112&amount=500000").then((r) => r.json());
-      await new Promise((r) => setTimeout(r, 200));
-      const jtoQuote = await fetch("https://api.jup.ag/swap/v1/quote?inputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&outputMint=jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL&amount=500000").then((r) => r.json());
-
+      const solQuote = await fetchJupiterQuote(
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "So11111111111111111111111111111111111111112",
+        500000n,
+        50
+      );
       await new Promise((r) => setTimeout(r, 400));
-      const solIxRes = await fetch("https://api.jup.ag/swap/v1/swap-instructions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userPublicKey: fundedPayer.toBase58(), quoteResponse: solQuote, wrapAndUnwrapSol: false, useSharedAccounts: true }),
-      }).then((r) => r.json());
-      if (!solIxRes.swapInstruction) {
-        throw new Error(`Jupiter SOL SwapIx Error: ${JSON.stringify(solIxRes)}`);
-      }
+      const jtoQuote = await fetchJupiterQuote(
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
+        500000n,
+        50
+      );
 
-      await new Promise((r) => setTimeout(r, 400));
-      const jtoIxRes = await fetch("https://api.jup.ag/swap/v1/swap-instructions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userPublicKey: fundedPayer.toBase58(), quoteResponse: jtoQuote, wrapAndUnwrapSol: false, useSharedAccounts: true }),
-      }).then((r) => r.json());
-      if (!jtoIxRes.swapInstruction) {
-        throw new Error(`Jupiter JTO SwapIx Error: ${JSON.stringify(jtoIxRes)}`);
-      }
+      await new Promise((r) => setTimeout(r, 600));
+      const solIxRes = await fetchSwapInstructions(fundedPayer.toBase58(), solQuote);
+
+      await new Promise((r) => setTimeout(r, 600));
+      const jtoIxRes = await fetchSwapInstructions(fundedPayer.toBase58(), jtoQuote);
 
       const altAddrs = Array.from(new Set([...(solIxRes.addressLookupTableAddresses || []), ...(jtoIxRes.addressLookupTableAddresses || [])]));
       const lookupTables = [];
