@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="goatGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD700" />
+      <stop offset="100%" stop-color="#FF8C00" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="64" fill="#0D0D12" stroke="#FFD700" stroke-width="2"/>
+  <!-- Stylized Goat Horns -->
+  <path d="M46 54 C34 36 44 24 58 34 C50 38 46 44 48 54 Z" fill="url(#goatGrad)"/>
+  <path d="M82 54 C94 36 84 24 70 34 C78 38 82 44 80 54 Z" fill="url(#goatGrad)"/>
+  <!-- Head -->
+  <polygon points="64,88 44,54 84,54" fill="url(#goatGrad)"/>
+  <!-- Eyes -->
+  <rect x="50" y="58" width="6" height="2" fill="#0D0D12"/>
+  <rect x="72" y="58" width="6" height="2" fill="#0D0D12"/>
+  <!-- Beard -->
+  <polygon points="64,102 58,88 70,88" fill="url(#goatGrad)"/>
+</svg>

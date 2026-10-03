@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="fartGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#39FF14" />
+      <stop offset="50%" stop-color="#00FFA3" />
+      <stop offset="100%" stop-color="#CCFF00" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="64" fill="#0A0F0D" stroke="#39FF14" stroke-width="2"/>
+  <!-- Stylized comic puff cloud -->
+  <path d="M42 74 C34 74 28 66 32 58 C28 50 36 40 46 42 C52 34 66 32 74 38 C84 32 96 38 96 50 C104 54 104 66 96 72 C100 82 88 92 78 88 C70 96 54 94 48 88 C40 92 34 84 42 74 Z" fill="url(#fartGrad)" opacity="0.9"/>
+  <!-- Whimsical face / lines -->
+  <circle cx="56" cy="60" r="4" fill="#0A0F0D"/>
+  <circle cx="76" cy="60" r="4" fill="#0A0F0D"/>
+  <path d="M60 72 Q66 78 72 72" stroke="#0A0F0D" stroke-width="3" fill="none" stroke-linecap="round"/>
+</svg>

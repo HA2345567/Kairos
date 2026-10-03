@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="arxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9333EA"/>
+      <stop offset="50%" stop-color="#A855F7"/>
+      <stop offset="100%" stop-color="#EC4899"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="64" fill="#0D091A"/>
+  <!-- Arcium A / confidential hexagon shape -->
+  <polygon points="64,28 96,46 96,82 64,100 32,82 32,46" fill="none" stroke="url(#arxGrad)" stroke-width="6"/>
+  <path d="M64 42L46 78h12l4-8h16l4 8h12L74 42h-10zm-1 18l5 10H58l5-10z" fill="url(#arxGrad)"/>
+</svg>

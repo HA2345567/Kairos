@@ -1,0 +1,346 @@
+@import "./components/arc/foundation.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Kairos Design System — Powered by Arc Foundation */
+
+@layer base {
+  :root,
+  .dark {
+    --background: #141414;
+    --surface: #242424;
+    --surface-hover: #2A2A2A;
+    --surface-elevated: #242424;
+    --surface-raised: #2A2A2A;
+    --surface-muted: #1E1E1E;
+
+    --text-primary: #F5F5F5;
+    --text-secondary: #A0A0A0;
+    --text-muted: #737373;
+
+    --border: #292929;
+    --border-subtle: #222222;
+    --border-strong: #383838;
+
+    --foreground: #F5F5F5;
+    --card: #242424;
+    --card-foreground: #F5F5F5;
+    --popover: #242424;
+    --popover-foreground: #F5F5F5;
+
+    --primary: #F5F5F5;
+    --primary-foreground: #141414;
+    --secondary: #242424;
+    --secondary-foreground: #F5F5F5;
+    --muted: #242424;
+    --muted-foreground: #A0A0A0;
+    --accent: #F5F5F5;
+    --accent-foreground: #141414;
+    --accent-subtle: rgba(255, 255, 255, 0.08);
+
+    --radius: 0.625rem;
+
+    /* Solana brand accents */
+    --sol-green: 152 76% 50%;
+    --sol-purple: 263 78% 65%;
+    --sol-cyan: 187 92% 55%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    background-color: var(--background);
+    color: var(--text-primary);
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--text-primary);
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+    min-height: 100vh;
+  }
+
+  /* Display font — Cal Sans loaded via cdnfonts */
+  .font-display,
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: "Cal Sans", "Outfit", "Inter", ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.015em;
+    color: inherit;
+  }
+
+  .font-mono {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  ::selection {
+    background: #2A2A2A;
+    color: #F5F5F5;
+  }
+}
+
+@layer components {
+
+  /* Cal.com-style multi-layer shadow cards */
+  .shadow-ring {
+    box-shadow:
+      0 0 0 1px hsl(106 19% 17% / 0.12),
+      0 1px 5px -4px hsl(106 19% 17% / 0.25),
+      0 4px 12px -2px hsl(106 19% 17% / 0.12);
+  }
+
+  .shadow-ring-strong {
+    box-shadow:
+      0 0 0 1px hsl(106 19% 17% / 0.18),
+      0 1px 5px -4px hsl(106 19% 17% / 0.35),
+      0 8px 24px -4px hsl(106 19% 17% / 0.2);
+  }
+
+  .shadow-button-inset {
+    box-shadow:
+      inset 0 1px 0 0 hsl(69 86% 74% / 0.25),
+      0 0 0 1px hsl(106 19% 17% / 0.15),
+      0 1px 2px hsl(106 19% 17% / 0.2);
+  }
+
+  /* Hairline divider */
+  .hairline {
+    background: linear-gradient(to right,
+        transparent,
+        hsl(106 19% 17% / 0.15) 20%,
+        hsl(106 19% 17% / 0.15) 80%,
+        transparent);
+    height: 1px;
+  }
+
+  /* Grid background */
+  .grid-bg {
+    background-image:
+      linear-gradient(hsl(106 19% 17% / 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(106 19% 17% / 0.06) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  .dot-bg {
+    background-image: radial-gradient(hsl(106 19% 17% / 0.12) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Radial glow */
+  .radial-fade {
+    mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+  }
+
+  .text-gradient {
+    background: linear-gradient(180deg, #FFFFFF 0%, #A0A0A0 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .badge-pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-border/20 bg-surface px-3 py-1 text-xs font-semibold text-foreground;
+  }
+}
+
+@layer utilities {
+  .animate-marquee {
+    animation: marquee 40s linear infinite;
+  }
+
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-pulse-soft {
+    animation: pulse-soft 2.4s ease-in-out infinite;
+  }
+
+  @keyframes pulse-soft {
+
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .animate-fade-up {
+    animation: fade-up 0.6s ease-out both;
+  }
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-shimmer {
+    background: linear-gradient(110deg, transparent 30%, hsl(0 0% 100% / 0.06) 50%, transparent 70%);
+    background-size: 200% 100%;
+    animation: shimmer 2.5s linear infinite;
+  }
+
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  @keyframes shine {
+    0% {
+      background-position: 200% center;
+    }
+
+    100% {
+      background-position: -200% center;
+    }
+  }
+
+
+  /* Orderbook flash animations */
+  .animate-flash-green {
+    animation: flash-green 0.5s ease-out;
+  }
+
+  @keyframes flash-green {
+    0% {
+      background-color: hsl(142 71% 45% / 0.30);
+    }
+
+    100% {
+      background-color: transparent;
+    }
+  }
+
+  .animate-flash-red {
+    animation: flash-red 0.5s ease-out;
+  }
+
+  @keyframes flash-red {
+    0% {
+      background-color: hsl(0 84% 60% / 0.30);
+    }
+
+    100% {
+      background-color: transparent;
+    }
+  }
+
+  .animate-flash-neutral {
+    animation: flash-neutral 0.5s ease-out;
+  }
+
+  @keyframes flash-neutral {
+    0% {
+      background-color: hsl(0 0% 100% / 0.12);
+    }
+
+    100% {
+      background-color: transparent;
+    }
+  }
+}
+
+/* Solana wallet adapter — themed to Kairos */
+.wallet-adapter-modal-wrapper {
+  background: hsl(var(--surface)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 12px !important;
+}
+
+.wallet-adapter-modal-title {
+  color: hsl(var(--foreground)) !important;
+  font-family: "Cal Sans", sans-serif !important;
+}
+
+.wallet-adapter-modal-list .wallet-adapter-button {
+  background: hsl(var(--surface-elevated)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-radius: 8px !important;
+  margin-bottom: 4px !important;
+}
+
+.wallet-adapter-modal-list .wallet-adapter-button:hover {
+  background: hsl(var(--surface-hover)) !important;
+}
+
+/* Responsive basket grid with equal-sized cards */
+.basket-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .basket-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .basket-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ========================================================
+   CLEAN SOLID "LAUNCH APP" BUTTON
+   ======================================================== */
+.launch-app-shiny-btn {
+  position: relative;
+  background-color: var(--primary);
+  color: var(--primary-foreground) !important;
+  font-weight: 800;
+  border: 1px solid var(--border-strong);
+  border-radius: 9999px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.launch-app-shiny-btn:hover {
+  background-color: #E5E5E5;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(255, 255, 255, 0.12);
+}
+
+.launch-app-shiny-btn:active {
+  transform: translateY(0) scale(0.97);
+}

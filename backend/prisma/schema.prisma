@@ -1,0 +1,41 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Basket {
+  id          String              @id
+  name        String
+  category    String
+  description String
+  tokens      BasketToken[]
+  navHistory  BasketNAVHistory[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model BasketToken {
+  id          String   @id @default(uuid())
+  basketId    String
+  basket      Basket   @relation(fields: [basketId], references: [id], onDelete: Cascade)
+  symbol      String
+  coingeckoId String
+  weightBps   Int      // e.g. 2000 = 20% (sum must equal 10000 per basket)
+  createdAt   DateTime @default(now())
+
+  @@unique([basketId, symbol])
+}
+
+model BasketNAVHistory {
+  id        String   @id @default(uuid())
+  basketId  String
+  basket    Basket   @relation(fields: [basketId], references: [id], onDelete: Cascade)
+  navValue  Float
+  timestamp DateTime
+
+  @@index([basketId, timestamp])
+}

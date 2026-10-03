@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="iotGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#24D605" />
+      <stop offset="100%" stop-color="#00A3FF" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="64" fill="#0C141C" stroke="#24D605" stroke-width="2"/>
+  <!-- IoT Sensor Hexagon / Wave Mesh -->
+  <polygon points="64,30 92,46 92,78 64,94 36,78 36,46" fill="none" stroke="url(#iotGrad)" stroke-width="4"/>
+  <circle cx="64" cy="62" r="8" fill="#24D605"/>
+  <circle cx="64" cy="30" r="4" fill="#00A3FF"/>
+  <circle cx="92" cy="46" r="4" fill="#00A3FF"/>
+  <circle cx="92" cy="78" r="4" fill="#00A3FF"/>
+  <circle cx="64" cy="94" r="4" fill="#00A3FF"/>
+  <circle cx="36" cy="78" r="4" fill="#00A3FF"/>
+  <circle cx="36" cy="46" r="4" fill="#00A3FF"/>
+  <text x="64" y="112" font-family="monospace" font-size="12" font-weight="700" fill="#24D605" text-anchor="middle">IOT</text>
+</svg>

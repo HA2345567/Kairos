@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="jitoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="50%" stop-color="#06B6D4"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="64" fill="#0A181C"/>
+  <!-- Jito ring -->
+  <circle cx="64" cy="64" r="44" stroke="url(#jitoGrad)" stroke-width="8" fill="none" opacity="0.4"/>
+  <circle cx="64" cy="64" r="32" fill="url(#jitoGrad)"/>
+  <!-- Solana / staking S glyph -->
+  <path d="M48 54h32l-6 8H42zM54 68h32l-6 8H48z" fill="#FFFFFF"/>
+</svg>

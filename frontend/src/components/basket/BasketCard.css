@@ -1,0 +1,171 @@
+/* Cesto Basket Card Aesthetic */
+.basket-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+@media (min-width: 1024px) {
+  .basket-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+  }
+}
+
+.basket-card {
+  display: flex;
+  flex-direction: column;
+  background-color: #071611;
+  border: 1px solid #0f2a20;
+  border-radius: 20px;
+  padding: 14px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.basket-card:hover {
+  transform: translateY(-2px);
+  border-color: #174232;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.7), 0 0 25px rgba(0, 255, 133, 0.05);
+}
+
+.basket-card .cover {
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+  border-radius: 14px;
+  background-color: #05100c;
+  border: 1px solid rgba(15, 42, 32, 0.7);
+  display: block;
+}
+
+.basket-card .card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 14px 4px 4px;
+}
+
+.basket-card .card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.basket-card .card-title span:first-child {
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 19px;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.basket-card .pts {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  background-color: #37264e;
+  color: #bf86ff;
+  border: 1px solid rgba(191, 134, 255, 0.2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.basket-card .pts.twox {
+  background-color: #272c4e;
+  color: #8bb2ff;
+  border-color: rgba(139, 178, 255, 0.2);
+}
+
+.basket-card .card-description {
+  color: #5d8376;
+  font-size: 13.5px;
+  line-height: 1.45;
+  margin: 0 0 16px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 39px;
+}
+
+.basket-card .card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 10px;
+}
+
+/* Token Stack matching Cesto */
+.token-stack {
+  display: flex;
+  align-items: center;
+}
+
+.token-stack .token-circle,
+.token-stack .token-img {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid #071611;
+  margin-left: -5px;
+  background-color: #12241d;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.token-stack .token-circle:first-child,
+.token-stack .token-img:first-child {
+  margin-left: 0;
+}
+
+.token-stack .token-more {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5d8376;
+  font-family: monospace;
+}
+
+/* Return Block matching Cesto */
+.return-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.return-block small {
+  font-size: 11px;
+  font-weight: 500;
+  color: #5d8376;
+  margin-bottom: 2px;
+}
+
+.return-block strong {
+  font-size: 17px;
+  font-weight: 800;
+  font-family: monospace;
+  color: #00FF85;
+  letter-spacing: -0.3px;
+}
+
+.return-block strong.negative {
+  color: #ef4444;
+}

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="penguBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#70D6FF" />
+      <stop offset="100%" stop-color="#00A6FB" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="64" fill="url(#penguBg)"/>
+  <!-- Penguin silhouette body -->
+  <ellipse cx="64" cy="74" rx="32" ry="36" fill="#1E232A"/>
+  <!-- White belly -->
+  <ellipse cx="64" cy="78" rx="20" ry="26" fill="#FFFFFF"/>
+  <!-- Eyes -->
+  <circle cx="52" cy="52" r="5" fill="#1E232A"/>
+  <circle cx="76" cy="52" r="5" fill="#1E232A"/>
+  <circle cx="54" cy="50" r="1.5" fill="#FFFFFF"/>
+  <circle cx="78" cy="50" r="1.5" fill="#FFFFFF"/>
+  <!-- Beak -->
+  <polygon points="64,57 57,66 71,66" fill="#FFAA00"/>
+  <!-- Flippers -->
+  <ellipse cx="32" cy="76" rx="6" ry="16" fill="#1E232A" transform="rotate(15 32 76)"/>
+  <ellipse cx="96" cy="76" rx="6" ry="16" fill="#1E232A" transform="rotate(-15 96 76)"/>
+  <!-- Feet -->
+  <ellipse cx="50" cy="108" rx="10" ry="5" fill="#FFAA00"/>
+  <ellipse cx="78" cy="108" rx="10" ry="5" fill="#FFAA00"/>
+</svg>

@@ -1,0 +1,39 @@
+{
+  "cluster": "devnet",
+  "rpcUrl": "https://api.devnet.solana.com",
+  "fallbackRpcUrl": "https://devnet.helius-rpc.com/?api-key=15309047-0a65-4466-aa24-4e09d2c08f37",
+  "raydiumProgramId": "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb",
+  "raydiumAuthority": "CXniRufdq5xL8t8jZAPxsPZDpuudwuJSPWnbcD5Y5Nxq",
+  "ammConfig": "5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy",
+  "programId": "KairosRouter1111111111111111111111111111111",
+  "basketId": "solana-infra-governance",
+  "mints": {
+    "usdc": "An9DFuHeSDYgVBiybraa7Svn1RHjrDb7Ed8YJZCZ4D1Y",
+    "tJUP": "atvmDFJj7iGLBqJywzbs1Xo9SBpfp3eYjm268g9pwen",
+    "tJTO": "8YNCULLBG3u4Si2RQpfAidrv84GVifcf5U1wiEXi95Jg"
+  },
+  "pools": {
+    "tJUP": {
+      "poolId": "BrF8SRKw1Hr83oNCrzDn6FpTt2nLwjcBS5F8fgdpgG4V",
+      "ammConfig": "5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy",
+      "vault0": "HADg2Y5QXqRqr1ikzvQPeqEfqV3g6QrL66qLn4L14iTM",
+      "vault1": "Aqn26tKYwQhsDsB1DoMK24koVKyGML7Py1ssbaJK8gXR",
+      "observationKey": "CybMuPyf4kzFaTkDXd8YB3X9e7EXX7XTLWuWE6PWodQ5",
+      "mint0": "atvmDFJj7iGLBqJywzbs1Xo9SBpfp3eYjm268g9pwen",
+      "mint1": "An9DFuHeSDYgVBiybraa7Svn1RHjrDb7Ed8YJZCZ4D1Y",
+      "ratio": 0.85,
+      "creationTx": "4kPYaKAc6bg1G9KyEMcUbRgTkFt4e2ngSJBJF8x61hs6VY3PnKne1A1P38Q91ijnnBahEi5fhJZQP5sAQY3FocVr"
+    },
+    "tJTO": {
+      "poolId": "65AsVqu75SckPi4vpSNHSB6M88ASvJKkzavpN2jaqtV2",
+      "ammConfig": "5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy",
+      "vault0": "2hnxrtYQhchVeHTZQqcSyU5mPHgbHm2Y3x1hbuffoysP",
+      "vault1": "53pqUnNTGArcnMCQgktof2Tf6J3NBY8Mif4Hwez7SBHX",
+      "observationKey": "Aw2RCS5gixjiz5fztcNLjAMetuVk9Tk7gUipAGrqmvo5",
+      "mint0": "8YNCULLBG3u4Si2RQpfAidrv84GVifcf5U1wiEXi95Jg",
+      "mint1": "An9DFuHeSDYgVBiybraa7Svn1RHjrDb7Ed8YJZCZ4D1Y",
+      "ratio": 2.3,
+      "creationTx": "4RVJXNAFy2bRmK3QW75P6qrkaeyGHSog3mPWDaEj3jBMfQZiei2ZPPgMTfoJGgnqqdH5i8fSn4KhKFAHMP3WWanP"
+    }
+  }
+}

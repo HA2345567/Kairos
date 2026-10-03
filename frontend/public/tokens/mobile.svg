@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="mobGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00C9FF" />
+      <stop offset="100%" stop-color="#92FE9D" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="64" fill="#0A1826" stroke="#00C9FF" stroke-width="2"/>
+  <!-- Cellular 5G / Signal Bars -->
+  <rect x="36" y="76" width="10" height="18" rx="3" fill="url(#mobGrad)"/>
+  <rect x="52" y="64" width="10" height="30" rx="3" fill="url(#mobGrad)"/>
+  <rect x="68" y="50" width="10" height="44" rx="3" fill="url(#mobGrad)"/>
+  <rect x="84" y="34" width="10" height="60" rx="3" fill="url(#mobGrad)"/>
+  <!-- Broadcast wave on top -->
+  <path d="M78 28 A16 16 0 0 1 102 28" fill="none" stroke="#00C9FF" stroke-width="3" stroke-linecap="round"/>
+</svg>

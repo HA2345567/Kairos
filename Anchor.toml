@@ -1,0 +1,22 @@
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+kairos_router = "ELfFskTFe9keckQ7yN3hgZ2csq7hUHAR7QuPNoErQqPw"
+
+[programs.devnet]
+kairos_router = "ELfFskTFe9keckQ7yN3hgZ2csq7hUHAR7QuPNoErQqPw"
+
+[programs.mainnet]
+kairos_router = "ELfFskTFe9keckQ7yN3hgZ2csq7hUHAR7QuPNoErQqPw"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "bun test"

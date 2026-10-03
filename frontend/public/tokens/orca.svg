@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="orcaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFDD55"/>
+      <stop offset="100%" stop-color="#FF5E62"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="64" fill="#1C182B"/>
+  <circle cx="64" cy="64" r="46" fill="url(#orcaGrad)"/>
+  <!-- Orca whale silhouette -->
+  <path d="M42 66c0-14 12-22 26-22 11 0 19 6 24 13-3 1-8 3-12 1-7-3-14-1-18 4-5 6-4 13 2 17 6 4 15 2 20-3 3-3 8-4 12-3-4 10-14 18-28 18-14 0-26-11-26-25z" fill="#1C182B"/>
+  <circle cx="54" cy="56" r="3.5" fill="#FFFFFF"/>
+</svg>

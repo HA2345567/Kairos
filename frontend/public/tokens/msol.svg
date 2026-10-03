@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="msolGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3FE9C8"/>
+      <stop offset="100%" stop-color="#02B290"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="64" fill="#0C2522"/>
+  <path d="M38 88V40h12l14 26 14-26h12v48h-11V58l-12 22h-6l-12-22v30H38z" fill="url(#msolGrad)"/>
+  <circle cx="64" cy="24" r="6" fill="#3FE9C8"/>
+</svg>
