@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import realHistoricalNavData from "@/lib/real-historical-nav.json";
 
 export interface NAVPoint {
