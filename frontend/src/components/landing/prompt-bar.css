@@ -1,0 +1,161 @@
+/* ==========================================================================
+   Kairos Landing — PromptBar Component CSS
+   Dedicated, production-grade stylesheet for the hero prompt bar.
+   Combines sleek dark-glass aesthetics, micro-interactions, and accessible states.
+   ========================================================================== */
+
+.kairos-promptbar-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Outer Glow / Focus Ring Glow Layer */
+.kairos-promptbar-container {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(14, 14, 19, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  padding: 6px 7px 6px 20px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.4),
+              inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  transition: border-color 200ms ease, box-shadow 200ms ease, background 200ms ease, transform 150ms ease;
+}
+
+.kairos-promptbar-container:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(14, 14, 19, 0.9);
+}
+
+.kairos-promptbar-container:focus-within {
+  border-color: rgba(212, 255, 0, 0.45);
+  background: rgba(14, 14, 19, 0.96);
+  box-shadow: 0 0 0 1px rgba(212, 255, 0, 0.3),
+              0 8px 32px -4px rgba(0, 0, 0, 0.6),
+              inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Leading Icon */
+.kairos-promptbar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-zinc-mute, #71717a);
+  flex-shrink: 0;
+  transition: color 200ms ease, transform 200ms ease;
+}
+
+.kairos-promptbar-container:focus-within .kairos-promptbar-icon {
+  color: var(--color-cream-text, #fffaea);
+  transform: rotate(12deg);
+}
+
+/* Text Input Field */
+.kairos-promptbar-input {
+  flex: 1 1 0%;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--color-cream-text, #fffaea);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.5;
+  padding: 8px 0;
+}
+
+.kairos-promptbar-input::placeholder {
+  color: rgba(255, 255, 255, 0.38);
+  font-weight: 400;
+  transition: color 150ms ease;
+}
+
+.kairos-promptbar-container:focus-within .kairos-promptbar-input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+/* Trailing Actions */
+.kairos-promptbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Keyboard Enter Hint */
+.kairos-promptbar-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-zinc-mute, #71717a);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 3px 6px;
+  line-height: 1;
+  user-select: none;
+  opacity: 0.8;
+  transition: opacity 150ms ease;
+}
+
+@media (max-width: 640px) {
+  .kairos-promptbar-kbd {
+    display: none;
+  }
+}
+
+/* Send Action Button — Vibrant Pill/Circle */
+.kairos-promptbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+}
+
+/* Disabled state when empty */
+.kairos-promptbar-button:disabled {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.3);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Active / Ready state when user has entered text */
+.kairos-promptbar-button:not(:disabled) {
+  background: #D4FF00;
+  border-color: #D4FF00;
+  color: #0e0e13;
+  box-shadow: 0 0 16px -2px rgba(212, 255, 0, 0.45);
+}
+
+.kairos-promptbar-button:not(:disabled):hover {
+  transform: scale(1.06);
+  filter: brightness(1.1);
+  box-shadow: 0 0 20px 0 rgba(212, 255, 0, 0.6);
+}
+
+.kairos-promptbar-button:not(:disabled):active {
+  transform: scale(0.94);
+}
+

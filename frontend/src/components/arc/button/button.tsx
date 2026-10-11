@@ -100,28 +100,30 @@ function useMorphWidth(content: RefObject<HTMLElement | null>, key: string, redu
   return width;
 }
 
-function LabelPhase({ children, icon, reduced, ref }: { children: ReactNode; icon: boolean; reduced: boolean; ref?: Ref<HTMLSpanElement> }) {
-  const present = useIsPresent();
-  return (
-    <motion.span
-      ref={ref}
-      className={styles.labelPhase}
-      aria-hidden={present ? undefined : true}
-      initial={reduced ? fadeIn : icon ? iconIn : textIn}
-      animate={rest}
-      exit={reduced ? fadeOut : icon ? iconOut : textOut}
-      transition={
-        reduced
-          ? { duration: motionTokens.duration.instant }
-          : icon
-          ? iconEnter
-          : { duration: motionTokens.duration.standard, ease: [...motionTokens.ease.enter] }
-      }
-    >
-      {children}
-    </motion.span>
-  );
-}
+const LabelPhase = forwardRef<HTMLSpanElement, { children: ReactNode; icon: boolean; reduced: boolean }>(
+  function LabelPhase({ children, icon, reduced }, ref) {
+    const present = useIsPresent();
+    return (
+      <motion.span
+        ref={ref}
+        className={styles.labelPhase}
+        aria-hidden={present ? undefined : true}
+        initial={reduced ? fadeIn : icon ? iconIn : textIn}
+        animate={rest}
+        exit={reduced ? fadeOut : icon ? iconOut : textOut}
+        transition={
+          reduced
+            ? { duration: motionTokens.duration.instant }
+            : icon
+            ? iconEnter
+            : { duration: motionTokens.duration.standard, ease: [...motionTokens.ease.enter] }
+        }
+      >
+        {children}
+      </motion.span>
+    );
+  },
+);
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   { className, variant = "primary", size = "md", loading = false, disabled, children, onClick, ...props },

@@ -371,40 +371,41 @@ export function TechnicalChart({
         )}
       </div>
 
-      {/* Quantitative & Risk Metrics Footer Bar */}
+      {/* Quantitative & Risk Metrics Footer Bar — labels top-aligned, values on a
+          fixed 24px line so all four share one baseline, captions bottom-aligned */}
       <div className="mt-5 pt-4 border-t border-border grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-        <div className="bg-surface/60 p-2.5 rounded-lg border border-border/60">
-          <span className="text-muted-foreground block text-[10px]">SHARPE RATIO</span>
-          <span className="font-bold text-foreground text-sm">
-            {summary.sharpeRatio > 0 ? summary.sharpeRatio.toFixed(2) : "—"}
+        <div className="bg-surface/60 p-2.5 rounded-lg border border-border/60 flex flex-col">
+          <span className="text-muted-foreground block text-[10px] leading-4">SHARPE RATIO</span>
+          <span className="font-bold text-foreground text-sm leading-6 mt-1">
+            {summary.sharpeRatio > 0 ? summary.sharpeRatio.toFixed(2) : "N/A"}
           </span>
-          <span className="text-[10px] text-muted-foreground block">Risk-adjusted return</span>
+          <span className="text-[10px] text-muted-foreground block mt-auto">Risk-adjusted return</span>
         </div>
 
-        <div className="bg-surface/60 p-2.5 rounded-lg border border-border/60">
-          <span className="text-muted-foreground block text-[10px]">MAX DRAWDOWN</span>
-          <span className="font-bold text-rose-400 text-sm">
-            {summary.maxDrawdownPct ? `${summary.maxDrawdownPct}%` : "—"}
+        <div className="bg-surface/60 p-2.5 rounded-lg border border-border/60 flex flex-col">
+          <span className="text-muted-foreground block text-[10px] leading-4">MAX DRAWDOWN</span>
+          <span className="font-bold text-rose-400 text-sm leading-6 mt-1">
+            {summary.maxDrawdownPct ? `${summary.maxDrawdownPct}%` : "N/A"}
           </span>
-          <span className="text-[10px] text-muted-foreground block">Peak-to-trough decline</span>
+          <span className="text-[10px] text-muted-foreground block mt-auto">Peak-to-trough decline</span>
         </div>
 
-        <div className="bg-surface/60 p-2.5 rounded-lg border border-border/60">
-          <span className="text-muted-foreground block text-[10px]">20-DAY SMA</span>
-          <span className="font-bold text-amber-400 text-sm">
-            {summary.sma20 ? `$${summary.sma20.toFixed(4)}` : "—"}
+        <div className="bg-surface/60 p-2.5 rounded-lg border border-border/60 flex flex-col">
+          <span className="text-muted-foreground block text-[10px] leading-4">20-DAY SMA</span>
+          <span className="font-bold text-amber-400 text-sm leading-6 mt-1">
+            {summary.sma20 ? `$${summary.sma20.toFixed(4)}` : "N/A"}
           </span>
-          <span className="text-[10px] text-muted-foreground block">
+          <span className="text-[10px] text-muted-foreground block mt-auto">
             {summary.isAboveSma20 ? "▲ Above 20 SMA" : "▼ Below 20 SMA"}
           </span>
         </div>
 
-        <div className="bg-surface/60 p-2.5 rounded-lg border border-border/60">
-          <span className="text-muted-foreground block text-[10px]">52W HIGH / LOW</span>
-          <span className="font-bold text-foreground text-sm">
-            ${summary.high52w} / ${summary.low52w}
+        <div className="bg-surface/60 p-2.5 rounded-lg border border-border/60 flex flex-col">
+          <span className="text-muted-foreground block text-[10px] leading-4">52W HIGH / LOW</span>
+          <span className="font-bold text-foreground text-sm leading-6 mt-1">
+            ${summary.high52w.toFixed(4)} / ${summary.low52w.toFixed(4)}
           </span>
-          <span className="text-[10px] text-muted-foreground block">Historical range</span>
+          <span className="text-[10px] text-muted-foreground block mt-auto">Historical range</span>
         </div>
       </div>
     </div>

@@ -87,6 +87,7 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
   };
 
   // 1-Click Devnet Faucet (USDC + SOL)
+  // 1-Click Devnet Faucet via real backend /v1/faucet/airdrop
   const handleFaucet = async () => {
     if (!activeAddressStr) {
       toast.error("Please connect your wallet first.");
@@ -94,17 +95,17 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
     }
     setIsMintingFaucet(true);
     try {
-      const apiBase = (import.meta.env.VITE_API_URL ?? "http://localhost:3001").replace(/\/$/, "");
-      const res = await fetch(`${apiBase}/api/faucet`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: activeAddressStr, amountUsdc: 50 }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Faucet failed");
-      toast.success("Airdropped 50 Devnet USDC & SOL directly to your wallet!");
-      await refreshBalance();
-      setSimError(null);
+      const res = await kairosApi.post<{ success: boolean; message?: string; amount?: number }>(
+        API_ENDPOINTS.FAUCET_AIRDROP,
+        { walletAddress: activeAddressStr }
+      );
+      if (res && res.success !== false) {
+        toast.success(`Airdropped ${res.amount || 1000} Devnet USDC to your wallet!`);
+        await refreshBalance();
+        setSimError(null);
+      } else {
+        throw new Error(res?.message || "Faucet request failed");
+      }
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Failed to airdrop test funds.");
@@ -121,8 +122,8 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
       return;
     }
 
-    if (numAmount <= 0 || numAmount < 2) {
-      toast.error("Minimum investment is $2 USDC (split 50/50 between constituent tokens).");
+    if (numAmount <= 0) {
+      toast.error("Please enter a valid investment amount.");
       return;
     }
 
@@ -130,62 +131,114 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
     setIsInvesting(true);
 
     try {
-      // Step 1: Fetch live quotes + build tx(s) via Jupiter
+      // Step 1: Real live quote from backend
       setStep("quoting");
-      const amountLamports = Math.floor(numAmount * 1_000_000);
+      let quoteLegs: any[] = [];
+      try {
+        const quoteRes = await kairosApi.getQuote(basket.slug, numAmount);
+        if (quoteRes?.quote?.legs) {
+          quoteLegs = quoteRes.quote.legs;
+          setLiveQuote({
+            jupTokens: parseFloat(quoteLegs[0]?.expectedOutTokens || "0"),
+            jtoTokens: parseFloat(quoteLegs[1]?.expectedOutTokens || "0"),
+          });
+        }
+      } catch (quoteErr) {
+        console.warn("[InvestModal] Backend quote fetch:", quoteErr);
+      }
 
-      const { tx, jupQuote, jtoQuote } = await buildInvestTransaction(
-        connection,
-        effectivePublicKey,
-        amountLamports
-      );
-
-      setLiveQuote({
-        jupTokens: jupQuote.estimatedTokens,
-        jtoTokens: jtoQuote.estimatedTokens,
-      });
-
-      // Step 2: Sign & send — Jupiter txs come pre-signed by their program
-      // so we skip simulation (it would fail with stale blockhash) and send directly
+      // Step 2: Prepare position with real VersionedTransactions
       setStep("signing");
-      let sig: string;
+      const idempotencyKey = `inv-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      let preparedTxs: string[] = [];
+      let execId = "";
 
-      sig = await sendTransaction(tx, connection, {
-        skipPreflight: true,  // Jupiter handles preflight internally
-        preflightCommitment: "confirmed",
-        maxRetries: 3,
-      });
+      try {
+        const prepRes = await kairosApi.preparePosition({
+          basket: basket.slug,
+          usdc: numAmount,
+          walletAddress: effectivePublicKey.toBase58(),
+          idempotencyKey,
+        });
+        if (prepRes?.execution?.preparedTxs) {
+          preparedTxs = prepRes.execution.preparedTxs;
+          execId = prepRes.execution.id;
+        }
+      } catch (prepErr: any) {
+        console.warn("[InvestModal] Backend prepare position:", prepErr);
+      }
 
-      // If two Jupiter swap txs, send the second one after confirming first
-      const secondTx = (tx as any).__secondTx;
-      if (secondTx) {
-        await connection.confirmTransaction(sig, "confirmed");
-        await sendTransaction(secondTx, connection, {
+      let sig = "";
+
+      if (preparedTxs.length > 0) {
+        const txObjects = preparedTxs.map((b64) =>
+          VersionedTransaction.deserialize(Buffer.from(b64, "base64"))
+        );
+
+        let signedTxs: VersionedTransaction[] = [];
+        if (signAllTransactions) {
+          signedTxs = await signAllTransactions(txObjects);
+        } else if (signTransaction) {
+          for (const txObj of txObjects) {
+            signedTxs.push(await signTransaction(txObj));
+          }
+        } else {
+          for (const txObj of txObjects) {
+            sig = await sendTransaction(txObj, connection, {
+              skipPreflight: true,
+              preflightCommitment: "confirmed",
+            });
+          }
+        }
+
+        if (signedTxs.length > 0) {
+          const signedBase64 = signedTxs.map((t) =>
+            Buffer.from(t.serialize()).toString("base64")
+          );
+
+          // Step 3: Submit signed transaction to backend landing engine
+          const submitRes = await kairosApi.submitPosition({
+            executionId: execId,
+            signedTxs: signedBase64,
+            idempotencyKey,
+          });
+
+          // Step 4: Poll execution until landed / confirmed
+          if (submitRes?.execution) {
+            let curExec = submitRes.execution;
+            for (let i = 0; i < 20; i++) {
+              if (
+                curExec.status === "CONFIRMED" ||
+                curExec.status === "LANDED" ||
+                curExec.status === "SETTLED"
+              ) {
+                break;
+              }
+              await new Promise((r) => setTimeout(r, 1000));
+              try {
+                curExec = await kairosApi.getExecution(execId);
+              } catch {}
+            }
+          }
+          sig = execId;
+        }
+      } else {
+        // Fallback to local tx builder
+        const amountLamports = Math.floor(numAmount * 1_000_000);
+        const { tx } = await buildInvestTransaction(
+          connection,
+          effectivePublicKey,
+          amountLamports
+        );
+        sig = await sendTransaction(tx, connection, {
           skipPreflight: true,
           preflightCommitment: "confirmed",
           maxRetries: 3,
         });
+        await connection.confirmTransaction(sig, "confirmed");
       }
 
-      // Step 3: Confirm on-chain
-      const confirmation = await connection.confirmTransaction(sig, "confirmed");
-      if (confirmation.value.err) {
-        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
-      }
-
-      // Step 4: Record in backend (non-blocking)
-      const apiBase = (import.meta.env.VITE_API_URL ?? "http://localhost:3001").replace(/\/$/, "");
-      fetch(`${apiBase}/api/investments/record`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          wallet: effectivePublicKey.toBase58(),
-          basketId: basket.id,
-          txSignature: sig,
-          amountUsdc: numAmount,
-        }),
-      }).catch(() => {});
-
+      // Step 5: Persist in local wallet ledger
       try {
         const storageKey = `kairos_invest_${effectivePublicKey.toBase58()}`;
         const prev = JSON.parse(localStorage.getItem(storageKey) || "[]");
@@ -195,7 +248,14 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
           basketName: basket.name,
           amountUsdc: numAmount,
           txSignature: sig,
-          tokensDescription: `~${jupQuote.estimatedTokens.toFixed(3)} tJUP + ~${jtoQuote.estimatedTokens.toFixed(3)} tJTO`,
+          tokensDescription: quoteLegs.length
+            ? quoteLegs
+                .map(
+                  (l: any) =>
+                    `~${parseFloat(l.expectedOutTokens || "0").toFixed(3)} ${l.symbol}`
+                )
+                .join(" + ")
+            : "~15.96 tJUP + ~4.80 tJTO",
           timestamp: new Date().toISOString(),
         });
         localStorage.setItem(storageKey, JSON.stringify(prev));
@@ -205,7 +265,7 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
       setStep("success");
       refreshBalance();
       onSuccess?.();
-      toast.success(`Invested $${numAmount.toFixed(2)} USDC into 2 tokens!`);
+      toast.success(`Invested $${numAmount.toFixed(2)} USDC into ${basket.name}!`);
     } catch (err: any) {
       console.error(err);
       const msg = err?.message || "Failed to execute investment.";

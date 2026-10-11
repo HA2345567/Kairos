@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { PageShell } from "@/components/layout/PageShell";
-import { CURATED_BASKETS, DEVNET_DEMO_BASKET, Basket } from "@/lib/baskets-data";
+import { CURATED_BASKETS, Basket } from "@/lib/baskets-data";
+import { kairosApi } from "@/lib/api-client";
 import { InvestModal } from "@/components/basket/InvestModal";
 import { Link } from "react-router-dom";
 import { BasketCardSkeleton, PortfolioSkeleton } from "@/components/basket/BasketSkeleton";
@@ -147,18 +148,17 @@ export default function Portfolio() {
       const localRecords: ActivityItem[] = JSON.parse(localStorage.getItem(storageKey) || "[]");
       setRecentActivity(localRecords);
 
-      const apiBase = (import.meta.env.VITE_API_URL ?? "http://localhost:3001").replace(/\/$/, "");
-      fetch(`${apiBase}/api/positions/${activePublicKey.toBase58()}`)
-        .then((r) => r.json())
+      kairosApi
+        .getPositions(activePublicKey.toBase58())
         .then((data) => {
-          if (data?.investments?.length > 0) {
-            const apiItems: ActivityItem[] = data.investments.map((inv: any) => ({
+          if (data?.positions && data.positions.length > 0) {
+            const apiItems: ActivityItem[] = data.positions.map((pos: any) => ({
               action: "Invest",
-              basketName: "Solana Infra Governance",
-              amountUsdc: inv.amountUsdc,
-              tokensDescription: "50% tJUP + 50% tJTO",
-              txSignature: inv.txSignature,
-              timestamp: inv.createdAt,
+              basketName: pos.basketSlug || "Curated Basket",
+              amountUsdc: pos.netInvestedUsdc,
+              tokensDescription: `${pos.basketSlug} basket`,
+              txSignature: pos.id,
+              timestamp: pos.createdAt,
             }));
             const seen = new Set(localRecords.map((r: any) => r.txSignature));
             const merged = [...localRecords];
@@ -256,7 +256,9 @@ export default function Portfolio() {
   const hasConstituents = tokenBalances.some(
     (t) => (t.symbol === "tJUP" || t.symbol === "tJTO") && t.amount > 0
   );
-  const activeBaskets = hasConstituents ? [DEVNET_DEMO_BASKET] : [];
+  const activeBaskets = hasConstituents
+    ? CURATED_BASKETS.filter((basket) => basket.id === "solana-infra-governance")
+    : [];
   const basketTokensUsd = tokenBalances
     .filter((t) => t.symbol === "tJUP" || t.symbol === "tJTO")
     .reduce((acc, t) => acc + t.usdValue, 0);

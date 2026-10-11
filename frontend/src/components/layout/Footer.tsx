@@ -20,11 +20,11 @@ export function Footer() {
   };
 
   return (
-    <footer className="relative bg-surface pt-20 pb-0 overflow-hidden font-display border-t border-border text-foreground">
+    <footer className="relative bg-surface pt-16 pb-0 overflow-hidden font-display border-t border-border text-foreground">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        {/* Top Grid: Brand, Nav Columns, Subscribe & Action Button */}
+        {/* Top Grid: Brand, Nav Columns, Subscribe */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 lg:gap-8 items-start pb-20">
-          
+
           {/* Column 1: Brand Logo (kairos) */}
           <div className="lg:col-span-3">
             <Link to="/" className="inline-flex items-center gap-3 group">
@@ -87,11 +87,11 @@ export function Footer() {
           </div>
 
           {/* Column 4: SUBSCRIBE Box */}
-          <div className="lg:col-span-3 space-y-4">
+          <div className="lg:col-span-5 space-y-4">
             <h4 className="font-display font-bold text-xs uppercase tracking-wider text-muted-foreground">
               SUBSCRIBE
             </h4>
-            <form onSubmit={handleSubscribe} className="space-y-2.5">
+            <form onSubmit={handleSubscribe} className="space-y-2.5 max-w-md">
               <div className="flex items-center gap-2">
                 <input
                   type="email"
@@ -120,26 +120,16 @@ export function Footer() {
             </form>
           </div>
 
-          {/* Column 5: Top-Right Capsule Button */}
-          <div className="lg:col-span-2 flex justify-start lg:justify-end">
-            <Link
-              to="/markets"
-              className="inline-block rounded-full border border-border hover:border-foreground px-5 py-2 font-display text-xs font-bold uppercase tracking-wider text-foreground hover:bg-foreground hover:text-background transition-all whitespace-nowrap shadow-sm active:scale-95"
-            >
-              TRY KAIROS NOW
-            </Link>
-          </div>
-
         </div>
       </div>
 
-      {/* Giant Background Watermark — Full Edge to Edge */}
-      <div className="relative w-full overflow-hidden select-none pointer-events-none flex justify-center items-end -mb-4 sm:-mb-8 lg:-mb-14">
+      {/* Background Watermark — Clean Archivo typography with balanced width */}
+      <div className="relative w-full overflow-hidden select-none pointer-events-none flex justify-center items-end -mb-3 sm:-mb-6 lg:-mb-10 px-4">
         <span
-          className="w-full text-center font-display font-black leading-[0.74] tracking-tighter whitespace-nowrap block text-transparent bg-clip-text bg-gradient-to-b from-foreground/[0.05] to-transparent"
-          style={{ fontSize: "27.5vw" }}
+          className="font-display font-black leading-[0.8] tracking-[-0.035em] whitespace-nowrap block text-transparent bg-clip-text bg-gradient-to-b from-foreground/[0.08] to-foreground/[0.02] select-none"
+          style={{ fontSize: "clamp(100px, 18.5vw, 260px)" }}
         >
-          kairos
+          Kairos
         </span>
       </div>
     </footer>

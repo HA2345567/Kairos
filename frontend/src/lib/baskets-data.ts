@@ -1,3 +1,5 @@
+import { kairosApi } from "./api-client";
+
 export interface BasketToken {
   symbol: string;
   name: string;
@@ -48,13 +50,33 @@ export interface Basket {
   };
 }
 
+// Type for raw basket data from backend API
+export interface BackendBasket {
+  id: string;
+  slug: string;
+  name: string;
+  thesis: string;
+  category: string;
+  status: "active" | "paused" | "deprecated";
+  activeVersionId: string;
+  minUsdc: number;
+  performance: {
+    "1W": number;
+    "1M": number;
+    "6M": number;
+    "1Y": number;
+  };
+  protocols: string[];
+}
+
 /**
- * Kairos — Final Launch Basket Catalog (Locked)
- * 1. Solana Infrastructure (CLOUD 10.6%, BP 10%, JUP 9%, JitoSOL 8%, SOL 8%, mSOL 8%, KMNO 8%, RAY 8%, ORCA 8%, MET 8%, ARX 8%, JTO 6.4%)
- * 2. Solana Sigma Basket (PYTH 35%, JUP 25%, KMNO 20%, RENDER 20%)
- * 3. Solana Culture & Memes (BONK 40%, TRUMP 30%, PENGU 30%)
- * 4. Solana AI & Compute (RENDER 30%, FARTCOIN 25%, PIPPIN 25%, GOAT 20%)
- * 5. Solana DePIN Infrastructure (HNT 50%, IOT 25%, MOBILE 25%)
+ * Kairos — Launch Basket Catalog (6 Baskets)
+ * 1. Solana Infra Governance (Devnet Live Trading Demo: tJUP 50%, tJTO 50%)
+ * 2. Solana Infrastructure (CLOUD, BP, JUP, JitoSOL, SOL, mSOL, KMNO, RAY, ORCA, MET, ARX, JTO)
+ * 3. Solana Sigma Basket (PYTH 35%, JUP 25%, KMNO 20%, RENDER 20%)
+ * 4. Solana Culture & Memes (BONK 40%, TRUMP 30%, PENGU 30%)
+ * 5. Solana AI & Compute (RENDER 30%, FARTCOIN 25%, PIPPIN 25%, GOAT 20%)
+ * 6. Solana DePIN Infrastructure (HNT 50%, IOT 25%, MOBILE 25%)
  */
 export const DEVNET_DEMO_BASKET: Basket = {
   id: "solana-infra-governance",
@@ -62,7 +84,7 @@ export const DEVNET_DEMO_BASKET: Basket = {
   name: "Solana Infra Governance",
   category: "Infrastructure",
   pointsMultiplier: "3x Pts",
-  imageUrl: "/baskets/solana-infra-governance.jpg",
+  imageUrl: "/baskets/solana-orb.png",
   description: "Devnet Demo Basket: Real Raydium CPMM swaps into 50% tJUP and 50% tJTO directly to your wallet.",
   returns7d: 18.2,
   returns30d: 56.4,
@@ -117,7 +139,8 @@ export const DEVNET_DEMO_BASKET: Basket = {
 
 export const CURATED_BASKETS: Basket[] = [
   DEVNET_DEMO_BASKET,
-  // 1. Solana Infrastructure
+
+  // 2. Solana Infrastructure
   {
     id: "solana-infrastructure",
     slug: "solana-infrastructure",
@@ -263,63 +286,51 @@ export const CURATED_BASKETS: Basket[] = [
       constituentsRationale: [
         {
           symbol: "CLOUD",
-          rationale:
-            "Sanctum powers unified LST liquidity and custom liquid staking token infrastructure across Solana.",
+          rationale: "Sanctum powers unified LST liquidity and custom liquid staking token infrastructure across Solana.",
         },
         {
           symbol: "BP",
-          rationale:
-            "Backpack operates the premier regulated ecosystem wallet, exchange, and community standard.",
+          rationale: "Backpack operates the premier regulated ecosystem wallet, exchange, and community standard.",
         },
         {
           symbol: "JUP",
-          rationale:
-            "Jupiter routes over 80% of all Solana DEX volume and operates the network's leading perpetuals and DCA engines.",
+          rationale: "Jupiter routes over 80% of all Solana DEX volume and operates the network's leading perpetuals and DCA engines.",
         },
         {
           symbol: "JitoSOL",
-          rationale:
-            "Leading liquid staked SOL generating validator MEV rewards with deepest ecosystem DeFi integrations.",
+          rationale: "Leading liquid staked SOL generating validator MEV rewards with deepest ecosystem DeFi integrations.",
         },
         {
           symbol: "SOL",
-          rationale:
-            "Native Solana layer-1 asset securing consensus and powering base transaction fees.",
+          rationale: "Native Solana layer-1 asset securing consensus and powering base transaction fees.",
         },
         {
           symbol: "mSOL",
-          rationale:
-            "Marinade's native liquid staking token backed by automated, decentralized stake distribution.",
+          rationale: "Marinade's native liquid staking token backed by automated, decentralized stake distribution.",
         },
         {
           symbol: "KMNO",
-          rationale:
-            "Kamino is Solana's premier money market and automated liquidity vault protocol with billions in supplied capital.",
+          rationale: "Kamino is Solana's premier money market and automated liquidity vault protocol with billions in supplied capital.",
         },
         {
           symbol: "RAY",
-          rationale:
-            "Raydium provides core AMM liquidity and powers the high-velocity token launch and swapping flywheel.",
+          rationale: "Raydium provides core AMM liquidity and powers the high-velocity token launch and swapping flywheel.",
         },
         {
           symbol: "ORCA",
-          rationale:
-            "Orca provides capital-efficient concentrated liquidity AMM pools and swap infrastructure.",
+          rationale: "Orca provides capital-efficient concentrated liquidity AMM pools and swap infrastructure.",
         },
         {
           symbol: "MET",
-          rationale:
-            "Meteora delivers dynamic AMM vaults and dynamic liquidity market maker (DLMM) infrastructure.",
+          rationale: "Meteora delivers dynamic AMM vaults and dynamic liquidity market maker (DLMM) infrastructure.",
         },
         {
           symbol: "ARX",
-          rationale:
-            "Arcium provides decentralized confidential computing and multi-party computation framework.",
+          rationale: "Arcium provides decentralized confidential computing and multi-party computation framework.",
         },
         {
           symbol: "JTO",
-          rationale:
-            "Jito captures maximum extractable value (MEV) rewards through its liquid staking pool and client infrastructure.",
+          rationale: "Jito captures maximum extractable value (MEV) rewards through its liquid staking pool and client infrastructure.",
         },
       ],
       characteristics: [
@@ -334,7 +345,7 @@ export const CURATED_BASKETS: Basket[] = [
     },
   },
 
-  // 2. Solana Sigma Basket
+  // 3. Solana Sigma Basket
   {
     id: "solana-sigma-basket",
     slug: "solana-sigma-basket",
@@ -408,23 +419,19 @@ export const CURATED_BASKETS: Basket[] = [
       constituentsRationale: [
         {
           symbol: "PYTH",
-          rationale:
-            "Pyth delivers sub-second financial oracle price feeds to over 400 dApps across 50+ blockchains.",
+          rationale: "Pyth delivers sub-second financial oracle price feeds to over 400 dApps across 50+ blockchains.",
         },
         {
           symbol: "JUP",
-          rationale:
-            "The routing engine underpinning almost all trades, liquidations, and treasury rebalances across Solana.",
+          rationale: "The routing engine underpinning almost all trades, liquidations, and treasury rebalances across Solana.",
         },
         {
           symbol: "KMNO",
-          rationale:
-            "Automated liquidity market making and lending infrastructure maintaining collateral health for the entire ecosystem.",
+          rationale: "Automated liquidity market making and lending infrastructure maintaining collateral health for the entire ecosystem.",
         },
         {
           symbol: "RENDER",
-          rationale:
-            "Decentralized GPU compute infrastructure scaling AI model inference, 3D rendering, and machine workflows.",
+          rationale: "Decentralized GPU compute infrastructure scaling AI model inference, 3D rendering, and machine workflows.",
         },
       ],
       characteristics: [
@@ -437,7 +444,7 @@ export const CURATED_BASKETS: Basket[] = [
     },
   },
 
-  // 3. Solana Culture & Memes
+  // 4. Solana Culture & Memes
   {
     id: "solana-culture-memes",
     slug: "solana-culture-memes",
@@ -502,18 +509,15 @@ export const CURATED_BASKETS: Basket[] = [
       constituentsRationale: [
         {
           symbol: "BONK",
-          rationale:
-            "The community revival coin that reignited the Solana ecosystem; backed by widespread utility, burns, and integrations.",
+          rationale: "The community revival coin that reignited the Solana ecosystem; backed by widespread utility, burns, and integrations.",
         },
         {
           symbol: "TRUMP",
-          rationale:
-            "The premier political and cultural macro token with global media mindshare and sustained high liquidity.",
+          rationale: "The premier political and cultural macro token with global media mindshare and sustained high liquidity.",
         },
         {
           symbol: "PENGU",
-          rationale:
-            "The official token of Pudgy Penguins, the leading consumer IP bridging Web3 culture into mainstream retail.",
+          rationale: "The official token of Pudgy Penguins, the leading consumer IP bridging Web3 culture into mainstream retail.",
         },
       ],
       characteristics: [
@@ -526,7 +530,7 @@ export const CURATED_BASKETS: Basket[] = [
     },
   },
 
-  // 4. Solana AI & Compute
+  // 5. Solana AI & Compute
   {
     id: "solana-ai-compute",
     slug: "solana-ai-compute",
@@ -600,23 +604,19 @@ export const CURATED_BASKETS: Basket[] = [
       constituentsRationale: [
         {
           symbol: "RENDER",
-          rationale:
-            "The foundational compute layer providing distributed GPU clusters for AI rendering and model inference.",
+          rationale: "The foundational compute layer providing distributed GPU clusters for AI rendering and model inference.",
         },
         {
           symbol: "FARTCOIN",
-          rationale:
-            "High-traction autonomous conversational agent with widespread viral resonance and massive trading volume.",
+          rationale: "High-traction autonomous conversational agent with widespread viral resonance and massive trading volume.",
         },
         {
           symbol: "PIPPIN",
-          rationale:
-            "Leading modular AI companion and autonomous agent framework with growing developer ecosystem.",
+          rationale: "Leading modular AI companion and autonomous agent framework with growing developer ecosystem.",
         },
         {
           symbol: "GOAT",
-          rationale:
-            "Goatseus Maximus, the historic pioneer that originated the autonomous AI agent narrative on Solana.",
+          rationale: "Goatseus Maximus, the historic pioneer that originated the autonomous AI agent narrative on Solana.",
         },
       ],
       characteristics: [
@@ -629,7 +629,7 @@ export const CURATED_BASKETS: Basket[] = [
     },
   },
 
-  // 5. Solana DePIN Infrastructure
+  // 6. Solana DePIN Infrastructure
   {
     id: "solana-depin-infrastructure",
     slug: "solana-depin-infrastructure",
@@ -694,18 +694,15 @@ export const CURATED_BASKETS: Basket[] = [
       constituentsRationale: [
         {
           symbol: "HNT",
-          rationale:
-            "The overarching Helium network governance and value-accrual token backed by data credit burn mechanisms.",
+          rationale: "The overarching Helium network governance and value-accrual token backed by data credit burn mechanisms.",
         },
         {
           symbol: "IOT",
-          rationale:
-            "SubDAO token incentivizing hundreds of thousands of LoRaWAN IoT tracking gateways globally.",
+          rationale: "SubDAO token incentivizing hundreds of thousands of LoRaWAN IoT tracking gateways globally.",
         },
         {
           symbol: "MOBILE",
-          rationale:
-            "SubDAO token powering Helium Mobile's nationwide decentralized 5G carrier network and subscribers.",
+          rationale: "SubDAO token powering Helium Mobile's nationwide decentralized 5G carrier network and subscribers.",
         },
       ],
       characteristics: [
@@ -717,7 +714,330 @@ export const CURATED_BASKETS: Basket[] = [
       ],
     },
   },
+
+  // 7. Solana Liquid Staking Alpha
+  {
+    id: "solana-liquid-staking",
+    slug: "solana-liquid-staking",
+    name: "Solana Liquid Staking Alpha",
+    category: "LST & Yield",
+    pointsMultiplier: "3x Pts",
+    imageUrl: "/baskets/solana-orb.png",
+    description: "Liquid staking protocols capturing network MEV tips, staking yield, and validator decentralization",
+    returns7d: 12.4,
+    returns30d: 42.1,
+    returns1y: 194.2,
+    displayReturn: {
+      value: "+194.20%",
+      period: "1 YEAR RETURN",
+      isPositive: true,
+    },
+    sparkline: [100, 108, 115, 126, 138, 152, 168, 182, 194.2],
+    extraTokensCount: 1,
+    tvlUsd: 7420000,
+    tokens: [
+      {
+        symbol: "JitoSOL",
+        name: "Jito Staked SOL",
+        mint: "J1toso1uCk3RKmWHx4qQCeqAghWvMtPxxDMTjaNaUhS",
+        weightBps: 3500,
+        icon: "/tokens/jitosol.png",
+        priceUsd: 214.5,
+        change24h: 3.8,
+      },
+      {
+        symbol: "mSOL",
+        name: "Marinade Staked SOL",
+        mint: "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+        weightBps: 2500,
+        icon: "/tokens/msol.png",
+        priceUsd: 218.8,
+        change24h: 3.5,
+      },
+      {
+        symbol: "CLOUD",
+        name: "Sanctum",
+        mint: "CLoUDKc4Ane7HeQcPpE3YHnznRxhMimJ4MyaUqyHFzAu",
+        weightBps: 2000,
+        icon: "/tokens/cloud.png",
+        priceUsd: 0.28,
+        change24h: 4.8,
+      },
+      {
+        symbol: "SOL",
+        name: "Solana",
+        mint: "So11111111111111111111111111111111111111112",
+        weightBps: 2000,
+        icon: "/tokens/sol.png",
+        priceUsd: 184.2,
+        change24h: 3.2,
+      },
+    ],
+    chartData: [
+      { time: "Apr", value: 100 },
+      { time: "May", value: 122 },
+      { time: "Jun", value: 148 },
+      { time: "Jul", value: 165 },
+      { time: "Aug", value: 180 },
+      { time: "Sep", value: 194.2 },
+    ],
+  },
+
+  // 8. Solana DeFi Money Markets
+  {
+    id: "solana-defi-markets",
+    slug: "solana-defi-markets",
+    name: "Solana DeFi Money Markets",
+    category: "DeFi",
+    pointsMultiplier: "3x Pts",
+    imageUrl: "/baskets/solana-infrastructure.jpg",
+    description: "The premier lending, leverage, and perpetual liquidity protocols across the Solana ecosystem",
+    returns7d: 22.8,
+    returns30d: 68.4,
+    returns1y: 228.4,
+    displayReturn: {
+      value: "+228.40%",
+      period: "1 YEAR RETURN",
+      isPositive: true,
+    },
+    sparkline: [100, 112, 128, 145, 168, 195, 215, 228.4],
+    extraTokensCount: 1,
+    tvlUsd: 4890000,
+    tokens: [
+      {
+        symbol: "JUP",
+        name: "Jupiter",
+        mint: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+        weightBps: 3500,
+        icon: "/tokens/jup.png",
+        priceUsd: 0.92,
+        change24h: 3.4,
+      },
+      {
+        symbol: "KMNO",
+        name: "Kamino",
+        mint: "KMNo3nJsBXfcpJTVhZcXLW7RmTwTt4GVFE7suUBo9sS",
+        weightBps: 2500,
+        icon: "/tokens/kmno.png",
+        priceUsd: 0.14,
+        change24h: 5.8,
+      },
+      {
+        symbol: "RAY",
+        name: "Raydium",
+        mint: "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+        weightBps: 2000,
+        icon: "/tokens/ray.png",
+        priceUsd: 1.84,
+        change24h: 4.2,
+      },
+      {
+        symbol: "ORCA",
+        name: "Orca",
+        mint: "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
+        weightBps: 2000,
+        icon: "/tokens/orca.png",
+        priceUsd: 3.42,
+        change24h: 2.9,
+      },
+    ],
+    chartData: [
+      { time: "Apr", value: 100 },
+      { time: "May", value: 125 },
+      { time: "Jun", value: 155 },
+      { time: "Jul", value: 185 },
+      { time: "Aug", value: 210 },
+      { time: "Sep", value: 228.4 },
+    ],
+  },
+
+  // 9. Solana Meme Titans
+  {
+    id: "solana-meme-titans",
+    slug: "solana-meme-titans",
+    name: "Solana Meme Titans",
+    category: "Culture & Memes",
+    pointsMultiplier: "4x Pts",
+    imageUrl: "/baskets/culture-memes.jpg",
+    description: "Multi-billion dollar cultural giants with global mindshare and premier Tier-1 exchange liquidity",
+    returns7d: 48.6,
+    returns30d: 192.5,
+    returns1y: 520.3,
+    displayReturn: {
+      value: "+520.30%",
+      period: "1 YEAR RETURN",
+      isPositive: true,
+    },
+    sparkline: [100, 140, 190, 260, 340, 420, 520.3],
+    extraTokensCount: 0,
+    tvlUsd: 3850000,
+    tokens: [
+      {
+        symbol: "BONK",
+        name: "Bonk",
+        mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+        weightBps: 4000,
+        icon: "/tokens/bonk.jpg",
+        priceUsd: 0.000021,
+        change24h: 12.4,
+      },
+      {
+        symbol: "TRUMP",
+        name: "Official Trump",
+        mint: "6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN",
+        weightBps: 3000,
+        icon: "/tokens/trump.svg",
+        priceUsd: 16.5,
+        change24h: 8.7,
+      },
+      {
+        symbol: "PENGU",
+        name: "Pudgy Penguins",
+        mint: "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv",
+        weightBps: 3000,
+        icon: "/tokens/pengu.svg",
+        priceUsd: 0.035,
+        change24h: 15.2,
+      },
+    ],
+    chartData: [
+      { time: "Apr", value: 100 },
+      { time: "May", value: 175 },
+      { time: "Jun", value: 260 },
+      { time: "Jul", value: 360 },
+      { time: "Aug", value: 450 },
+      { time: "Sep", value: 520.3 },
+    ],
+  },
+
+  // 10. Solana Real World Assets
+  {
+    id: "solana-rwa-infrastructure",
+    slug: "solana-rwa-infrastructure",
+    name: "Solana Real World Assets",
+    category: "RWA & Real Assets",
+    pointsMultiplier: "2x Pts",
+    imageUrl: "/baskets/depin-infrastructure.jpg",
+    description: "Decentralized physical hardware, wireless networks, and high-fidelity institutional oracle rails",
+    returns7d: 14.5,
+    returns30d: 38.2,
+    returns1y: 142.5,
+    displayReturn: {
+      value: "+142.50%",
+      period: "1 YEAR RETURN",
+      isPositive: true,
+    },
+    sparkline: [100, 106, 114, 122, 131, 138, 142.5],
+    extraTokensCount: 1,
+    tvlUsd: 3120000,
+    tokens: [
+      {
+        symbol: "PYTH",
+        name: "Pyth Network",
+        mint: "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3",
+        weightBps: 3500,
+        icon: "/tokens/pyth.svg",
+        priceUsd: 0.42,
+        change24h: 5.1,
+      },
+      {
+        symbol: "HNT",
+        name: "Helium",
+        mint: "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux",
+        weightBps: 2500,
+        icon: "/tokens/hnt.png",
+        priceUsd: 6.8,
+        change24h: 4.3,
+      },
+      {
+        symbol: "MOBILE",
+        name: "Helium Mobile",
+        mint: "mb1eu7TzEc71KxDpsmsKoucSSuuoGLv1drys1oP2jh6",
+        weightBps: 2000,
+        icon: "/tokens/mobile.png",
+        priceUsd: 0.0012,
+        change24h: 8.9,
+      },
+      {
+        symbol: "CLOUD",
+        name: "Sanctum",
+        mint: "CLoUDKc4Ane7HeQcPpE3YHnznRxhMimJ4MyaUqyHFzAu",
+        weightBps: 2000,
+        icon: "/tokens/cloud.png",
+        priceUsd: 0.28,
+        change24h: 4.8,
+      },
+    ],
+    chartData: [
+      { time: "Apr", value: 100 },
+      { time: "May", value: 110 },
+      { time: "Jun", value: 118 },
+      { time: "Jul", value: 126 },
+      { time: "Aug", value: 135 },
+      { time: "Sep", value: 142.5 },
+    ],
+  },
 ];
+
+/**
+ * Fetch baskets from the backend API enriched with real live token prices and performance
+ */
+export async function fetchBaskets(): Promise<Basket[]> {
+  try {
+    const [basketsRes, tokensRes] = await Promise.all([
+      kairosApi.getBaskets().catch(() => null),
+      kairosApi.getTokens().catch(() => null),
+    ]);
+
+    const backendBaskets = basketsRes?.baskets as BackendBasket[] | undefined;
+    const tokenPriceMap: Record<string, number> = {};
+    if (tokensRes?.tokens) {
+      for (const t of tokensRes.tokens) {
+        if (t.symbol && t.priceUsd) {
+          tokenPriceMap[t.symbol.toUpperCase()] = t.priceUsd;
+          if (t.symbol.startsWith("t")) {
+            tokenPriceMap[t.symbol.slice(1).toUpperCase()] = t.priceUsd;
+          }
+        }
+      }
+    }
+
+    // Deep copy and enrich CURATED_BASKETS with live prices and backend performance
+    const enriched = CURATED_BASKETS.map((b) => {
+      const match = backendBaskets?.find((bb) => bb.slug === b.slug || bb.id === b.id);
+      
+      const updatedTokens = b.tokens.map((token) => {
+        const livePrice = tokenPriceMap[token.symbol.toUpperCase()] ?? token.priceUsd;
+        return {
+          ...token,
+          priceUsd: livePrice,
+        };
+      });
+
+      const r7d = match?.performance?.["1W"] ?? b.returns7d;
+      const r30d = match?.performance?.["1M"] ?? b.returns30d;
+      const r1y = match?.performance?.["1Y"] ?? b.returns1y;
+
+      return {
+        ...b,
+        returns7d: r7d,
+        returns30d: r30d,
+        returns1y: r1y,
+        displayReturn: {
+          value: `${r1y >= 0 ? "+" : ""}${r1y.toFixed(2)}%`,
+          period: "1 YEAR RETURN",
+          isPositive: r1y >= 0,
+        },
+        tokens: updatedTokens,
+      };
+    });
+
+    return enriched;
+  } catch (error) {
+    console.warn("Failed to fetch baskets from API, using catalog:", error);
+    return CURATED_BASKETS;
+  }
+}
 
 /**
  * Helper to resolve basket by ID or legacy slug alias
@@ -763,4 +1083,11 @@ export function getBasketById(idOrSlug?: string): Basket {
   }
 
   return CURATED_BASKETS[0];
+}
+
+/**
+ * Get all baskets
+ */
+export function getAllBaskets(): Basket[] {
+  return CURATED_BASKETS;
 }

@@ -1,0 +1,167 @@
+.cylinder-carousel {
+  position: relative;
+  overflow: hidden;
+  padding: 4rem 0 3rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background:
+    radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 42%),
+    var(--background);
+}
+
+.cylinder-carousel-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  width: min(1120px, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+.cylinder-carousel-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--foreground);
+  font: 600 0.72rem/1.2 "JetBrains Mono", ui-monospace, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cylinder-carousel-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: hsl(var(--sol-green));
+  box-shadow: 0 0 16px hsl(var(--sol-green) / 0.8);
+}
+
+.cylinder-carousel-header p {
+  max-width: 30rem;
+  margin: 0.65rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.cylinder-carousel-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.cylinder-carousel-controls button,
+.cylinder-carousel-dots button {
+  border: 1px solid var(--border-strong);
+  color: var(--foreground);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.cylinder-carousel-controls button {
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  border-radius: 999px;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.cylinder-carousel-controls button:hover {
+  border-color: var(--foreground);
+  background: var(--surface-hover);
+  transform: translateY(-2px);
+}
+
+.cylinder-carousel-controls svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.cylinder-carousel-stage {
+  position: relative;
+  display: grid;
+  height: 28rem;
+  place-items: center;
+  perspective: 1100px;
+  perspective-origin: center center;
+}
+
+.cylinder-carousel-stage::after {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  width: min(44rem, 75vw);
+  height: 3rem;
+  content: "";
+  background: radial-gradient(ellipse, rgb(0 0 0 / 0.5), transparent 70%);
+  filter: blur(8px);
+  transform: translateX(-50%);
+}
+
+.cylinder-carousel-cylinder {
+  position: relative;
+  width: min(19rem, 72vw);
+  height: 22rem;
+  transform-style: preserve-3d;
+  transition: transform 720ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.cylinder-carousel-panel {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
+
+.cylinder-carousel-panel > * {
+  height: 100%;
+}
+
+.cylinder-carousel-dots {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.cylinder-carousel-dots button {
+  width: 0.4rem;
+  height: 0.4rem;
+  padding: 0;
+  border-radius: 999px;
+  opacity: 0.45;
+  transition: width 160ms ease, opacity 160ms ease, background 160ms ease;
+}
+
+.cylinder-carousel-dots button[aria-current="true"] {
+  width: 1.35rem;
+  opacity: 1;
+  background: var(--foreground);
+}
+
+@media (max-width: 640px) {
+  .cylinder-carousel {
+    padding-top: 3rem;
+  }
+
+  .cylinder-carousel-header {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .cylinder-carousel-stage {
+    height: 25rem;
+  }
+
+  .cylinder-carousel-cylinder {
+    width: min(18rem, 78vw);
+    height: 20rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cylinder-carousel-cylinder {
+    transition: none;
+  }
+}

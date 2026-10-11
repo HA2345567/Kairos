@@ -9,8 +9,8 @@ import { X } from "lucide-react";
 import { motionTokens } from "@/lib/motion-tokens";
 import styles from "./card.module.css";
 
-export interface CardProps extends HTMLAttributes<HTMLElement> {
-  title: string | ReactNode;
+export interface CardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
+  title: ReactNode;
   description?: string;
   media?: ReactNode;
   action?: ReactNode;
@@ -136,7 +136,7 @@ export function Card({ title, description, media, action, avatar, meta, status, 
   </div> : null;
 
   const card = <motion.article
-    {...(props as HTMLMotionProps<"article">)}
+    {...(props as unknown as HTMLMotionProps<"article">)}
     ref={cardRef}
     className={[styles.card, className].filter(Boolean).join(" ")}
     style={{ ...style, borderRadius: geometry.card ?? style?.borderRadius }}

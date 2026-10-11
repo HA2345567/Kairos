@@ -1,0 +1,33 @@
+/* ==========================================================================
+   Kairos Market (/market) — Investment Baskets listing page
+   Layout clone of the Cesto basket-listing structure, restyled exclusively
+   with the Kairos design tokens. Page chrome + small helpers only; all
+   component styling lives in Tailwind / the arc component CSS.
+   ========================================================================== */
+
+.market-page {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 26px 28px 72px;
+  color: var(--text-primary);
+  background: var(--background);
+}
+
+/* Category filter rail — allow horizontal scroll on mobile without a
+   visible scrollbar (matches the Cesto filter rail behaviour) */
+.market-filters {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.market-filters::-webkit-scrollbar {
+  display: none;
+}
+
+/* Responsive page gutter (mirrors the cesto-page breakpoint) */
+@media (max-width: 800px) {
+  .market-page {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

@@ -1,11 +1,36 @@
+# Dependencies
 node_modules/
 target/
+dist/
+build/
+
+# Environment and sensitive keys
 .env
 .env*.local
 *.log
+frontend/*.log
 *-keypair.json
 *keypair*.json
 .DS_Store
-dist/
-build/
+
+# Logs and local debugging dumps
 frontend/console.log*
+frontend/tsc-out.txt
+*.sqlite
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Agentic / AI tooling / workflow specs (Strictly excluded)
+.agents/
+.claude/
+.dsh/
+.github/
+.zcode/
+.zcodeignore
+specs/
+my-project/
+project-tasks/
+GEMINI.md
+*.pptx

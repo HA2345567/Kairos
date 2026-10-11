@@ -1,0 +1,223 @@
+/* ==========================================================================
+   Kairos Labs (/labs, /ideas) — community basket-idea feed
+   Layout clone of the Cesto Labs structure (hero + feed + sticky sidebar),
+   restyled exclusively with the Kairos design tokens. Page chrome + small
+   helpers only; all component styling lives in Tailwind / the arc CSS.
+
+   Metrics matched to the measured Cesto Labs spec (1440×900):
+   1280px container · 830px feed + 355px sidebar · 31px column gap ·
+   176px banner · 160×108 landscape card thumbnails · ~158-170px cards.
+   ========================================================================== */
+
+/* NOTE: every class in this file carries a unique multi-word prefix so no
+   selector can collide with cesto.css (still globally imported by
+   Markets.tsx), which styles its own legacy Labs layout under bare
+   "labs-" names. Never introduce a bare "labs-<word>" selector here. */
+
+.labsroot-page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 48px 32px 72px;
+  color: var(--text-primary);
+  background: var(--background);
+}
+
+/* --------------------------------------------------------------------------
+   Two-column shell: ~830px main feed + 355px sidebar (31px gap). The whole
+   aside is one sticky wrapper (top: 32px) on lg+; it drops below the feed on
+   smaller screens.
+   -------------------------------------------------------------------------- */
+.labsgrid-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 355px;
+  gap: 31px;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .labsaside-sidebar {
+    position: sticky;
+    top: 2rem;
+  }
+}
+
+@media (max-width: 1023px) {
+  .labsgrid-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Banner CTA card (176px min height) — Kairos decorative background (soft
+   lime glow + dot texture). Pure CSS, zero AI-generated imagery.
+   Heading top-left, copy below, button row bottom-left.
+   -------------------------------------------------------------------------- */
+.labscta-banner {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background:
+    radial-gradient(120% 180% at 100% 0%, rgba(212, 255, 0, 0.07) 0%, transparent 55%),
+    var(--surface);
+}
+
+.labscta-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(245, 245, 245, 0.045) 1px, transparent 1px);
+  background-size: 22px 22px;
+  pointer-events: none;
+}
+
+/* Keep banner content above the dot texture */
+.labscta-banner > * {
+  position: relative;
+}
+
+/* Banner button pair — 36px tall, 8px radius, 14px/600 (arc Button's module
+   CSS is unlayered and wins over Tailwind utilities, so exact metrics live
+   here instead of className overrides). */
+.labs-btn-primary,
+.labs-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 150ms ease, opacity 150ms ease, background-color 150ms ease,
+    border-color 150ms ease, transform 100ms ease;
+}
+
+.labs-btn-primary {
+  border: 0;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.labs-btn-primary:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.labs-btn-secondary {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.labs-btn-secondary:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+/* --------------------------------------------------------------------------
+   Idea-card thumbnail — LANDSCAPE 160×108 tile built from stacked token
+   avatars over a subtle gradient (token collage = house style, no AI images).
+   -------------------------------------------------------------------------- */
+.labs-idea-thumb {
+  flex: 0 0 160px;
+  width: 160px;
+  height: 108px;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background:
+    radial-gradient(120% 120% at 15% 0%, rgba(212, 255, 0, 0.05) 0%, transparent 55%),
+    linear-gradient(160deg, var(--surface-elevated) 0%, var(--surface-muted) 100%);
+}
+
+.labs-thumb-stack {
+  display: flex;
+  align-items: center;
+}
+
+.labs-thumb-stack img {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  object-fit: cover;
+  background: var(--surface-hover);
+  border: 2px solid var(--surface-muted);
+  margin-left: -0.5rem;
+}
+
+.labs-thumb-stack img:first-child {
+  margin-left: 0;
+}
+
+.labs-thumb-symbols {
+  max-width: 8.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Idea card hover — border lifts to border-strong, card rises 1px max.
+   -------------------------------------------------------------------------- */
+.labs-idea-card {
+  transition: border-color 150ms ease, transform 150ms ease;
+}
+
+.labs-idea-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .labs-idea-card,
+  .labs-idea-card:hover,
+  .labs-btn-primary:hover {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Responsive page gutter + landscape thumbnail shrink on small screens
+   (aspect ratio preserved).
+   -------------------------------------------------------------------------- */
+@media (max-width: 800px) {
+  .labsroot-page {
+    padding: 32px 16px 48px;
+  }
+}
+
+@media (max-width: 640px) {
+  .labs-idea-thumb {
+    flex-basis: 128px;
+    width: 128px;
+    height: 88px;
+  }
+}
+
+@media (max-width: 420px) {
+  .labs-idea-thumb {
+    flex-basis: 104px;
+    width: 104px;
+    height: 71px;
+  }
+
+  .labs-thumb-stack img {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+}

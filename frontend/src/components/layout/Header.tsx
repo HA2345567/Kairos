@@ -11,7 +11,7 @@ import { Button } from "@/components/arc/button";
 const NAV = [
   { to: "/markets", label: "Baskets" },
   { to: "/positions", label: "Positions" },
-  { to: "/labs", label: "Labs", isBeta: true },
+  { to: "/ideas", label: "Ideas", isBeta: true },
 ];
 
 export function Header() {
@@ -40,13 +40,13 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-background/80 backdrop-blur-md border-b border-border/20">
+    <header className="sticky top-0 z-50 w-full border-b border-border/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
         {/* Left: Company Logo + Name — Kairos */}
         <div className="flex items-center gap-8">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <KairosLogo className="size-7 text-foreground transition-transform group-hover:scale-105" />
-            <span className="font-display text-2xl font-extrabold tracking-tight text-foreground">Kairos</span>
+            <KairosLogo className="size-6 text-foreground transition-transform group-hover:scale-105" />
+            <span className="font-display text-2xl tracking-tight text-foreground">Kairos</span>
           </Link>
         </div>
 
@@ -80,15 +80,12 @@ export function Header() {
         {/* Right: Landing shows "Launch App", App pages show "Connect Wallet" */}
         <div className="hidden md:flex items-center gap-3">
           {isLanding ? (
-            <Link to="/markets">
-              <Button
-                variant="primary"
-                size="md"
-                className="rounded-full px-5 font-bold"
-              >
-                <span>Launch App</span>
-                <ArrowRight className="size-3.5 stroke-[2.5]" />
-              </Button>
+            <Link
+              to="/labs/create"
+              className="inline-flex items-center justify-center gap-1.5 rounded-full bg-primary hover:bg-neutral-200 text-primary-foreground font-bold text-xs px-3.5 h-[32px] transition-all duration-200 shadow-sm cursor-pointer select-none active:scale-95"
+            >
+              <span>Launch App</span>
+              <ArrowRight className="size-3.5 stroke-[2.5]" />
             </Link>
           ) : (
             <>
@@ -96,8 +93,8 @@ export function Header() {
                 <Button
                   onClick={handleSignIn}
                   variant="primary"
-                  size="md"
-                  className="rounded-xl px-5 font-bold"
+                  size="sm"
+                  className="rounded-full !min-h-[32px] !h-[32px] px-3.5 text-xs font-bold gap-1.5"
                 >
                   <Wallet className="size-3.5" />
                   <span>Sign In</span>
@@ -150,7 +147,7 @@ export function Header() {
           <div className="pt-2 border-t border-border/30 space-y-2">
             {isLanding ? (
               <Link
-                to="/markets"
+                to="/labs/create"
                 onClick={() => setOpen(false)}
                 className="w-full py-2.5 rounded-full bg-primary hover:opacity-90 text-primary-foreground font-extrabold text-sm tracking-wide flex items-center justify-center gap-2 select-none transition-all active:scale-95 shadow-sm"
               >

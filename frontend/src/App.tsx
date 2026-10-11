@@ -7,6 +7,7 @@ import { SolanaProvider } from "@/components/wallet/SolanaProvider";
 
 import Landing from "./pages/Index.tsx";
 import Markets from "./pages/Markets.tsx";
+import Market from "./pages/Market.tsx";
 import MarketDetail from "./pages/MarketDetailpage.tsx";
 import CreateBasket from "./pages/CreateBasket.tsx";
 import Portfolio from "./pages/Portfolio.tsx";
@@ -36,6 +37,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/markets" element={<Markets />} />
+            <Route path="/market" element={<Market />} />
             <Route path="/markets/create" element={<CreateBasket />} />
             <Route path="/markets/:id" element={<MarketDetail />} />
             <Route path="/product/:id" element={<MarketDetail />} />
@@ -44,6 +46,8 @@ const App = () => (
             <Route path="/create" element={<CreateBasket />} />
             <Route path="/basket/:id" element={<MarketDetail />} />
             <Route path="/positions" element={<Portfolio />} />
+            <Route path="/ideas" element={<Labs />} />
+            <Route path="/ideas/create" element={<LabsCreate />} />
             <Route path="/labs" element={<Labs />} />
             <Route path="/labs/create" element={<LabsCreate />} />
             <Route path="/portfolio" element={<Portfolio />} />

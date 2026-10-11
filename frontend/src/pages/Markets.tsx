@@ -1,6 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
 import { PageShell } from "@/components/layout/PageShell";
-import { CURATED_BASKETS, Basket } from "@/lib/baskets-data";
 import { BasketCard } from "@/components/basket/BasketCard";
 import { BasketRow } from "@/components/basket/BasketRow";
 import { BasketCardSkeleton, BasketRowSkeleton } from "@/components/basket/BasketSkeleton";
@@ -9,24 +8,28 @@ import { Link } from "react-router-dom";
 import { LayoutGrid, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./cesto.css";
+import { kairosApi } from "@/lib/api-client";
+import { CURATED_BASKETS, fetchBaskets, type Basket } from "@/lib/baskets-data";
 
 import { useTokenPrices } from "@/hooks/useTokenPrices";
 
-const CATEGORIES = ["All", ...Array.from(new Set(CURATED_BASKETS.map((b) => b.category)))];
+const INITIAL_CATEGORIES = ["All", ...Array.from(new Set(CURATED_BASKETS.map((b) => b.category))).sort()];
 
 export default function Markets() {
+  const [baskets, setBaskets] = useState<Basket[]>(CURATED_BASKETS);
+  const [categories, setCategories] = useState<string[]>(INITIAL_CATEGORIES);
   const [selectedCat, setSelectedCat] = useState<string>("All");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [investBasket, setInvestBasket] = useState<Basket | null>(null);
   const [investModalOpen, setInvestModalOpen] = useState(false);
 
   // Aggregate all unique token mints for real-time DexScreener/Jupiter price updates
   const allConstituentMints = useMemo(() => {
     return Array.from(
-      new Set(CURATED_BASKETS.flatMap((b) => b.tokens.map((t) => t.priceMint || t.mint)))
+      new Set(baskets.flatMap((b) => (b.tokens || []).map((t) => t.priceMint || t.mint)))
     );
-  }, []);
+  }, [baskets]);
   const { prices: livePrices } = useTokenPrices(allConstituentMints);
 
   function handleInvestClick(basket: Basket) {
@@ -34,18 +37,36 @@ export default function Markets() {
     setInvestModalOpen(true);
   }
 
-  // Initial smooth mount skeleton
+  // Load real backend baskets enriched with live on-chain token prices
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 250);
-    return () => clearTimeout(timer);
+    let active = true;
+    async function loadMarketsData() {
+      try {
+        const fetchedBaskets = await fetchBaskets();
+        if (active && fetchedBaskets && fetchedBaskets.length > 0) {
+          setBaskets(fetchedBaskets);
+          const uniqueCategories = Array.from(
+            new Set(fetchedBaskets.map((basket) => basket.category))
+          );
+          setCategories(["All", ...uniqueCategories.sort()]);
+        }
+      } catch (error) {
+        console.warn("API unavailable, displaying catalog:", error);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    }
+
+    loadMarketsData();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const filteredBaskets = useMemo(() => {
-    return CURATED_BASKETS.filter((b) => {
-      if (selectedCat === "All") return true;
-      return b.category === selectedCat;
-    });
-  }, [selectedCat]);
+    if (selectedCat === "All") return baskets;
+    return baskets.filter(basket => basket.category === selectedCat);
+  }, [baskets, selectedCat]);
 
   return (
     <PageShell>
@@ -64,7 +85,7 @@ export default function Markets() {
         <div className="flex items-center justify-between gap-3 pt-1">
           {/* Category Filter Pills */}
           <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {CATEGORIES.map((cat) => {
+            {categories.map((cat) => {
               const isSelected = selectedCat === cat;
               return (
                 <button
@@ -118,7 +139,7 @@ export default function Markets() {
 
         {/* Baskets Grid / Table View */}
         <div className="pt-2">
-          {isLoading ? (
+          {isLoading && baskets.length === 0 ? (
             viewMode === "grid" ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 auto-rows-fr">
                 {[1, 2, 3, 4, 5, 6].map((i) => (

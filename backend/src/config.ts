@@ -83,7 +83,7 @@ export const config: Config = {
   // fallback is the public endpoint (withFailover then acts as a retry).
   fallbackRpcUrl:
     process.env.SOLANA_FALLBACK_RPC_URL ||
-    (process.env.HELIUS_API_KEY
+    (process.env.HELIUS_API_KEY && !process.env.HELIUS_API_KEY.includes("replace")
       ? `https://devnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`
       : "https://api.devnet.solana.com"),
   jwtSecret: process.env.JWT_SECRET || "kairos-super-secure-devnet-secret-key-2026",

@@ -21,8 +21,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['"Cal Sans"', "Inter", "system-ui", "sans-serif"],
-        sans: ["Inter", "system-ui", "sans-serif"],
+        display: ['"Archivo"', '"Archivo Narrow"', "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "Roboto", "sans-serif"],
+        sans: ['"Archivo"', '"Archivo Narrow"', "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "Roboto", "sans-serif"],
         mono: ['"JetBrains Mono"', "ui-monospace", "monospace"],
       },
       colors: {

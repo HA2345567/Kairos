@@ -15,12 +15,10 @@ import {
   Check,
   X,
   Equal,
-  Sliders,
 } from "lucide-react";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, AreaChart, Area, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-import "./cesto.css";
+import "./labs-create.css";
 
 export interface LabTokenAllocation {
   symbol: string;
@@ -166,15 +164,16 @@ export const VERIFIED_SOLANA_TOKENS: {
   },
 ];
 
+// Sleek high-contrast palette with ZERO green
 const DONUT_COLORS = [
-  "#10b981", // emerald
-  "#38bdf8", // sky
-  "#a855f7", // purple
-  "#f59e0b", // amber
-  "#ec4899", // pink
-  "#6366f1", // indigo
-  "#14b8a6", // teal
-  "#f43f5e", // rose
+  "#38bdf8", // sky cyan
+  "#818cf8", // indigo
+  "#c084fc", // purple
+  "#f472b6", // pink
+  "#fb923c", // orange
+  "#facc15", // yellow amber
+  "#94a3b8", // slate
+  "#e2e8f0", // platinum
 ];
 
 export default function LabsCreate() {
@@ -375,7 +374,7 @@ export default function LabsCreate() {
     setTimeout(() => {
       setIsSubmitting(false);
       toast.success("Basket idea published successfully!");
-      navigate("/labs");
+      navigate("/ideas");
     }, 600);
   }
 
@@ -386,8 +385,7 @@ export default function LabsCreate() {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"];
     let base = 100;
     return months.map((m, idx) => {
-      // Synthetic weighted random walk based on allocations count
-      const drift = 1 + (idx * 0.04) + (Math.sin(idx) * 0.03);
+      const drift = 1 + idx * 0.04 + Math.sin(idx) * 0.03;
       base = Number((100 * drift).toFixed(2));
       return {
         month: m,
@@ -409,57 +407,52 @@ export default function LabsCreate() {
 
   return (
     <PageShell>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        {/* Breadcrumb Navigation */}
-        <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-          <Link
-            to="/labs"
-            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+      <div className="labs-create-container">
+        {/* Breadcrumb Navigation: go-back + Labs + current (Cesto pattern) */}
+        <nav className="labs-create-breadcrumbs" aria-label="Breadcrumb">
+          <button
+            type="button"
+            aria-label="Go back"
+            onClick={() => navigate(-1)}
+            className="labs-create-back-btn"
           >
-            <ChevronLeft className="size-3.5" />
-            <span>Labs</span>
-          </Link>
-          <span className="text-border">/</span>
-          <span className="text-foreground font-semibold">Create Basket</span>
-        </div>
+            <ChevronLeft className="size-4" />
+          </button>
+          <Link to="/labs">Labs</Link>
+          <span className="separator">›</span>
+          <span className="current">Create Basket</span>
+        </nav>
 
-        {/* Top Header Bar matching Cesto screenshot */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border/50">
-          <div className="flex items-start gap-3.5">
-            <div className="size-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5">
-              <FlaskConical className="size-6" />
+        {/* Top Header Bar matching Cesto reference */}
+        <div className="labs-create-header">
+          <div className="labs-create-title-group">
+            <div className="labs-create-icon-badge">
+              <FlaskConical className="size-5" />
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
-                Share a Basket Idea
-              </h1>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                Describe your strategy, pick tokens or markets, set allocations, and publish.
-              </p>
+              <h1>Share a Basket Idea</h1>
+              <p>Describe your strategy, pick tokens or markets, set allocations, and publish.</p>
             </div>
           </div>
 
           <button
             type="button"
             onClick={handleMagicGenerate}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-border bg-surface hover:bg-surface-hover text-foreground text-xs font-semibold transition-all shadow-sm cursor-pointer w-fit self-start sm:self-auto"
+            className="labs-create-magic-btn"
           >
-            <Sparkles className="size-3.5 text-emerald-400" />
+            <Sparkles className="size-3.5" />
             <span>Magic</span>
           </button>
         </div>
 
         {/* Two-Column Form & Preview Layout */}
-        <form onSubmit={handlePublish} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Column: Form Controls (7 cols) */}
-          <div className="lg:col-span-7 space-y-6">
-            {/* Title Input */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
-                  Title
-                </label>
-                <span className="text-[11px] font-mono text-muted-foreground">{title.length}/100</span>
+        <form onSubmit={handlePublish} className="labs-create-grid">
+          {/* Left Column: Form Controls */}
+          <div className="labs-create-form-section">
+            {/* Title Input — counter sits below the input, right-aligned */}
+            <div className="labs-create-field">
+              <div className="labs-create-field-header">
+                <label className="labs-create-label">Title</label>
               </div>
               <input
                 type="text"
@@ -467,18 +460,16 @@ export default function LabsCreate() {
                 maxLength={100}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. AI x DePIN Convergence Basket"
-                className="w-full px-4 py-3 rounded-xl border border-border bg-surface text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:border-border-strong transition-colors"
+                className="labs-create-input"
                 required
               />
+              <span className="labs-create-char-counter">{title.length}/100</span>
             </div>
 
-            {/* Description Input */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
-                  Description
-                </label>
-                <span className="text-[11px] font-mono text-muted-foreground">{description.length}/1000</span>
+            {/* Description Input — counter below the textarea */}
+            <div className="labs-create-field">
+              <div className="labs-create-field-header">
+                <label className="labs-create-label">Description</label>
               </div>
               <textarea
                 value={description}
@@ -486,48 +477,40 @@ export default function LabsCreate() {
                 rows={4}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Describe your basket strategy — what tokens, weighting, rebalance cadence, thesis..."
-                className="w-full px-4 py-3 rounded-xl border border-border bg-surface text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:border-border-strong transition-colors resize-none"
+                className="labs-create-textarea"
               />
+              <span className="labs-create-char-counter">{description.length}/1000</span>
             </div>
 
             {/* Cover Image Toggle */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
-                  Cover Image <span className="text-muted-foreground/50 lowercase font-normal">(optional)</span>
+            <div className="labs-create-cover-group">
+              <div className="labs-create-field-header">
+                <label className="labs-create-label">
+                  Cover Image <span className="optional">(optional)</span>
                 </label>
 
-                {/* Toggle Switch matching screenshot */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground flex items-center gap-1 font-medium">
-                    <Sparkles className="size-3 text-emerald-400" /> Generate with AI
-                  </span>
+                {/* Neutral High-Contrast Switch */}
+                <div className="labs-create-ai-toggle-row">
+                  <Sparkles className="size-3 text-muted-foreground" />
+                  <span>Generate with AI</span>
                   <button
                     type="button"
                     role="switch"
                     aria-checked={generateAiCover}
                     onClick={() => setGenerateAiCover(!generateAiCover)}
-                    className={cn(
-                      "w-11 h-6 rounded-full transition-colors relative cursor-pointer",
-                      generateAiCover ? "bg-emerald-500" : "bg-surface border border-border"
-                    )}
+                    className={`labs-create-switch ${generateAiCover ? "active" : ""}`}
                   >
-                    <span
-                      className={cn(
-                        "block size-5 rounded-full bg-white transition-transform duration-200 mt-0.5",
-                        generateAiCover ? "translate-x-5" : "translate-x-0.5"
-                      )}
-                    />
+                    <span className="labs-create-switch-thumb" />
                   </button>
                 </div>
               </div>
 
-              {/* AI Banner matching screenshot */}
+              {/* AI Banner */}
               {generateAiCover ? (
-                <div className="flex items-center gap-3 p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-xs text-muted-foreground">
-                  <Sparkles className="size-4 text-emerald-400 shrink-0" />
+                <div className="labs-create-ai-banner">
+                  <Sparkles className="size-4 labs-create-ai-banner-icon" />
                   <div>
-                    <strong className="text-foreground font-semibold block">AI will generate a cover image</strong>
+                    <strong>AI will generate a cover image</strong>
                     <span>Based on your title and description when you publish.</span>
                   </div>
                 </div>
@@ -537,19 +520,17 @@ export default function LabsCreate() {
                   value={customCoverUrl}
                   onChange={(e) => setCustomCoverUrl(e.target.value)}
                   placeholder="https://example.com/cover.png"
-                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-surface text-foreground placeholder:text-muted-foreground/60 text-xs focus:outline-none focus:border-border-strong"
+                  className="labs-create-input"
                 />
               )}
             </div>
 
             {/* Allocation Section */}
-            <div className="space-y-3 pt-2">
-              <div className="flex items-center justify-between">
+            <div className="labs-create-field">
+              <div className="labs-create-alloc-header">
                 <div>
-                  <label className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground block">
-                    Allocation
-                  </label>
-                  <p className="text-xs text-muted-foreground">
+                  <label className="labs-create-label">Allocation</label>
+                  <p className="labs-create-alloc-desc">
                     Pick tokens, stocks, and/or prediction markets and set each target weight (must total 100%).
                   </p>
                 </div>
@@ -558,49 +539,49 @@ export default function LabsCreate() {
                   <button
                     type="button"
                     onClick={handleEqualWeight}
-                    className="flex items-center gap-1 text-[11px] font-mono font-semibold text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                    className="labs-create-equal-btn"
                   >
-                    <Equal className="size-3" /> Equal Weight
+                    <Equal className="size-3" />
+                    <span>Equal Weight</span>
                   </button>
                 )}
               </div>
 
               {/* Tokens Table / List */}
               {allocations.length > 0 && (
-                <div className="space-y-2 rounded-2xl border border-border bg-surface p-3 divide-y divide-border/40">
-                  {allocations.map((item, idx) => {
+                <div className="labs-create-allocations-table">
+                  {allocations.map((item) => {
                     const price = livePrices[item.mint]?.priceUsd;
                     const change = livePrices[item.mint]?.change24h;
 
                     return (
-                      <div key={item.mint} className="pt-2 first:pt-0 flex items-center justify-between gap-3 text-xs">
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <div key={item.mint} className="labs-create-allocation-row">
+                        <div className="labs-create-token-info">
                           <img
                             src={item.icon}
                             alt={item.symbol}
-                            className="size-7 rounded-full object-cover border border-border shrink-0"
+                            className="labs-create-token-icon"
                             onError={(e) => {
                               (e.target as HTMLElement).style.display = "none";
                             }}
                           />
-                          <div className="min-w-0">
-                            <span className="font-bold text-foreground block truncate">{item.symbol}</span>
-                            <span className="text-[10px] text-muted-foreground block truncate">{item.name}</span>
+                          <div className="labs-create-token-texts">
+                            <span className="labs-create-token-symbol">{item.symbol}</span>
+                            <span className="labs-create-token-name">{item.name}</span>
                           </div>
                         </div>
 
                         {/* Live Price Tag */}
                         {price !== undefined && (
-                          <div className="font-mono text-right hidden sm:block shrink-0">
-                            <div className="text-foreground font-semibold">
+                          <div className="labs-create-token-price-col">
+                            <div className="labs-create-token-price">
                               ${price < 0.01 ? price.toFixed(6) : price.toFixed(2)}
                             </div>
                             {change !== undefined && (
                               <div
-                                className={cn(
-                                  "text-[10px] font-medium",
-                                  change >= 0 ? "text-emerald-400" : "text-rose-400"
-                                )}
+                                className={`labs-create-token-change ${
+                                  change >= 0 ? "positive" : "negative"
+                                }`}
                               >
                                 {change >= 0 ? "+" : ""}
                                 {change.toFixed(2)}%
@@ -610,8 +591,8 @@ export default function LabsCreate() {
                         )}
 
                         {/* Weight Input Box */}
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className="flex items-center border border-border rounded-lg bg-surface-muted px-2 py-1 w-20">
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <div className="labs-create-weight-box">
                             <input
                               type="number"
                               min={1}
@@ -623,15 +604,15 @@ export default function LabsCreate() {
                                   allocations.map((a) => (a.mint === item.mint ? { ...a, weightPct: val } : a))
                                 );
                               }}
-                              className="w-full bg-transparent text-right font-mono text-xs font-bold text-foreground focus:outline-none"
+                              className="labs-create-weight-input"
                             />
-                            <span className="text-muted-foreground ml-1 font-mono text-xs">%</span>
+                            <span className="labs-create-weight-pct">%</span>
                           </div>
 
                           <button
                             type="button"
                             onClick={() => handleRemoveToken(item.mint)}
-                            className="p-1 rounded-lg text-muted-foreground hover:text-rose-400 transition-colors cursor-pointer"
+                            className="labs-create-delete-btn"
                           >
                             <Trash2 className="size-4" />
                           </button>
@@ -641,58 +622,43 @@ export default function LabsCreate() {
                   })}
 
                   {/* Weight Summary Footer */}
-                  <div className="pt-3 flex items-center justify-between text-xs font-mono">
-                    <span className="text-muted-foreground">Total Allocation:</span>
-                    <span
-                      className={cn(
-                        "font-bold",
-                        isValidWeight ? "text-emerald-400" : "text-rose-400"
-                      )}
-                    >
+                  <div className="labs-create-alloc-footer">
+                    <span className="total-label">Total Allocation:</span>
+                    <span className={`total-val ${isValidWeight ? "valid" : "invalid"}`}>
                       {totalWeight}% / 100%
                     </span>
                   </div>
                 </div>
               )}
 
-              {/* Dashed "+ Add asset" box matching screenshot */}
-              <div className="border border-dashed border-border rounded-2xl p-8 flex flex-col items-center justify-center text-center bg-surface/30 hover:bg-surface/50 transition-colors">
+              {/* Dashed "+ Add asset" box */}
+              <div className="labs-create-dashed-box">
                 {allocations.length === 0 && (
-                  <p className="text-xs font-mono text-muted-foreground mb-3">No allocations added yet</p>
+                  <p className="labs-create-dashed-empty">No allocations added yet</p>
                 )}
 
                 <button
                   type="button"
                   onClick={() => setIsAssetModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface border border-border hover:border-border-strong text-foreground text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  className="labs-create-add-btn"
                 >
-                  <Plus className="size-3.5 text-emerald-400" />
+                  <Plus className="size-3.5" />
                   <span>Add asset</span>
-                  <span className="px-1.5 py-0.5 rounded bg-surface-muted text-[10px] font-mono text-muted-foreground border border-border ml-1">
-                    Ctrl K
-                  </span>
+                  <span className="labs-create-kbd">Ctrl K</span>
                 </button>
               </div>
             </div>
 
-            {/* Bottom Actions Bar matching screenshot */}
-            <div className="pt-4 flex items-center justify-between border-t border-border/50">
-              <Link
-                to="/labs"
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-              >
+            {/* Bottom Actions Bar */}
+            <div className="labs-create-actions">
+              <Link to="/ideas" className="labs-create-cancel-btn">
                 Cancel
               </Link>
 
               <button
                 type="submit"
                 disabled={isSubmitting || !title.trim() || allocations.length === 0 || !isValidWeight}
-                className={cn(
-                  "flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs transition-all shadow-md cursor-pointer",
-                  !title.trim() || allocations.length === 0 || !isValidWeight
-                    ? "bg-surface-muted text-muted-foreground cursor-not-allowed border border-border"
-                    : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20"
-                )}
+                className="labs-create-publish-btn"
               >
                 <Send className="size-3.5" />
                 <span>{isSubmitting ? "Publishing..." : "Publish Basket"}</span>
@@ -700,71 +666,66 @@ export default function LabsCreate() {
             </div>
           </div>
 
-          {/* Right Column: Preview & Simulation (5 cols) */}
-          <div className="lg:col-span-5 space-y-6">
-            {/* Card 1: Allocation Breakdown matching screenshot */}
-            <div className="rounded-2xl border border-border bg-surface p-5 space-y-4">
-              <div className="flex items-center gap-2">
-                <PieIcon className="size-4 text-muted-foreground" />
-                <h3 className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
-                  Allocation Breakdown
-                </h3>
-              </div>
+          {/* Right Column: Preview & Simulation */}
+          <div className="labs-create-preview-section">
+            {/* Card 1: Allocation Breakdown (~250px min-height) */}
+            <div className="labs-create-preview-card labs-create-card-breakdown">
+              <h3 className="labs-create-card-title">
+                <PieIcon className="size-4" />
+                <span>Allocation Breakdown</span>
+              </h3>
 
               {allocations.length === 0 ? (
-                <div className="h-44 flex flex-col items-center justify-center text-center p-4">
-                  <div className="size-10 rounded-full border border-border flex items-center justify-center text-muted-foreground/40 mb-2">
+                <div className="labs-create-empty-state">
+                  <div className="labs-create-empty-icon">
                     <PieIcon className="size-5" />
                   </div>
-                  <p className="text-xs font-mono text-muted-foreground">
-                    Add tokens to see allocation breakdown
-                  </p>
+                  <p>Add tokens to see allocation breakdown</p>
                 </div>
               ) : (
-                <div className="h-56 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={allocations}
-                        dataKey="weightPct"
-                        nameKey="symbol"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={55}
-                        outerRadius={80}
-                        paddingAngle={3}
-                      >
-                        {allocations.map((entry, index) => (
-                          <Cell
-                            key={`cell-${entry.symbol}`}
-                            fill={DONUT_COLORS[index % DONUT_COLORS.length]}
-                            stroke="#1A1A1A"
-                            strokeWidth={2}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          if (!active || !payload?.length) return null;
-                          const d = payload[0].payload as LabTokenAllocation;
-                          return (
-                            <div className="rounded-lg border border-border bg-[#141414] p-2 text-xs font-mono shadow-xl">
-                              <span className="font-bold text-foreground">{d.symbol}</span>: {d.weightPct}%
-                            </div>
-                          );
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+                <div>
+                  <div className="labs-create-chart-wrap">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={allocations}
+                          dataKey="weightPct"
+                          nameKey="symbol"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={80}
+                          paddingAngle={3}
+                        >
+                          {allocations.map((entry, index) => (
+                            <Cell
+                              key={`cell-${entry.symbol}`}
+                              fill={DONUT_COLORS[index % DONUT_COLORS.length]}
+                              stroke="#1A1A1A"
+                              strokeWidth={2}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null;
+                            const d = payload[0].payload as LabTokenAllocation;
+                            return (
+                              <div style={{ borderRadius: "0.5rem", border: "1px solid var(--border)", background: "var(--background)", padding: "0.5rem", fontSize: "0.75rem", fontFamily: "var(--font-mono, monospace)" }}>
+                                <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>{d.symbol}</span>: {d.weightPct}%
+                              </div>
+                            );
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
                   {/* Legend list */}
-                  <div className="flex flex-wrap gap-2 justify-center pt-2">
+                  <div className="labs-create-legend-wrap">
                     {allocations.map((a, i) => (
-                      <span
-                        key={a.symbol}
-                        className="inline-flex items-center gap-1.5 text-[11px] font-mono text-muted-foreground"
-                      >
+                      <span key={a.symbol} className="labs-create-legend-badge">
                         <span
-                          className="size-2 rounded-full"
+                          className="labs-create-legend-dot"
                           style={{ backgroundColor: DONUT_COLORS[i % DONUT_COLORS.length] }}
                         />
                         {a.symbol} ({a.weightPct}%)
@@ -775,46 +736,44 @@ export default function LabsCreate() {
               )}
             </div>
 
-            {/* Card 2: Backtested Data matching screenshot */}
-            <div className="rounded-2xl border border-border bg-surface p-5 space-y-4">
-              <div className="flex items-center gap-2">
-                <ChartIcon className="size-4 text-muted-foreground" />
-                <h3 className="text-xs font-bold font-mono uppercase tracking-wider text-muted-foreground">
-                  Backtested Data
-                </h3>
-              </div>
+            {/* Card 2: Backtested Data (~365px min-height) */}
+            <div className="labs-create-preview-card labs-create-card-backtest">
+              <h3 className="labs-create-card-title">
+                <ChartIcon className="size-4" />
+                <span>Backtested Data</span>
+              </h3>
 
               {allocations.length === 0 ? (
-                <div className="h-44 flex flex-col items-center justify-center text-center p-4">
-                  <p className="text-xs font-mono text-muted-foreground">
-                    Graph data will appear here after simulation.
-                  </p>
+                <div className="labs-create-empty-state">
+                  <p>Graph data will appear here after simulation.</p>
                 </div>
               ) : (
-                <div className="h-44 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={backtestData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="backtestGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop stopColor="#10b981" stopOpacity={0.25} />
-                          <stop offset="1" stopColor="#10b981" stopOpacity={0.0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="month" tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
-                      <YAxis tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
-                      <Area
-                        type="monotone"
-                        dataKey="nav"
-                        stroke="#10b981"
-                        strokeWidth={2}
-                        fill="url(#backtestGrad)"
-                        dot={false}
-                        isAnimationActive={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                  <div className="flex items-center justify-between text-[11px] font-mono text-muted-foreground pt-1">
-                    <span>Backtested Return: <strong className="text-emerald-400 font-bold">+38.4%</strong></span>
+                <div>
+                  <div style={{ height: "11rem", width: "100%" }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={backtestData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="backtestGradNeutral" x1="0" y1="0" x2="0" y2="1">
+                            <stop stopColor="#38bdf8" stopOpacity={0.25} />
+                            <stop offset="1" stopColor="#38bdf8" stopOpacity={0.0} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="month" tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
+                        <YAxis tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
+                        <Area
+                          type="monotone"
+                          dataKey="nav"
+                          stroke="#38bdf8"
+                          strokeWidth={2}
+                          fill="url(#backtestGradNeutral)"
+                          dot={false}
+                          isAnimationActive={false}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="labs-create-stat-row">
+                    <span>Backtested Return: <strong className="labs-create-stat-val">+38.4%</strong></span>
                     <span>1Y Simulation</span>
                   </div>
                 </div>
@@ -825,41 +784,36 @@ export default function LabsCreate() {
 
         {/* Asset Selection Modal (Ctrl+K) */}
         {isAssetModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-            <div className="w-full max-w-lg rounded-2xl border border-border bg-[#1A1A1A] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="labs-create-modal-overlay" onClick={() => setIsAssetModalOpen(false)}>
+            <div className="labs-create-modal-card" onClick={(e) => e.stopPropagation()}>
               {/* Modal Search Bar */}
-              <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
-                <Search className="size-4 text-muted-foreground" />
+              <div className="labs-create-modal-search">
+                <Search className="size-4 labs-create-modal-search-icon" />
                 <input
                   type="text"
                   autoFocus
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search Solana tokens (symbol, name)..."
-                  className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                  className="labs-create-modal-search-input"
                 />
                 <button
                   type="button"
                   onClick={() => setIsAssetModalOpen(false)}
-                  className="p-1 rounded-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  className="labs-create-modal-close"
                 >
                   <X className="size-4" />
                 </button>
               </div>
 
               {/* Categories Pills */}
-              <div className="flex items-center gap-1.5 px-4 py-2 border-b border-border/60 overflow-x-auto scrollbar-none bg-surface/30">
+              <div className="labs-create-pills-wrap">
                 {["All", "DeFi", "AI & Compute", "DePIN", "Culture & Memes", "Infrastructure"].map((cat) => (
                   <button
                     key={cat}
                     type="button"
                     onClick={() => setActiveCategory(cat)}
-                    className={cn(
-                      "px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer",
-                      activeCategory === cat
-                        ? "bg-surface-elevated text-foreground border border-border"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
+                    className={`labs-create-pill-btn ${activeCategory === cat ? "active" : ""}`}
                   >
                     {cat}
                   </button>
@@ -867,9 +821,9 @@ export default function LabsCreate() {
               </div>
 
               {/* Tokens List */}
-              <div className="max-h-80 overflow-y-auto divide-y divide-border/30 p-2">
+              <div className="labs-create-modal-list">
                 {filteredTokens.length === 0 ? (
-                  <div className="p-8 text-center text-xs font-mono text-muted-foreground">
+                  <div className="labs-create-modal-empty">
                     No tokens match "{searchQuery}"
                   </div>
                 ) : (
@@ -881,31 +835,26 @@ export default function LabsCreate() {
                         type="button"
                         onClick={() => handleAddToken(t)}
                         disabled={isSelected}
-                        className={cn(
-                          "w-full flex items-center justify-between p-3 rounded-xl transition-colors text-left cursor-pointer",
-                          isSelected ? "opacity-50 cursor-not-allowed bg-surface/20" : "hover:bg-surface"
-                        )}
+                        className={`labs-create-modal-item ${isSelected ? "selected" : ""}`}
                       >
-                        <div className="flex items-center gap-3">
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                           <img
                             src={t.icon}
                             alt={t.symbol}
-                            className="size-8 rounded-full object-cover border border-border"
+                            style={{ width: "2rem", height: "2rem", borderRadius: "9999px", objectFit: "cover", border: "1px solid var(--border)" }}
                             onError={(e) => {
                               (e.target as HTMLElement).style.display = "none";
                             }}
                           />
                           <div>
-                            <span className="font-bold text-foreground text-sm block">{t.symbol}</span>
-                            <span className="text-xs text-muted-foreground block">{t.name}</span>
+                            <span style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "0.875rem", display: "block" }}>{t.symbol}</span>
+                            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block" }}>{t.name}</span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-surface border border-border text-muted-foreground">
-                            {t.category}
-                          </span>
-                          {isSelected && <Check className="size-4 text-emerald-400" />}
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <span className="labs-create-category-badge">{t.category}</span>
+                          {isSelected && <Check className="size-4" style={{ color: "#38bdf8" }} />}
                         </div>
                       </button>
                     );

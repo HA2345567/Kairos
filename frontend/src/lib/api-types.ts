@@ -1,298 +1,287 @@
-// Shared API types matching backend Prisma models.
-
-export const CATEGORIES = [
-  "Crypto", "Politics", "Sports", "Memes",
-  "NFTs", "DeFi", "Social", "AI", "Weather",
-] as const;
-export type MarketCategory = (typeof CATEGORIES)[number];
-
-export type ResolutionSource = "Pyth" | "Switchboard" | "AIOracle" | "DAOVote";
-export type MarketStatus = "open" | "resolving" | "resolved" | "disputed";
-export type Outcome = "YES" | "NO" | "INVALID" | "DISPUTED";
-export type Side = "YES" | "NO";
-export type TradeKind = "market" | "limit" | "stop";
-
-export interface ApiUser {
-  id: string;
-  wallet: string;
-  handle?: string | null;
+export interface HealthResponse {
+  status: string;
+  service: string;
+  cluster: string;
+  killSwitchActive: boolean;
+  devnetInitialized: boolean;
+  timestamp: string;
 }
 
-export interface ApiMarket {
-  id: string;
-  onchainId?: string | null;
-  question: string;
-  description?: string | null;
-  category: MarketCategory;
-  resolution: ResolutionSource;
-  resolutionDetail?: string | null;
-  endsAt: string;
-  resolvedAt?: string | null;
-  status: MarketStatus;
-  outcome?: Outcome | null;
-  yesPrice: number;
-  noPrice: number;
-  liquidity: number;
-  volume: number;
-  participants: number;
-  totalTrades?: number;
-  isLive: boolean;
-  creator: { wallet: string; handle?: string | null };
-  createdAt: string;
-  imageUrl?: string | null;
-  oracleResolution?: ApiOracleResolution | null;
-  outcome_mints: string[];
-  collateralMint?: string | null;
-  winning_outcome_index?: number | null;
+export interface HealthzResponse {
+  status: string;
+  service: string;
+  cluster: string;
+  killSwitchActive: boolean;
+  devnet: {
+    initialized: boolean;
+  };
+  relayer: {
+    pubkey: string;
+    solBalance: number;
+    funded: boolean;
+  };
+  counts: {
+    baskets: number;
+    tokens: number;
+    executions: number;
+  };
+  timestamp: string;
 }
 
-export interface ApiPricePoint { yesPrice: number; noPrice: number; ts: string }
-
-export interface ApiTrade {
-  id: string;
-  marketId: string;
-  side: Side;
-  kind: TradeKind;
-  shares: number;
-  price: number;
-  cost: number;
-  txSig?: string | null;
-  createdAt: string;
-  wallet?: string | null;
-  handle?: string | null;
-  isAgent?: boolean;
-  user?: { wallet: string; handle?: string | null };
+export interface QuoteLeg {
+  mint: string;
+  symbol: string;
+  weightBps: number;
+  inUsdcAmount: number;
+  expectedOutTokens: string;
+  minOutTokens: string;
+  priceImpactPct: string;
+  routeHint?: string;
 }
 
-export interface ApiComment {
+export interface Quote {
   id: string;
-  marketId: string;
-  userId?: string | null;
-  wallet?: string | null;
-  text: string;
-  gifUrl?: string | null;
-  isAgent: boolean;
-  likesCount: number;
-  isLiked?: boolean;
-  isBookmarked?: boolean;
+  basketId: string;
+  basketVersionId: string;
+  usdcAmount: number;
+  legs: QuoteLeg[];
+  platformFeeUsdc: number;
+  netInvestUsdc: number;
+  expiresAt: string;
   createdAt: string;
+}
+
+export interface BasketLeg {
+  id: string;
+  versionId: string;
+  mint: string;
+  weightBps: number; // 0..10000
+  legType: string;
+  venueHint?: string;
+  slippageBps?: number;
+}
+
+export interface BasketVersion {
+  id: string;
+  basketId: string;
+  version: number;
+  changelog: string;
+  publishedBy: string;
+  publishedAt: string;
+  legs: BasketLeg[];
+}
+
+export interface Basket {
+  id: string;
+  slug: string;
+  name: string;
+  thesis: string;
+  category: string;
+  status: "active" | "paused" | "deprecated";
+  activeVersionId: string;
+  minUsdc: number;
+  performance: {
+    "1W": number;
+    "1M": number;
+    "6M": number;
+    "1Y": number;
+  };
+  protocols: string[];
+}
+
+export interface QuoteRequest {
+  basket: string;
+  usdcAmount: number;
+}
+
+export interface QuoteResponse {
+  quote: Quote;
+}
+
+export interface PreparePositionRequest {
+  basket: string;
+  usdc: number;
+  walletAddress: string;
+  idempotencyKey: string;
+}
+
+export interface PreparePositionResponse {
+  execution: {
+    id: string;
+    preparedTxs: string[];
+    status: string;
+    legs?: unknown[];
+  };
+}
+
+export interface SubmitPositionRequest {
+  executionId: string;
+  signedTxs: string[];
+  idempotencyKey?: string;
+}
+
+export interface SubmitPositionResponse {
+  execution: {
+    status: string;
+    id?: string;
+  };
+}
+
+export interface Execution {
+  id: string;
+  walletId: string;
+  walletAddress: string;
+  basketId: string;
+  basketVersionId: string;
+  type: "open" | "rebalance" | "close";
+  status: "PREPARED" | "SUBMITTED" | "LANDING" | "COMPLETED" | "PARTIALLY_COMPLETED" | "FAILED" | "EXPIRED";
+  idempotencyKey: string;
+  totalUsdc: number;
+  feeUsdc: number;
+  preparedTxs: string[];
+  messageHashes: string[];
+  blockhash?: string;
+  lastValidBlockHeight?: number;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+  legs: ExecutionLeg[];
+}
+
+export interface ExecutionLeg {
+  id: string;
+  executionId: string;
+  mint: string;
+  symbol: string;
+  inAmountUsdc: number;
+  expectedOut: string;
+  actualOut?: string;
+  txSignature?: string;
+  messageHash: string;
+  status: "PENDING" | "CONFIRMED" | "FAILED";
+  error?: string;
+}
+
+export interface PositionsResponse {
+  positions: Position[];
+}
+
+export interface PositionLeg {
+  mint: string;
+  symbol: string;
+  targetBps: number;
+  currentAmount: number;
+  currentValueUsd: number;
+}
+
+export interface Position {
+  id: string;
+  walletAddress: string;
+  basketId: string;
+  basketVersionId: string;
+  entryUsdc: number;
+  currentValueUsd: number;
+  status: "ACTIVE" | "MODIFIED" | "CLOSED";
+  autoRebalance: boolean;
+  driftPct: number;
+  rebalanceAvailable: boolean;
+  legs: PositionLeg[];
   updatedAt: string;
 }
 
-export interface ApiPosition {
-
-  id: string;
-  marketId: string;
-  yesShares: number;
-  noShares: number;
-  avgYesCost: number;
-  avgNoCost: number;
-  realizedPnl: number;
-  market: ApiMarket;
+export interface AuthNonceResponse {
+  nonce: string;
+  expiresInSec: number;
 }
 
-export interface ApiAgent {
-  id: string;
-  name: string;
-  handle: string;
-  wallet: string;
-  type: "Sentiment" | "Arbitrage" | "MarketMaker" | "NewsAlpha" | "Momentum";
-  description: string;
-  pnl30d: number;
-  winRate: number;
-  sharpe: number;
-  maxDrawdown: number;
-  aum: number;
-  performanceFee: number;
-  uptime: number;
-  marketsTraded: number;
-  status: "live" | "paused";
-  _count?: { subscriptions: number };
+export interface AuthVerifyResponse {
+  success: boolean;
+  token?: string;
+  refreshToken?: string;
 }
 
-export interface ApiOracleResolution {
-  id: string;
-  marketId: string;
-  outcome: Outcome;
-  consensus: number;
-  totalVotes: number;
-  tally?: { YES: number; NO: number; INVALID: number };
-  weightedConfidence?: { YES: number; NO: number; INVALID: number };
-  averageConfidence?: number;
-  consensusThreshold?: number;
-  isDisputed?: boolean;
-  reasoning?: string | null;
-  createdAt: string;
-  market: ApiMarket;
-  votes: {
-    id: string;
-    vote: Outcome;
-    confidence: number;
-    evidence?: string | null;
-    agent: ApiAgent;
-  }[];
+export interface AuthRefreshResponse {
+  success: boolean;
+  token?: string;
+  refreshToken?: string;
 }
 
-export interface ApiProtocolStats {
-  markets: number;
-  openMarkets: number;
-  agents: number;
-  users: number;
-  totalVolume: number;
-  totalLiquidity: number;
+export interface FaucetAirdropResponse {
+  success: boolean;
+  recipient: string;
+  token: string;
+  amount: number;
+  ata: string;
+  txSignature?: string;
+  simulated?: boolean;
+  message: string;
 }
 
-// ────────────────────────────────────────────────────────────────
-// Kalshi Live Markets
-// ────────────────────────────────────────────────────────────────
-
-export interface KalshiMarketLive {
-  ticker: string;
-  title: string;
-  subtitle?: string;
-  category: string;
-  status: string; // "active" | "closed" | "settled"
-  yes_bid: number; // in cents
-  yes_ask: number; // in cents
-  no_bid: number; // in cents
-  no_ask: number; // in cents
-  yes_prob: number; // 0-1
-  trend: "up" | "down" | "flat";
-  volume_24h: number;
-  liquidity: number;
-  open_interest: number;
-  close_time: string;
-  event_ticker: string;
+export interface AdminKillSwitchResponse {
+  killSwitchActive: boolean;
 }
 
-export interface ApiLiveMarketsResponse {
-  markets: KalshiMarketLive[];
-  pagination: {
-    offset: number;
-    limit: number;
-    total: number;
-    hasMore: boolean;
-  };
-  meta: {
-    activeCount: number;
-    closedCount: number;
-    settledCount: number;
-    totalVolume: number;
-    totalLiquidity: number;
-    categories: {
-      crypto: number;
-      politics: number;
-      sports: number;
-      economy: number;
-      culture: number;
-      weather: number;
-      other: number;
-    };
-    cacheAge: number; // milliseconds
-  };
+export interface BasketsResponse {
+  baskets: Basket[];
 }
 
-export interface OrderbookLevel {
-  price: number; // cents
-  quantity: number;
+export interface BasketBySlugResponse {
+  basket: Basket;
+  activeVersion: any; // BasketVersion | null
 }
 
-export interface ApiLiveMarketDetail {
-  market: {
-    ticker: string;
-    title: string;
-    subtitle?: string;
-    description?: string;
-    category: string;
-    status: string;
-    yes_bid: number;
-    yes_ask: number;
-    no_bid: number;
-    no_ask: number;
-    yes_prob: number;
-    trend: "up" | "down" | "flat";
-    volume_24h: number;
-    volume: number;
-    liquidity: number;
-    open_interest: number;
-    notional_value: number;
-    close_time: string;
-    event_ticker: string;
-    result?: string;
-  };
-  orderbook: {
-    yes: { bids: OrderbookLevel[]; asks: OrderbookLevel[] };
-    no: { bids: OrderbookLevel[]; asks: OrderbookLevel[] };
-  };
+export interface RebalancesResponse {
+  versions: string[]; // version IDs
 }
 
-export interface Candlestick {
-  ts: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
+export interface KillSwitchToggleRequest {
+  active: boolean;
+  reason?: string;
 }
 
-export interface ApiCandlesticksResponse {
-  ticker: string;
-  interval: string;
-  candlesticks: Candlestick[];
+export interface BasketsSlugStatusRequest {
+  status: "active" | "paused" | "deprecated";
 }
 
-// ────────────────────────────────────────────────────────────────
-// Agent Performance Metrics
-// ────────────────────────────────────────────────────────────────
-
-export interface AgentPerformanceMetrics {
-  realizedPnl: number;
-  unrealizedPnl: number;
-  totalPnl: number;
-  winRate: number;
-  winningTrades: number;
-  losingTrades: number;
-  totalTrades: number;
-  maxDrawdown: number;
-  sharpe: number;
+export interface ErrorResponse {
+  error: string;
+  message: string;
 }
 
-export interface AgentTrade {
-  id: string;
-  market: {
-    id: string;
-    question: string;
-    category: string;
-    outcome?: string;
-    status: string;
-  };
-  side: string;
-  shares: number;
-  price: number;
-  cost: number;
-  createdAt: string;
-  status: "won" | "lost" | "pending";
+export interface NotFoundError {
+  error: string;
+  message: string;
 }
 
-export interface ApiAgentDetailResponse {
-  agent: ApiAgent & {
-    subscriptionCount: number;
-    oracleVotesCount: number;
-  };
-  performance: AgentPerformanceMetrics;
-  recentTrades: AgentTrade[];
-}
-
-export interface ApiAgentPerformanceResponse {
-  agent: {
-    id: string;
-    name: string;
-    handle: string;
-    type: string;
-    aum: number;
-    status: string;
-  };
-  period: string; // "7d" | "30d" | "90d" | "all"
-  performance: AgentPerformanceMetrics;
-  timestamp: string;
+// Error code mappings from PRD
+export enum AppErrorCode {
+  NONCE_ISSUE_FAILED = "NONCE_ISSUE_FAILED",
+  INVALID_SIGNATURE_OR_NONCE = "INVALID_SIGNATURE_OR_NONCE",
+  NONCE_REPLAYED = "NONCE_REPLAYED",
+  WALLET_ADDRESS_REQUIRED = "WALLET_ADDRESS_REQUIRED",
+  MISSING_AUTH_FIELDS = "MISSING_AUTH_FIELDS",
+  INVALID_REFRESH_TOKEN = "INVALID_REFRESH_TOKEN",
+  QUOTE_EXPIRED = "QUOTE_EXPIRED",
+  QUOTE_FAILED = "QUOTE_FAILED",
+  SLIPPAGE_EXCEEDED = "SLIPPAGE_EXCEEDED",
+  INVALID_QUOTE_PARAMETERS = "INVALID_QUOTE_PARAMETERS",
+  MISSING_REQUIRED_PREPARE_FIELDS = "MISSING_REQUIRED_PREPARE_FIELDS",
+  POSITION_NOT_FOUND = "POSITION_NOT_FOUND",
+  UNAUTHORIZED = "UNAUTHORIZED",
+  INVALID_AUTO_REBALANCE_POLICY = "INVALID_AUTO_REBALANCE_POLICY",
+  FORBIDDEN_ADMIN_TOKEN_REQUIRED = "FORBIDDEN_ADMIN_TOKEN_REQUIRED",
+  FAUCET_DEVNET_ONLY = "FAUCET_DEVNET_ONLY",
+  DEVNET_NOT_INITIALIZED = "DEVNET_NOT_INITIALIZED",
+  FAUCET_FAILED = "FAUCET_FAILED",
+  VERSION_AND_LEGS_REQUIRED = "VERSION_AND_LEGS_REQUIRED",
+  BASKET_NOT_FOUND = "BASKET_NOT_FOUND",
+  ACTIVE_MUST_BE_BOOLEAN = "ACTIVE_MUST_BE_BOOLEAN",
+  DELEGATED_SIGNING_NOT_ENABLED = "DELEGATED_SIGNING_NOT_ENABLED",
+  AUTO_REBALANCE_REQUIRES_EMBEDDED_WALLET = "AUTO_REBALANCE_REQUIRES_EMBEDDED_WALLET",
+  INVALID_BASKET_STATUS = "INVALID_BASKET_STATUS",
+  INVALID_TRADING_STATUS = "INVALID_TRADING_STATUS",
+  TOKEN_NOT_FOUND = "TOKEN_NOT_FOUND",
+  ENABLED_MUST_BE_BOOLEAN = "ENABLED_MUST_BE_BOOLEAN",
+  MISSING_IDEMPOTENCY_KEY_OR_WALLET = "MISSING_IDEMPOTENCY_KEY_OR_WALLET",
+  EXECUTION_NOT_FOUND = "EXECUTION_NOT_FOUND",
 }
