@@ -4,10 +4,11 @@ use anchor_lang::solana_program::{
     program::invoke,
 };
 use anchor_spl::token::{Token, TokenAccount};
-use crate::state::BasketConfig;
 use crate::errors::KairosError;
+use crate::state::{BasketConfig, GlobalConfig};
 
 pub const RAYDIUM_CPMM_PROGRAM_ID: Pubkey = pubkey!("DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb");
+pub const MEMO_V2_PROGRAM_ID: Pubkey = pubkey!("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 
 // Discriminator for Raydium CPMM `swap_base_input`
 // SHA256("global:swap_base_input")[..8]
@@ -19,17 +20,29 @@ pub struct InvestLegExecuted {
     pub basket_id: String,
     pub target_mint: Pubkey,
     pub amount_in_usdc: u64,
+    pub fee_usdc: u64,
     pub amount_out: u64,
 }
 
+/// BUY leg: USDC → one basket asset, executed as a Raydium CPMM CPI.
+/// Order inside this single atomic instruction:
+///   1. pause checks (global + basket) — a paused program never moves funds,
+///   2. USDC-mint pinning + pool program check,
+///   3. platform fee transfer (input-side) to the treasury,
+///   4. CPI swap of the NET amount with slippage guard,
+///   5. memo, then event.
+/// Any failure reverts the whole instruction, so a failed leg charges no fee.
 #[derive(Accounts)]
 pub struct SwapAndDistributeLeg<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
 
+    #[account(constraint = !global_config.paused @ KairosError::ProgramPaused)]
+    pub global_config: Account<'info, GlobalConfig>,
+
     #[account(
-        mut,
-        constraint = user_usdc_ata.owner == user.key() @ KairosError::InvalidUserAta
+        constraint = user_usdc_ata.owner == user.key() @ KairosError::InvalidUserAta,
+        constraint = user_usdc_ata.mint == global_config.usdc_mint @ KairosError::UsdcMintMismatch
     )]
     pub user_usdc_ata: Account<'info, TokenAccount>,
 
@@ -39,6 +52,15 @@ pub struct SwapAndDistributeLeg<'info> {
     )]
     pub user_dest_ata: Account<'info, TokenAccount>,
 
+    /// Treasury USDC ATA: must be owned by the configured treasury and hold
+    /// the pinned USDC — fee transfers fail loudly otherwise.
+    #[account(
+        mut,
+        constraint = treasury_usdc_ata.owner == global_config.treasury @ KairosError::InvalidTreasuryAta,
+        constraint = treasury_usdc_ata.mint == global_config.usdc_mint @ KairosError::InvalidTreasuryAta
+    )]
+    pub treasury_usdc_ata: Account<'info, TokenAccount>,
+
     #[account(
         seeds = [b"basket", basket_config.basket_id.as_bytes()],
         bump = basket_config.bump,
@@ -46,7 +68,7 @@ pub struct SwapAndDistributeLeg<'info> {
     )]
     pub basket_config: Account<'info, BasketConfig>,
 
-    /// CHECK: Validated against Raydium CPMM devnet program ID
+    /// CHECK: Validated against Raydium CPMM devnet/mainnet program ID
     #[account(
         constraint = cpmm_program.key() == RAYDIUM_CPMM_PROGRAM_ID @ KairosError::InvalidCpmmProgram
     )]
@@ -94,22 +116,62 @@ pub fn handler<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, SwapAndDistributeLeg<'info>>,
     amount_in_usdc: u64,
     min_amount_out: u64,
+    memo: String,
 ) -> Result<()> {
-    let target_mint = ctx.accounts.user_dest_ata.mint;
+    // 1. Global kill switch (constraint above) + basket active (constraint).
+    let global = &ctx.accounts.global_config;
     let basket = &ctx.accounts.basket_config;
-    let is_valid_mint = basket.items.iter().any(|item| item.mint == target_mint);
+
+    // 2. Pool account sanity: the CPI input mint must be the pinned USDC and
+    //    the output mint must match the destination ATA.
+    let target_mint = ctx.accounts.user_dest_ata.mint;
+    let is_valid_mint = basket
+        .items
+        .iter()
+        .take(basket.leg_count as usize)
+        .any(|item| item.mint == target_mint);
     require!(is_valid_mint, KairosError::InvalidUserAta);
     require_keys_eq!(ctx.accounts.output_mint.key(), target_mint, KairosError::InvalidUserAta);
-    require_keys_eq!(ctx.accounts.input_mint.key(), ctx.accounts.user_usdc_ata.mint, KairosError::InvalidUserAta);
+    require_keys_eq!(ctx.accounts.input_mint.key(), global.usdc_mint, KairosError::UsdcMintMismatch);
 
-    // Snapshot destination balance before swap
+    // 3. Fee (input-side) + swap the net amount.
+    let fee_usdc = u128::from(amount_in_usdc)
+        .checked_mul(u128::from(global.fee_bps))
+        .and_then(|v| v.checked_div(10_000))
+        .and_then(|v| u64::try_from(v).ok())
+        .ok_or(KairosError::MathOverflow)?;
+    let net_in = amount_in_usdc
+        .checked_sub(fee_usdc)
+        .ok_or(KairosError::MathOverflow)?;
+    require!(net_in > 0, KairosError::MathOverflow);
+    require!(
+        ctx.accounts.user_usdc_ata.amount >= amount_in_usdc,
+        KairosError::InvalidUserAta
+    );
+
+    // Fee transfer first (input-side). If the swap below fails, this whole
+    // instruction reverts — the user is never charged for a failed leg.
+    if fee_usdc > 0 {
+        anchor_spl::token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from: ctx.accounts.user_usdc_ata.to_account_info(),
+                    to: ctx.accounts.treasury_usdc_ata.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            fee_usdc,
+        )?;
+    }
+
+    // 4. CPI swap of the NET amount.
     ctx.accounts.user_dest_ata.reload()?;
     let start_balance = ctx.accounts.user_dest_ata.amount;
 
-    // Build Raydium CPMM swap_base_input instruction data (24 bytes)
     let mut data = Vec::with_capacity(24);
     data.extend_from_slice(&SWAP_BASE_INPUT_DISCRIMINATOR);
-    data.extend_from_slice(&amount_in_usdc.to_le_bytes());
+    data.extend_from_slice(&net_in.to_le_bytes());
     data.extend_from_slice(&min_amount_out.to_le_bytes());
 
     let accounts = vec![
@@ -152,27 +214,37 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
     invoke(&ix, &account_infos)?;
 
-    // Reload destination ATA and verify min_amount_out slippage check
+    // 5. Slippage guard on the actual received amount.
     ctx.accounts.user_dest_ata.reload()?;
     let end_balance = ctx.accounts.user_dest_ata.amount;
-
     let amount_out = end_balance
         .checked_sub(start_balance)
         .ok_or(KairosError::MathOverflow)?;
-
     require!(amount_out >= min_amount_out, KairosError::SlippageExceeded);
+
+    // 6. Memo (audit trail: basket:version:leg intent).
+    if !memo.is_empty() {
+        let memo_ix = Instruction {
+            program_id: MEMO_V2_PROGRAM_ID,
+            accounts: vec![],
+            data: memo.as_bytes().to_vec(),
+        };
+        invoke(&memo_ix, &[])?;
+    }
 
     emit!(InvestLegExecuted {
         user: ctx.accounts.user.key(),
         basket_id: basket.basket_id.clone(),
         target_mint,
         amount_in_usdc,
+        fee_usdc,
         amount_out,
     });
 
     msg!(
-        "Kairos CPMM Swap Leg Executed: Swapped {} USDC for {} of mint {}",
+        "Kairos buy leg: {} USDC (fee {}) → {} of {}",
         amount_in_usdc,
+        fee_usdc,
         amount_out,
         target_mint
     );

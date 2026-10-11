@@ -1,235 +1,209 @@
-import Fastify from "fastify";
-import cors from "@fastify/cors";
-import dotenv from "dotenv";
-import * as fs from "fs";
-import * as path from "path";
-import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
-import { PrismaClient } from "@prisma/client";
-import { startNavSnapshotCron, runNavSnapshotCycle } from "./services/navSnapshotCron.js";
+import { IncomingMessage, ServerResponse, createServer } from "http";
+import { URL } from "url";
 
-dotenv.config();
-
-const prisma = new PrismaClient();
-const server = Fastify({
-  logger: true,
-});
-
-await server.register(cors, {
-  origin: true,
-  methods: ["GET", "POST", "OPTIONS"],
-});
-
-// Health check endpoint
-server.get("/health", async () => {
-  return { status: "ok", timestamp: new Date().toISOString() };
-});
-
-// List all baskets with constituent tokens
-server.get("/api/baskets", async () => {
-  const baskets = await prisma.basket.findMany({
-    include: {
-      tokens: true,
-    },
-  });
-  return baskets;
-});
-
-// Step 5: Fastify endpoint GET /api/baskets/:id/nav-history
-// - Query BasketNAVHistory for given basketId, ordered by timestamp ascending
-// - If no rows exist, return HTTP 404 with clear error message (frontend depends on 404 for empty state)
-// - Return each row as { timestamp: <unix ms>, navValue: <number> }
-server.get<{ Params: { id: string } }>("/api/baskets/:id/nav-history", async (request, reply) => {
-  const { id } = request.params;
-
-  const rows = await prisma.basketNAVHistory.findMany({
-    where: { basketId: id },
-    orderBy: { timestamp: "asc" },
-  });
-
-  if (!rows || rows.length === 0) {
-    return reply.code(404).send({
-      statusCode: 404,
-      error: "Not Found",
-      message: `No NAV history found for basket "${id}". Real data is pending or unavailable.`,
-    });
-  }
-
-  const payload = rows.map((r) => ({
-    timestamp: r.timestamp.getTime(),
-    navValue: r.navValue,
-  }));
-
-  return reply.code(200).send(payload);
-});
-
-// Return the latest NAV snapshot for every basket (single call, powers the markets list)
-server.get("/api/baskets/nav-latest", async (_request, reply) => {
-  const baskets = await prisma.basket.findMany({ select: { id: true } });
-
-  const results: Record<string, { navValue: number; timestamp: number } | null> = {};
-
-  await Promise.all(
-    baskets.map(async (b) => {
-      const latest = await prisma.basketNAVHistory.findFirst({
-        where: { basketId: b.id },
-        orderBy: { timestamp: "desc" },
-      });
-      results[b.id] = latest
-        ? { navValue: latest.navValue, timestamp: latest.timestamp.getTime() }
-        : null;
-    })
-  );
-
-  return reply.code(200).send(results);
-});
-
-
-// In-memory fallback investment store for demo
-interface InvestmentRecord {
-  wallet: string;
-  basketId: string;
-  txSignature: string;
-  amountUsdc: number;
-  createdAt: string;
+export interface InjectOptions {
+  method: "GET" | "POST" | "PUT" | "DELETE";
+  url: string;
+  payload?: any;
+  headers?: Record<string, string>;
 }
-const investmentStore: InvestmentRecord[] = [];
 
-// Record investment after devnet on-chain execution
-server.post<{
-  Body: {
-    wallet: string;
-    basketId: string;
-    txSignature: string;
-    amountUsdc: number;
-  };
-}>("/api/investments/record", async (request, reply) => {
-  const { wallet, basketId, txSignature, amountUsdc } = request.body;
-  if (!wallet || !txSignature) {
-    return reply.code(400).send({ error: "Missing required fields: wallet, txSignature" });
+export interface InjectResponse {
+  statusCode: number;
+  headers: Record<string, string>;
+  json: () => any;
+  text: () => string;
+}
+
+export type RouteHandler = (
+  req: {
+    params: Record<string, string>;
+    query: Record<string, string>;
+    body: any;
+    headers: Record<string, string | string[] | undefined>;
+  },
+  reply: {
+    status: (code: number) => { send: (data: any) => any };
+    send: (data: any) => any;
+  }
+) => Promise<any> | any;
+
+interface RouteEntry {
+  method: string;
+  pattern: RegExp;
+  paramNames: string[];
+  handler: RouteHandler;
+}
+
+export class KairosHttpServer {
+  private routes: RouteEntry[] = [];
+
+  private register(method: string, path: string, handler: RouteHandler) {
+    const paramNames: string[] = [];
+    const regexPath = path.replace(/:([a-zA-Z0-9_]+)/g, (_, name) => {
+      paramNames.push(name);
+      return "([^/]+)";
+    });
+    const pattern = new RegExp(`^${regexPath}$`);
+    this.routes.push({ method: method.toUpperCase(), pattern, paramNames, handler });
   }
 
-  const record: InvestmentRecord = {
-    wallet,
-    basketId: basketId || "solana-infra-governance",
-    txSignature,
-    amountUsdc: Number(amountUsdc) || 0,
-    createdAt: new Date().toISOString(),
-  };
-
-  investmentStore.unshift(record);
-  server.log.info({ record }, "Investment recorded");
-  return reply.code(201).send({ success: true, record });
-});
-
-// Get user investment positions and history
-server.get<{ Params: { wallet: string } }>("/api/positions/:wallet", async (request, reply) => {
-  const { wallet } = request.params;
-  const userInvestments = investmentStore.filter(
-    (inv) => inv.wallet.toLowerCase() === wallet.toLowerCase()
-  );
-  return reply.code(200).send({
-    wallet,
-    investments: userInvestments,
-  });
-});
-
-// Devnet Faucet endpoint for user wallets (Phantom, Solflare, etc.)
-server.post<{
-  Body: {
-    wallet: string;
-    amountUsdc?: number;
-  };
-}>("/api/faucet", async (request, reply) => {
-  const { wallet, amountUsdc = 50 } = request.body || {};
-  if (!wallet) {
-    return reply.code(400).send({ error: "Missing required field: wallet" });
+  get(path: string, handler: RouteHandler) {
+    this.register("GET", path, handler);
   }
 
-  try {
-    const recipientPubkey = new PublicKey(wallet);
-    const candidatePaths = [
-      path.resolve(process.cwd(), "scripts/deployer-keypair.json"),
-      path.resolve(process.cwd(), "../scripts/deployer-keypair.json"),
-    ];
-    const keypairPath = candidatePaths.find((p) => fs.existsSync(p));
-    if (!keypairPath) {
-      return reply.code(500).send({ error: "Deployer keypair not found on server." });
-    }
+  post(path: string, handler: RouteHandler) {
+    this.register("POST", path, handler);
+  }
 
-    const secretKey = Uint8Array.from(JSON.parse(fs.readFileSync(keypairPath, "utf-8")));
-    const payer = Keypair.fromSecretKey(secretKey);
+  put(path: string, handler: RouteHandler) {
+    this.register("PUT", path, handler);
+  }
 
-    const rpcUrl = process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
-    const connection = new Connection(rpcUrl, "confirmed");
-    const usdcMint = new PublicKey("An9DFuHeSDYgVBiybraa7Svn1RHjrDb7Ed8YJZCZ4D1Y");
+  delete(path: string, handler: RouteHandler) {
+    this.register("DELETE", path, handler);
+  }
 
-    // Airdrop SOL if low (<0.05 SOL)
-    let airdroppedSol = false;
-    const recipientSol = await connection.getBalance(recipientPubkey);
-    if (recipientSol < 0.05 * LAMPORTS_PER_SOL) {
-      try {
-        const airdropSig = await connection.requestAirdrop(recipientPubkey, 1 * LAMPORTS_PER_SOL);
-        await connection.confirmTransaction(airdropSig, "confirmed");
-        airdroppedSol = true;
-      } catch (err: any) {
-        server.log.warn({ err: err.message }, "SOL airdrop request failed");
+  async handleRequest(
+    method: string,
+    rawUrl: string,
+    body: any,
+    headers: Record<string, any> = {}
+  ): Promise<{ statusCode: number; data: any; headers: Record<string, string> }> {
+    const parsedUrl = new URL(rawUrl, "http://localhost");
+    const pathname = parsedUrl.pathname;
+    const query: Record<string, string> = {};
+    parsedUrl.searchParams.forEach((v, k) => (query[k] = v));
+
+    let matchedRoute: RouteEntry | undefined;
+    let matchedParams: Record<string, string> = {};
+
+    for (const r of this.routes) {
+      if (r.method === method.toUpperCase()) {
+        const match = pathname.match(r.pattern);
+        if (match) {
+          matchedRoute = r;
+          r.paramNames.forEach((name, idx) => {
+            matchedParams[name] = match[idx + 1];
+          });
+          break;
+        }
       }
     }
 
-    // Get or create recipient's devnet USDC ATA
-    const userAta = await getOrCreateAssociatedTokenAccount(
-      connection,
-      payer,
-      usdcMint,
-      recipientPubkey
+    if (!matchedRoute) {
+      return {
+        statusCode: 404,
+        data: { error: "NOT_FOUND", path: pathname },
+        headers: { "Content-Type": "application/json" },
+      };
+    }
+
+    let statusCode = 200;
+    let responseData: any;
+
+    const reply = {
+      status: (code: number) => ({
+        send: (data: any) => {
+          statusCode = code;
+          responseData = data;
+          return data;
+        },
+      }),
+      send: (data: any) => {
+        responseData = data;
+        return data;
+      },
+    };
+
+    try {
+      const res = await matchedRoute.handler(
+        {
+          params: matchedParams,
+          query,
+          body,
+          headers,
+        },
+        reply
+      );
+      if (responseData === undefined) {
+        responseData = res;
+      }
+      return {
+        statusCode,
+        data: responseData,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      };
+    } catch (err: any) {
+      return {
+        statusCode: statusCode === 200 ? 500 : statusCode,
+        data: { error: err.message || "INTERNAL_SERVER_ERROR" },
+        headers: { "Content-Type": "application/json" },
+      };
+    }
+  }
+
+  async inject(opts: InjectOptions): Promise<InjectResponse> {
+    const res = await this.handleRequest(
+      opts.method,
+      opts.url,
+      opts.payload,
+      opts.headers || {}
     );
 
-    // Mint devnet USDC directly to user's ATA
-    const amountLamports = BigInt(Math.floor(amountUsdc * 1_000_000));
-    const mintSig = await mintTo(
-      connection,
-      payer,
-      usdcMint,
-      userAta.address,
-      payer.publicKey,
-      amountLamports
-    );
+    return {
+      statusCode: res.statusCode,
+      headers: res.headers,
+      json: () => res.data,
+      text: () => JSON.stringify(res.data),
+    };
+  }
 
-    return reply.code(200).send({
-      success: true,
-      wallet: recipientPubkey.toBase58(),
-      mintedUsdc: amountUsdc,
-      airdroppedSol,
-      mintSignature: mintSig,
+  listen(port: number, host = "0.0.0.0"): Promise<string> {
+    return new Promise((resolve) => {
+      const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+        // CORS Preflight
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+        if (req.method === "OPTIONS") {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+
+        let body: any = null;
+        if (req.method !== "GET" && req.method !== "HEAD") {
+          const chunks: Buffer[] = [];
+          for await (const chunk of req) {
+            chunks.push(chunk as Buffer);
+          }
+          const raw = Buffer.concat(chunks).toString("utf-8");
+          try {
+            body = raw ? JSON.parse(raw) : null;
+          } catch {
+            body = raw;
+          }
+        }
+
+        const out = await this.handleRequest(
+          req.method || "GET",
+          req.url || "/",
+          body,
+          req.headers
+        );
+
+        res.writeHead(out.statusCode, out.headers);
+        res.end(JSON.stringify(out.data));
+      });
+
+      server.listen(port, host, () => {
+        resolve(`http://${host}:${port}`);
+      });
     });
-  } catch (err: any) {
-    server.log.error(err, "Faucet error");
-    return reply.code(500).send({ error: err.message || "Failed to mint devnet USDC" });
   }
-});
-
-// Manual trigger for testing snapshots
-server.post("/api/admin/trigger-snapshot", async () => {
-  const result = await runNavSnapshotCycle();
-  return { success: true, ...result };
-});
-
-const start = async () => {
-  try {
-    const port = parseInt(process.env.PORT || "3001", 10);
-    const host = process.env.HOST || "0.0.0.0";
-
-    await server.listen({ port, host });
-    console.log(`🚀 Kairos Backend Server running on http://${host}:${port}`);
-
-    // Step 4: Live Cron Job for Ongoing Snapshots
-    // Runs immediately on startup + hourly schedule
-    startNavSnapshotCron(60 * 60 * 1000);
-  } catch (err) {
-    server.log.error(err);
-    process.exit(1);
-  }
-};
-
-start();
+}

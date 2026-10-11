@@ -1,28 +1,29 @@
 {
-  "name": "kairos-backend",
+  "name": "@kairos/backend",
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "main": "src/index.ts",
   "scripts": {
-    "dev": "bun --watch src/server.ts",
-    "build": "tsc",
-    "start": "node dist/server.js",
-    "seed": "tsx prisma/seed.ts",
-    "backfill": "tsx scripts/backfillBasketNav.ts",
-    "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push"
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "setup": "tsx scripts/devnet-setup.ts",
+    "seed": "tsx scripts/seed.ts",
+    "test": "node --import tsx --test \"tests/**/*.test.ts\""
   },
   "dependencies": {
-    "@fastify/cors": "^9.0.1",
-    "@fastify/sensible": "^5.5.0",
-    "@prisma/client": "^5.22.0",
+    "@coral-xyz/anchor": "^0.30.1",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.0",
+    "bs58": "^6.0.0",
     "dotenv": "^16.4.7",
-    "fastify": "^4.28.1"
+    "tweetnacl": "^1.0.3",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
-    "prisma": "^5.22.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "@types/node": "^22.13.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.7.3"
   }
 }

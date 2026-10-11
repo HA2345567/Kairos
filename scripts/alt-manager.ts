@@ -1,9 +1,7 @@
 import {
-  AddressLookupTableProgram,
-  Connection,
   PublicKey,
+  AddressLookupTableProgram,
   TransactionInstruction,
-  AddressLookupTableAccount,
 } from "@solana/web3.js";
 
 export const FIXED_ROUTER_ACCOUNTS = {
@@ -34,18 +32,17 @@ export function buildCreateLookupTableInstruction(
   payer: PublicKey,
   recentSlot: number
 ): { instruction: TransactionInstruction; lookupTableAddress: PublicKey } {
-  const [instruction, lookupTableAddress] =
-    AddressLookupTableProgram.createLookupTable({
-      authority,
-      payer,
-      recentSlot,
-    });
+  const [instruction, lookupTableAddress] = AddressLookupTableProgram.createLookupTable({
+    authority,
+    payer,
+    recentSlot,
+  });
 
   return { instruction, lookupTableAddress };
 }
 
 export function buildExtendLookupTableInstruction(
-  lookupTableAddress: PublicKey,
+  lookupTable: PublicKey,
   payer: PublicKey,
   authority: PublicKey,
   addresses: PublicKey[]
@@ -53,23 +50,7 @@ export function buildExtendLookupTableInstruction(
   return AddressLookupTableProgram.extendLookupTable({
     payer,
     authority,
-    lookupTable: lookupTableAddress,
+    lookupTable,
     addresses,
   });
-}
-
-export async function resolveLookupTableWithWarmUp(
-  connection: Connection,
-  lookupTableAddress: PublicKey,
-  timeoutMs = 15000
-): Promise<AddressLookupTableAccount> {
-  const startTime = Date.now();
-  while (Date.now() - startTime < timeoutMs) {
-    const res = await connection.getAddressLookupTable(lookupTableAddress);
-    if (res.value && res.value.state.addresses.length > 0) {
-      return res.value;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  throw new Error(`Timeout waiting for ALT ${lookupTableAddress.toBase58()} activation`);
 }

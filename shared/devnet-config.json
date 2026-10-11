@@ -1,11 +1,13 @@
 {
   "cluster": "devnet",
   "rpcUrl": "https://api.devnet.solana.com",
-  "fallbackRpcUrl": "https://devnet.helius-rpc.com/?api-key=15309047-0a65-4466-aa24-4e09d2c08f37",
+  "fallbackRpcUrl": "https://api.devnet.solana.com",
+  "fallbackRpcUrlNote": "Set HELIUS_API_KEY in backend/.env — the backend composes https://devnet.helius-rpc.com/?api-key=<HELIUS_API_KEY> at runtime. Never commit API keys here.",
+  "heliusApiUrlTemplate": "https://devnet.helius-rpc.com/?api-key={HELIUS_API_KEY}",
   "raydiumProgramId": "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb",
   "raydiumAuthority": "CXniRufdq5xL8t8jZAPxsPZDpuudwuJSPWnbcD5Y5Nxq",
   "ammConfig": "5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy",
-  "programId": "KairosRouter1111111111111111111111111111111",
+  "programId": "ELfFskTFe9keckQ7yN3hgZ2csq7hUHAR7QuPNoErQqPw",
   "basketId": "solana-infra-governance",
   "mints": {
     "usdc": "An9DFuHeSDYgVBiybraa7Svn1RHjrDb7Ed8YJZCZ4D1Y",

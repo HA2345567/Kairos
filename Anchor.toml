@@ -19,4 +19,4 @@ cluster = "Localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "bun test"
+test = "ts-mocha -p ./tsconfig.json tests/kairos-router.ts --timeout 200000"
