@@ -1,0 +1,50 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "backend": {
+      "root": "backend",
+      "runtime": "node",
+      "entrypoint": "api/index.ts",
+      "installCommand": "bun install"
+    },
+    "frontend": {
+      "root": "frontend",
+      "framework": "vite",
+      "installCommand": "bun install",
+      "buildCommand": "bun run build",
+      "outputDirectory": "dist"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/healthz",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/v1/(.*)",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "frontend"
+      }
+    }
+  ]
+}

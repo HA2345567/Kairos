@@ -8,7 +8,7 @@ export interface LatestNavEntry {
 /** Map of basketId → latest NAV snapshot (or null if no data yet) */
 export type AllBasketsNavMap = Record<string, LatestNavEntry | null>;
 
-const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 /**
  * Fetches the most recent NAV snapshot for every basket in a single backend call.

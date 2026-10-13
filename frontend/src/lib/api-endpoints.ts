@@ -1,5 +1,5 @@
-// Base URL for the API - in production this would come from env vars
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Use the same origin in production; local development can override this.
+const BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export const API_ENDPOINTS = {
   // Health checks

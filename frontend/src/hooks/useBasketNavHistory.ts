@@ -15,7 +15,7 @@ export interface BasketNavHistorySummary {
   sparkline: number[];
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_URL || "";
 
 /**
  * Fetches real historical NAV points for a basket.

@@ -34,3 +34,5 @@ my-project/
 project-tasks/
 GEMINI.md
 *.pptx
+
+.vercel

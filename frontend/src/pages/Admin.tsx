@@ -5,7 +5,7 @@ import { AdminSkeleton } from "@/components/basket/BasketSkeleton";
 import { useQuery } from "@tanstack/react-query";
 import { Settings, RefreshCw, Database, Layers, ShieldCheck, CheckCircle2, AlertCircle } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_URL || "";
 
 export default function AdminPage() {
   const [triggering, setTriggering] = useState(false);
