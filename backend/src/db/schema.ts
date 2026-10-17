@@ -45,6 +45,13 @@ export interface Token {
   priceUsd: number;
 }
 
+export interface ProgramAllowlistRow {
+  programId: string;
+  name: string;
+  version?: string;
+  addedAt: string;
+}
+
 export interface BasketLeg {
   id: string;
   versionId: string;
@@ -192,6 +199,9 @@ export interface PositionLeg {
   targetBps: number;
   currentAmount: number;
   currentValueUsd: number;
+  lastKnownAt?: string;
+  lastKnownCommitment?: "confirmed" | "finalized";
+  lastObservationSource?: "landing" | "portfolio-refresh" | "reconciler";
 }
 
 export interface Position {

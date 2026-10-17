@@ -22,6 +22,8 @@ import { getTokenBalances } from "../chain/balances";
 import { DEVNET_LABELS, deterministicKeypair, loadDevnetState } from "../chain/devnetState";
 import { usdcToBaseUnits } from "./money";
 import { hashExecutionRequest } from "./request-hash";
+import { assertTransactionAllowlisted } from "../chain/allowlist";
+import { KAIROS_ROUTER_PROGRAM_ID, RAYDIUM_CPMM_PROGRAM_ID } from "../chain/programSwap";
 
 /**
  * Execution engine (PRD §4.4): prepare → sign (client) → submit → land.
@@ -263,6 +265,12 @@ async function prepareWithLegs(opts: {
             includeFeeUsdcBaseUnits,
             recentBlockhash: blockhash,
           });
+
+    await assertTransactionAllowlisted(
+      built.transaction,
+      [state.usdc.mint, legIn.mint],
+      config.swapBuilder === "program" ? [KAIROS_ROUTER_PROGRAM_ID, RAYDIUM_CPMM_PROGRAM_ID] : []
+    );
 
     if (config.simulateLanding) {
       // Simulation mode: skip the RPC simulate gate (mints don't exist on any

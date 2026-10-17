@@ -15,7 +15,7 @@ import {
 /**
  * Reconciler worker (PFOLIO lane, contracts.md §10; PRD §4.5).
  *
- * Every RECONCILE_INTERVAL_MS (default 5 min): for every ACTIVE/MODIFIED
+ * Every RECONCILE_INTERVAL_MS (default 30 s): for every ACTIVE/MODIFIED
  * position, compare REAL on-chain token balances against the stored
  * last_known_amount:
  *   - a leg differing by > 0.5% (and >= dust in USD) → position MODIFIED
@@ -34,7 +34,7 @@ import {
 /** Relative drift above which a leg counts as externally changed. */
 const DRIFT_TOLERANCE = 0.005; // 0.5%
 
-const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
+export const DEFAULT_RECONCILE_INTERVAL_MS = 30 * 1000;
 
 export interface ReconcileLegDiff {
   mint: string;
@@ -47,10 +47,19 @@ export interface ReconcileLegDiff {
 
 export interface ReconcileSummary {
   ranAt: string;
+  observationCommitment: "finalized";
+  observationSource: "reconciler";
   checked: number;
   modified: Array<{ positionId: string; walletAddress: string; reason: string; diffs: ReconcileLegDiff[] }>;
   absorbed: number;
   errors: Array<{ positionId: string; error: string }>;
+}
+
+export function reconcilerIntervalMs(raw = process.env.RECONCILE_INTERVAL_MS): number {
+  const configured = Number(raw);
+  if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_RECONCILE_INTERVAL_MS;
+  // Keep the fallback bounded to the PRD's 30-second reconciliation target.
+  return Math.min(DEFAULT_RECONCILE_INTERVAL_MS, Math.max(1_000, Math.floor(configured)));
 }
 
 function errMsg(err: unknown): string {
@@ -69,10 +78,20 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
   // Simulation mode has no on-chain truth source — comparing stored ledger
   // amounts against a real chain would falsely flag every position MODIFIED.
   if (config.simulateLanding) {
-    return { ranAt: new Date().toISOString(), checked: 0, modified: [], absorbed: 0, errors: [] };
+    return {
+      ranAt: new Date().toISOString(),
+      observationCommitment: "finalized",
+      observationSource: "reconciler",
+      checked: 0,
+      modified: [],
+      absorbed: 0,
+      errors: [],
+    };
   }
   const summary: ReconcileSummary = {
     ranAt: new Date().toISOString(),
+    observationCommitment: "finalized",
+    observationSource: "reconciler",
     checked: 0,
     modified: [],
     absorbed: 0,
@@ -99,15 +118,21 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
       const onChain = await getTokenBalances(
         getConnection(),
         owner,
-        mints.map((m) => new PublicKey(m))
+        mints.map((m) => new PublicKey(m)),
+        "finalized"
       );
 
       const diffs: ReconcileLegDiff[] = [];
+      const observedAt = new Date().toISOString();
       for (const leg of pos.legs) {
         const decimals = (await repository.getToken(leg.mint))?.decimals ?? 6;
         const raw = onChain[leg.mint] ?? 0;
         const onChainAmount = toUiAmount(raw, decimals);
         const lastKnown = leg.currentAmount;
+        leg.currentAmount = onChainAmount;
+        leg.lastKnownAt = observedAt;
+        leg.lastKnownCommitment = "finalized";
+        leg.lastObservationSource = "reconciler";
         const price = (await priceOf(leg.mint));
 
         const valueDeltaUsdc = Number((Math.abs(onChainAmount - lastKnown) * price).toFixed(4));
@@ -150,10 +175,6 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
           });
         }
 
-        // Absorb sub-tolerance drift so it never accumulates.
-        if (diffs.find((d) => d.mint === leg.mint) === undefined) {
-          leg.currentAmount = onChainAmount;
-        }
       }
 
       if (diffs.length > 0) {
@@ -170,6 +191,13 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
             autoRebalance: false,
           },
         }));
+        for (const leg of pos.legs) {
+          await repository.recordPositionObservation(pos.id, leg.mint, leg.currentAmount, {
+            observedAt,
+            commitment: "finalized",
+            source: "reconciler",
+          });
+        }
         summary.modified.push({
           positionId: pos.id,
           walletAddress: pos.walletAddress,
@@ -201,11 +229,11 @@ let timer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Start the reconciler loop: one guarded run immediately, then every
- * RECONCILE_INTERVAL_MS (default 5 min). Returns the interval handle so the
+ * RECONCILE_INTERVAL_MS (default 30 s). Returns the interval handle so the
  * boot path can clear it on shutdown.
  */
 export async function startReconciler(): Promise<ReturnType<typeof setInterval>> {
-  const intervalMs = Number(process.env.RECONCILE_INTERVAL_MS) || DEFAULT_INTERVAL_MS;
+  const intervalMs = reconcilerIntervalMs();
 
   const tick = async () => {
     try {

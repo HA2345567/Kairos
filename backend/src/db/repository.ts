@@ -13,6 +13,7 @@ import {
   JobRow,
   NonceRow,
   OutboxRow,
+  ProgramAllowlistRow,
   Position,
   PositionLeg,
   Quote,
@@ -244,13 +245,21 @@ function mapExecution(r: Row, legs: ExecutionLeg[]): Execution {
 }
 
 function mapPositionLeg(r: Row): PositionLeg {
-  return {
+  const leg: PositionLeg = {
     mint: str(r.mint),
     symbol: str(r.symbol),
     targetBps: num(r.target_bps),
     currentAmount: num(r.current_amount),
     currentValueUsd: num(r.current_value_usd),
   };
+  if (r.last_known_at != null) leg.lastKnownAt = str(r.last_known_at);
+  if (r.last_known_commitment === "confirmed" || r.last_known_commitment === "finalized") {
+    leg.lastKnownCommitment = r.last_known_commitment;
+  }
+  if (r.last_observation_source === "landing" || r.last_observation_source === "portfolio-refresh" || r.last_observation_source === "reconciler") {
+    leg.lastObservationSource = r.last_observation_source;
+  }
+  return leg;
 }
 
 function mapPosition(r: Row, legs: PositionLeg[]): Position {
@@ -435,6 +444,23 @@ export class Repository {
 
   async updateTokenPrice(mint: string, priceUsd: number): Promise<void> {
     (await run("UPDATE tokens SET price_usd = ?, updated_at = ? WHERE mint = ?", priceUsd, nowIso(), mint));
+  }
+
+  async getProgramAllowlist(): Promise<ProgramAllowlistRow[]> {
+    return (await all<Row>("SELECT * FROM program_allowlist ORDER BY program_id ASC")).map((row) => ({
+      programId: str(row.program_id),
+      name: str(row.name),
+      version: row.version == null ? undefined : str(row.version),
+      addedAt: str(row.added_at),
+    }));
+  }
+
+  async isMintAllowlisted(mint: string): Promise<boolean> {
+    const row = await one<Row>(
+      "SELECT mint FROM tokens WHERE mint = ? AND denylisted = 0",
+      mint
+    );
+    return Boolean(row);
   }
 
   // ================= Baskets & Versions =================
@@ -894,16 +920,20 @@ export class Repository {
       for (const leg of position.legs ?? []) {
         (await run(
           `INSERT INTO position_legs (position_id, mint, symbol, target_bps, current_amount,
-                                      current_value_usd, last_known_amount, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                                      current_value_usd, last_known_amount, last_known_at,
+                                      last_known_commitment, last_observation_source, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           position.id,
           leg.mint,
           leg.symbol ?? "",
           leg.targetBps,
-          leg.currentAmount,
-          leg.currentValueUsd,
-          String(leg.currentAmount),
-          position.updatedAt
+           leg.currentAmount,
+           leg.currentValueUsd,
+           String(leg.currentAmount),
+           leg.lastKnownAt ?? position.updatedAt,
+           leg.lastKnownCommitment ?? null,
+           leg.lastObservationSource ?? null,
+           position.updatedAt
         ));
       }
     }));
@@ -915,24 +945,62 @@ export class Repository {
     positionId: string,
     mint: string,
     targetBps: number,
-    lastKnownAmount: number | string
+    lastKnownAmount: number | string,
+    observation?: {
+      observedAt: string;
+      commitment: "confirmed" | "finalized";
+      source: "landing" | "portfolio-refresh" | "reconciler";
+    }
   ): Promise<void> {
     const amountNum = Number(lastKnownAmount);
     (await run(
       `INSERT INTO position_legs (position_id, mint, symbol, target_bps, current_amount,
-                                  current_value_usd, last_known_amount, updated_at)
-       VALUES (?, ?, '', ?, ?, 0, ?, ?)
+                                  current_value_usd, last_known_amount, last_known_at,
+                                  last_known_commitment, last_observation_source, updated_at)
+       VALUES (?, ?, '', ?, ?, 0, ?, ?, ?, ?, ?)
        ON CONFLICT(position_id, mint) DO UPDATE SET
-         target_bps = excluded.target_bps,
-         current_amount = excluded.current_amount,
-         last_known_amount = excluded.last_known_amount,
-         updated_at = excluded.updated_at`,
+          target_bps = excluded.target_bps,
+          current_amount = excluded.current_amount,
+          last_known_amount = excluded.last_known_amount,
+          last_known_at = COALESCE(excluded.last_known_at, position_legs.last_known_at),
+          last_known_commitment = COALESCE(excluded.last_known_commitment, position_legs.last_known_commitment),
+          last_observation_source = COALESCE(excluded.last_observation_source, position_legs.last_observation_source),
+          updated_at = excluded.updated_at`,
       positionId,
       mint,
       targetBps,
-      Number.isFinite(amountNum) ? amountNum : 0,
-      String(lastKnownAmount),
-      nowIso()
+       Number.isFinite(amountNum) ? amountNum : 0,
+       String(lastKnownAmount),
+       observation?.observedAt ?? null,
+       observation?.commitment ?? null,
+       observation?.source ?? null,
+       nowIso()
+     ));
+  }
+
+  async recordPositionObservation(
+    positionId: string,
+    mint: string,
+    amount: number | string,
+    observation: {
+      observedAt: string;
+      commitment: "confirmed" | "finalized";
+      source: "landing" | "portfolio-refresh" | "reconciler";
+    }
+  ): Promise<void> {
+    (await run(
+      `UPDATE position_legs
+          SET current_amount = ?, last_known_amount = ?, last_known_at = ?,
+              last_known_commitment = ?, last_observation_source = ?, updated_at = ?
+        WHERE position_id = ? AND mint = ?`,
+      Number(amount),
+      String(amount),
+      observation.observedAt,
+      observation.commitment,
+      observation.source,
+      observation.observedAt,
+      positionId,
+      mint
     ));
   }
 

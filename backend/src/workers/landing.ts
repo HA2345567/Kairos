@@ -297,7 +297,11 @@ async function onLegConfirmed(
     const amount = receipt ? Number(receipt.assetBalanceAfter) / 10 ** decimals
       : side === "sell" ? Math.max(0, previous - Number(leg.inputBaseUnits ?? previous * 10 ** decimals) / 10 ** decimals)
       : previous + Number(actualOut) / 10 ** decimals;
-    await repository.upsertPositionLeg(position.id, leg.mint, targetBps, amount);
+    await repository.upsertPositionLeg(position.id, leg.mint, targetBps, amount, receipt ? {
+      observedAt: new Date().toISOString(),
+      commitment: receipt.commitment,
+      source: "landing",
+    } : undefined);
   }
 
   (await outbox("execution.leg.confirmed", {

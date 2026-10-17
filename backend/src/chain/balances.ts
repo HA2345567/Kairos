@@ -1,4 +1,4 @@
-import { Connection, PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey, type Commitment } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { withFailover } from "./connection";
 
@@ -32,7 +32,8 @@ interface ParsedTokenAccountResponse {
 export async function getTokenBalances(
   conn: Connection,
   owner: PublicKey,
-  mints: PublicKey[]
+  mints: PublicKey[],
+  commitment: Commitment = "confirmed"
 ): Promise<Record<string, number>> {
   void conn; // calls route through withFailover (primary + fallback RPC) like the rest of chain/
   const balances: Record<string, number> = {};
@@ -42,7 +43,7 @@ export async function getTokenBalances(
     (c) =>
       c.getParsedTokenAccountsByOwner(owner, {
         programId: TOKEN_PROGRAM_ID,
-      }) as unknown as Promise<ParsedTokenAccountResponse>
+      }, commitment) as unknown as Promise<ParsedTokenAccountResponse>
   );
 
   const wanted = new Set(Object.keys(balances));

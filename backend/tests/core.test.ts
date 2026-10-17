@@ -23,6 +23,7 @@ const { AppError } = await import("../src/errors");
 const { config } = await import("../src/config");
 const { buildApp } = await import("../src/index");
 const { backtestService } = await import("../src/services/backtest.service");
+const { reconcilerIntervalMs, runReconcilerOnce, DEFAULT_RECONCILE_INTERVAL_MS } = await import("../src/workers/reconciler");
 
 // ---------- fixtures ----------
 const payer = Keypair.generate();
@@ -595,6 +596,22 @@ describe("HTTP surface (inject)", () => {
     assert.equal(versions.statusCode, 200);
     assert.equal(versions.json().versions[0].changelog, "test");
     assert.equal(versions.json().versions[0].legs.length, 2);
+  });
+});
+
+describe("reconciler cadence and provenance", () => {
+  test("bounds the fallback interval to the PRD target", () => {
+    assert.equal(DEFAULT_RECONCILE_INTERVAL_MS, 30_000);
+    assert.equal(reconcilerIntervalMs(undefined), 30_000);
+    assert.equal(reconcilerIntervalMs("60000"), 30_000);
+    assert.equal(reconcilerIntervalMs("500"), 1_000);
+    assert.equal(reconcilerIntervalMs("not-a-number"), 30_000);
+  });
+
+  test("simulation reconciliation reports explicit observation provenance", async () => {
+    const summary = await runReconcilerOnce();
+    assert.equal(summary.observationCommitment, "finalized");
+    assert.equal(summary.observationSource, "reconciler");
   });
 });
 

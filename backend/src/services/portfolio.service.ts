@@ -200,7 +200,11 @@ export class PortfolioService {
     try {
       (await repository.savePosition(pos));
       for (const leg of pos.legs) {
-        (await repository.upsertPositionLeg(pos.id, leg.mint, leg.targetBps, leg.currentAmount));
+        (await repository.upsertPositionLeg(pos.id, leg.mint, leg.targetBps, leg.currentAmount, {
+          observedAt: pos.updatedAt,
+          commitment: "confirmed",
+          source: "portfolio-refresh",
+        }));
       }
     } catch (err) {
       console.warn(`[portfolio] persist refresh failed for ${pos.id}: ${errMsg(err)}`);

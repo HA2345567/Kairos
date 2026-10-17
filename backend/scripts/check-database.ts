@@ -8,9 +8,9 @@ try {
   const existing = new Set(columns.map(row => `${row.table_name}.${row.column_name}`));
   const required = [
     "executions.base_execution_id", "executions.last_valid_block_height",
-    "executions.recovery_action", "execution_recoveries.execution_id",
+    "executions.recovery_action", "executions.request_hash", "execution_recoveries.execution_id",
     "execution_legs.side", "execution_legs.input_base_units", "execution_legs.receipt_json",
-    "jobs.lease_until_ms", "outbox.dedupe_key",
+    "jobs.lease_until_ms", "outbox.dedupe_key", "program_allowlist.program_id", "positions.rebalance_state",
   ];
   const missing = required.filter(column => !existing.has(column));
   if (missing.length) throw new Error(`Missing columns: ${missing.join(", ")}`);

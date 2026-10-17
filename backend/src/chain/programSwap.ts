@@ -8,7 +8,7 @@ import { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAd
 export const KAIROS_ROUTER_PROGRAM_ID = new PublicKey(
   process.env.KAIROS_ROUTER_PROGRAM_ID || "3jWJZPdDou1h8UrT871Qi573yqQkFYYW8Jqiug9Pne5w"
 );
-const CPMM = new PublicKey("DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb");
+export const RAYDIUM_CPMM_PROGRAM_ID = new PublicKey("DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb");
 export const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 
 export interface ProgramBuildOpts {
@@ -75,7 +75,7 @@ async function build(opts: ProgramBuildOpts, side: "buy" | "sell", amount: numbe
     keys: [
       { pubkey: opts.user, isSigner: true, isWritable: true }, readonly(opts.globalConfigPda),
       writable(opts.userUsdcAta), writable(opts.userAssetAta), writable(opts.treasuryUsdcAta),
-      readonly(opts.basketConfigPda), readonly(opts.basketVersionPda), readonly(CPMM), readonly(opts.pool.authority), readonly(opts.pool.ammConfig),
+      readonly(opts.basketConfigPda), readonly(opts.basketVersionPda), readonly(RAYDIUM_CPMM_PROGRAM_ID), readonly(opts.pool.authority), readonly(opts.pool.ammConfig),
       writable(opts.pool.poolState), writable(opts.pool.inputVault), writable(opts.pool.outputVault),
       readonly(TOKEN_PROGRAM_ID), readonly(TOKEN_PROGRAM_ID),
       readonly(side === "buy" ? opts.usdcMint : opts.assetMint),

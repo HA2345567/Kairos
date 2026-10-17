@@ -35,6 +35,22 @@ CREATE TABLE IF NOT EXISTS tokens (
   updated_at                 TEXT
 );
 
+CREATE TABLE IF NOT EXISTS program_allowlist (
+  program_id TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  version    TEXT,
+  added_at   TEXT NOT NULL
+);
+INSERT INTO program_allowlist (program_id, name, version, added_at) VALUES
+  ('11111111111111111111111111111111', 'System Program', 'native', CURRENT_TIMESTAMP),
+  ('ComputeBudget111111111111111111111111111111', 'Compute Budget Program', 'native', CURRENT_TIMESTAMP),
+  ('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL', 'Associated Token Program', 'spl', CURRENT_TIMESTAMP),
+  ('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'SPL Token Program', 'spl', CURRENT_TIMESTAMP),
+  ('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr', 'SPL Memo Program', 'v2', CURRENT_TIMESTAMP),
+  ('3jWJZPdDou1h8UrT871Qi573yqQkFYYW8Jqiug9Pne5w', 'Kairos Router', 'devnet', CURRENT_TIMESTAMP),
+  ('DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb', 'Raydium CPMM', 'devnet', CURRENT_TIMESTAMP)
+ON CONFLICT (program_id) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS baskets (
   rowid BIGSERIAL UNIQUE,
   id                TEXT PRIMARY KEY,
@@ -244,9 +260,15 @@ CREATE TABLE IF NOT EXISTS position_legs (
   current_amount    DOUBLE PRECISION NOT NULL DEFAULT 0,
   current_value_usd DOUBLE PRECISION NOT NULL DEFAULT 0,
   last_known_amount TEXT,
+  last_known_at     TEXT,
+  last_known_commitment TEXT,
+  last_observation_source TEXT,
   updated_at        TEXT,
   PRIMARY KEY (position_id, mint)
 );
+ALTER TABLE position_legs ADD COLUMN IF NOT EXISTS last_known_at TEXT;
+ALTER TABLE position_legs ADD COLUMN IF NOT EXISTS last_known_commitment TEXT;
+ALTER TABLE position_legs ADD COLUMN IF NOT EXISTS last_observation_source TEXT;
 
 CREATE TABLE IF NOT EXISTS nonces (
   rowid BIGSERIAL UNIQUE,
