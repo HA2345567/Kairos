@@ -13,7 +13,6 @@ import { recoveryRequest } from "./recovery-request";
 import { poolForPair } from "../chain/pool-config";
 import { getConnection, getSignatureStatuses } from "../chain/connection";
 import {
-  USDC_DECIMALS,
   buildLegSwapTx,
   buildReverseLegTx,
   getLatestBlockhashWithHeight,
@@ -21,6 +20,7 @@ import {
 } from "../chain/mockSwap";
 import { getTokenBalances } from "../chain/balances";
 import { DEVNET_LABELS, deterministicKeypair, loadDevnetState } from "../chain/devnetState";
+import { usdcToBaseUnits } from "./money";
 
 /**
  * Execution engine (PRD §4.4): prepare → sign (client) → submit → land.
@@ -64,7 +64,7 @@ export interface PrepareLegInput {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const usdToBase = (usd: number) => Math.round(usd * 10 ** USDC_DECIMALS);
+const usdToBase = usdcToBaseUnits;
 
 function requireDevnet() {
   const state = loadDevnetState();

@@ -115,14 +115,15 @@ describe("quote engine (PRD §4.3)", () => {
     assert.equal(Number(jup.expectedOutTokens), Number((24.95 / 0.85).toFixed(6)));
   });
 
-  test("rounding remainder lands on the largest leg (integer cents conserved)", async () => {
-    // Mirror the service's rounding: fee rounded to 4 dp, then integer cents.
+  test("rounding remainder lands on the largest leg (base units conserved)", async () => {
+    // Quote allocation is conserved in six-decimal USDC base units.
     const usdc = 25.01;
-    const fee = Number(((usdc * config.platformFeeBps) / 10000).toFixed(4));
-    const netCents = Math.floor((usdc - fee) * 100);
+    const usdcBase = Math.round(usdc * 1_000_000);
+    const feeBase = Math.floor((usdcBase * config.platformFeeBps) / 10000);
+    const netBase = usdcBase - feeBase;
     const q = (await quoteService.getQuote("test-basket", usdc));
-    const cents = q.legs.map((l) => Math.round(l.inUsdcAmount * 100));
-    assert.equal(cents.reduce((s, c) => s + c, 0), netCents);
+    const baseUnits = q.legs.map((l) => Math.round(l.inUsdcAmount * 1_000_000));
+    assert.equal(baseUnits.reduce((s, c) => s + c, 0), netBase);
   });
 
   test("min investment enforced", async () => {

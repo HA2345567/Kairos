@@ -4,6 +4,7 @@ import { config } from "../config";
 import { AppError } from "../errors";
 import { getQuotePrice } from "./pricing.service";
 import { Quote, QuoteLeg } from "../db/schema";
+import { allocateBaseUnits, baseUnitsToUsdc, usdcToBaseUnits, USDC_BASE_UNITS } from "./money";
 
 /**
  * Quote service for fixed-rate devnet execution. Impact remains unavailable
@@ -30,22 +31,18 @@ export class QuoteService {
     }
 
     // 1. Platform fee on the input (never output-side too — PRD §4.4 rule 5).
-    const platformFeeUsdc = Number(((usdcAmount * config.platformFeeBps) / 10000).toFixed(4));
-    const netInvestUsdc = Number((usdcAmount - platformFeeUsdc).toFixed(4));
+    // Keep all USDC allocation in six-decimal base units until the response boundary.
+    const usdcBaseUnits = usdcToBaseUnits(usdcAmount);
+    const platformFeeBaseUnits = Math.floor((usdcBaseUnits * config.platformFeeBps) / 10000);
+    const netInvestBaseUnits = usdcBaseUnits - platformFeeBaseUnits;
+    const platformFeeUsdc = baseUnitsToUsdc(platformFeeBaseUnits);
+    const netInvestUsdc = baseUnitsToUsdc(netInvestBaseUnits);
 
-    // 2. Integer-cent allocation by weight; remainder to the largest leg.
-    const netCents = Math.floor(netInvestUsdc * 100);
-    const rawLegCents = version.legs.map((leg) => Math.floor((netCents * leg.weightBps) / 10000));
-    const allocated = rawLegCents.reduce((s, c) => s + c, 0);
-    let largestIdx = 0;
-    let maxWeight = -1;
-    version.legs.forEach((leg, idx) => {
-      if (leg.weightBps > maxWeight) {
-        maxWeight = leg.weightBps;
-        largestIdx = idx;
-      }
-    });
-    rawLegCents[largestIdx] += netCents - allocated;
+    // 2. Integer-base-unit allocation; remainder goes to the largest leg.
+    const rawLegBaseUnits = allocateBaseUnits(
+      netInvestBaseUnits,
+      version.legs.map((leg) => leg.weightBps),
+    );
 
     // 3. Per-leg price source and token eligibility (PRD §4.3).
     const legs: QuoteLeg[] = [];
@@ -79,7 +76,7 @@ export class QuoteService {
         throw new AppError("QUOTE_STALE", `${token.symbol} ${reason}`, 409);
       }
 
-      const legUsdc = rawLegCents[idx] / 100;
+      const legUsdc = rawLegBaseUnits[idx] / USDC_BASE_UNITS;
       const decimals = Math.min(token.decimals, 6);
       const expectedTokens = (legUsdc / live.priceUsd).toFixed(decimals);
       const slippageBps = leg.slippageBps || 50;
