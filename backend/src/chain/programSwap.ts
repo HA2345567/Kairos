@@ -20,6 +20,9 @@ export interface ProgramBuildOpts {
   treasuryUsdcAta: PublicKey;
   globalConfigPda: PublicKey;
   basketConfigPda: PublicKey;
+  basketVersion: number;
+  basketVersionPda: PublicKey;
+  feeBps: number;
   pool: {
     authority: PublicKey; ammConfig: PublicKey; poolState: PublicKey;
     inputVault: PublicKey; outputVault: PublicKey; observation: PublicKey;
@@ -37,14 +40,24 @@ function uint64(value: number): Buffer {
 }
 
 async function build(opts: ProgramBuildOpts, side: "buy" | "sell", amount: number, minOut: number, memo: string): Promise<ProgramLegBuild> {
+  if (!Number.isInteger(opts.basketVersion) || opts.basketVersion < 1 || opts.basketVersion > 0xffff_ffff) {
+    throw new RangeError("Basket version must be a positive u32");
+  }
   const memoBytes = Buffer.from(memo, "utf8");
   if (memoBytes.length > 256) throw new RangeError("Swap memo exceeds 256 bytes");
+  if (!Number.isInteger(opts.feeBps) || opts.feeBps < 0 || opts.feeBps > 75) {
+    throw new RangeError("Fee bps must be an integer between 0 and 75");
+  }
   const length = Buffer.alloc(4);
   length.writeUInt32LE(memoBytes.length);
+  const version = Buffer.alloc(4);
+  version.writeUInt32LE(opts.basketVersion);
+  const fee = Buffer.alloc(2);
+  fee.writeUInt16LE(opts.feeBps);
   const name = side === "buy" ? "swap_and_distribute_leg" : "swap_and_collect_leg";
   const data = Buffer.concat([
     createHash("sha256").update(`global:${name}`).digest().subarray(0, 8),
-    uint64(amount), uint64(minOut), length, memoBytes,
+    version, fee, uint64(amount), uint64(minOut), length, memoBytes,
   ]);
   const readonly = (pubkey: PublicKey) => ({ pubkey, isSigner: false, isWritable: false });
   const writable = (pubkey: PublicKey) => ({ pubkey, isSigner: false, isWritable: true });
@@ -62,7 +75,7 @@ async function build(opts: ProgramBuildOpts, side: "buy" | "sell", amount: numbe
     keys: [
       { pubkey: opts.user, isSigner: true, isWritable: true }, readonly(opts.globalConfigPda),
       writable(opts.userUsdcAta), writable(opts.userAssetAta), writable(opts.treasuryUsdcAta),
-      readonly(opts.basketConfigPda), readonly(CPMM), readonly(opts.pool.authority), readonly(opts.pool.ammConfig),
+      readonly(opts.basketConfigPda), readonly(opts.basketVersionPda), readonly(CPMM), readonly(opts.pool.authority), readonly(opts.pool.ammConfig),
       writable(opts.pool.poolState), writable(opts.pool.inputVault), writable(opts.pool.outputVault),
       readonly(TOKEN_PROGRAM_ID), readonly(TOKEN_PROGRAM_ID),
       readonly(side === "buy" ? opts.usdcMint : opts.assetMint),
@@ -86,4 +99,12 @@ export const buildProgramSellLeg = (opts: ProgramBuildOpts & { amountInAssetBase
 export const globalConfigPda = () => PublicKey.findProgramAddressSync([Buffer.from("global")], KAIROS_ROUTER_PROGRAM_ID)[0];
 export const basketConfigPda = (basketId: string) =>
   PublicKey.findProgramAddressSync([Buffer.from("basket"), Buffer.from(basketId)], KAIROS_ROUTER_PROGRAM_ID)[0];
+export const basketVersionPda = (basketId: string, version: number) => {
+  const value = Buffer.alloc(4);
+  value.writeUInt32LE(version);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("version"), Buffer.from(basketId), value],
+    KAIROS_ROUTER_PROGRAM_ID
+  )[0];
+};
 export const ataFor = (mint: PublicKey, owner: PublicKey) => getAssociatedTokenAddress(mint, owner);

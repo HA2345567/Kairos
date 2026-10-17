@@ -43,4 +43,7 @@ pub enum KairosError {
 
     #[msg("The legs_hash does not match the canonical mint and weight encoding.")]
     LegsHashMismatch,
+
+    #[msg("The supplied basket version is invalid or does not match this basket.")]
+    InvalidBasketVersion,
 }

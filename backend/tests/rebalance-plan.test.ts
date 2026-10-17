@@ -54,7 +54,7 @@ test("close plan charges only each sell fee at the close policy rate", async () 
   assert.equal(usdcBase(plan.netUsdcToRedeploy), 40_000_000 - 2 * perLegFee);
 });
 
-test("program mode never silently falls back to treasury close or rebalance trades", async () => {
+test("program mode requires initialized devnet state instead of falling back to treasury trades", async () => {
   const previous = config.swapBuilder;
   const user = Keypair.generate().publicKey;
   const plan = await computeRebalancePlan(await fixture(), [], true);
@@ -64,7 +64,7 @@ test("program mode never silently falls back to treasury close or rebalance trad
       await assert.rejects(assembleRebalanceExecution({
         conn: getConnection(), user, walletAddress: user.toBase58(), walletId: "test",
         idempotencyKey: "test", type, basketId: "test", basketVersionId: "test", fromVersionId: "test", plan,
-      }), /on-chain fee policy/);
+      }), /devnet-setup/);
     }
   } finally {
     config.swapBuilder = previous;

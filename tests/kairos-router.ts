@@ -77,14 +77,19 @@ describe("kairos-router", () => {
         ? { mint: mints[i], weightBps: weights[i] ?? 0 }
         : { mint: PublicKey.default, weightBps: 0 }
     );
+  const hashLegs = (mints: PublicKey[], weight = 5000) => crypto.createHash("sha256").update(
+    Buffer.concat([...mints].sort((a, b) => Buffer.compare(a.toBuffer(), b.toBuffer()))
+      .map(mint => Buffer.concat([mint.toBuffer(), Buffer.from([weight & 255, weight >> 8])]))),
+  ).digest();
 
-  const swapAccounts = (userDestAta: PublicKey, outputMint: PublicKey) => ({
+  const swapAccounts = (userDestAta: PublicKey, outputMint: PublicKey, version = 1) => ({
     user: user.publicKey,
     globalConfig,
     userUsdcAta,
     userDestAta,
     treasuryUsdcAta,
     basketConfig,
+    basketVersion: versionPda(version),
     cpmmProgram: pool.cpmmProgram,
     authority: pool.authority,
     ammConfig: pool.ammConfig,
@@ -190,6 +195,15 @@ describe("kairos-router", () => {
     expect(b.isActive).toBe(true);
   });
 
+  it("publishes the immutable version used by swap legs", async () => {
+    const legsHash = hashLegs([assetMint, usdcMint]);
+    await program.methods
+      .publishVersion(basketId, 1, legs([assetMint, usdcMint], [5000, 5000]), 2, [...legsHash])
+      .accounts({ admin: admin.publicKey, approval: publishApprover.publicKey, globalConfig, publishAuthorities, basketConfig, basketVersion: versionPda(1) })
+      .signers([admin, publishApprover])
+      .rpc();
+  });
+
   it("rejects non-admin basket creation", async () => {
     try {
       await program.methods
@@ -275,7 +289,7 @@ describe("kairos-router", () => {
       .rpc();
     try {
       await program.methods
-        .swapAndDistributeLeg(new anchor.BN(1_000_000), new anchor.BN(1), "audit-memo")
+        .swapAndDistributeLeg(1, 20, new anchor.BN(1_000_000), new anchor.BN(1), "audit-memo")
         .accounts(swapAccounts(userAssetAta, assetMint))
         .signers([user])
         .rpc();
@@ -300,7 +314,7 @@ describe("kairos-router", () => {
       .rpc();
     try {
       await program.methods
-        .swapAndDistributeLeg(new anchor.BN(1_000_000), new anchor.BN(1), "audit-memo")
+        .swapAndDistributeLeg(1, 20, new anchor.BN(1_000_000), new anchor.BN(1), "audit-memo")
         .accounts(swapAccounts(userAssetAta, assetMint))
         .signers([user])
         .rpc();
@@ -316,26 +330,33 @@ describe("kairos-router", () => {
   });
 
   it("publishes a version with legs_hash; rejects bad weights", async () => {
-    const canonicalLegs = Buffer.concat(
-      [assetMint, usdcMint]
-        .sort((a, b) => Buffer.compare(a.toBuffer(), b.toBuffer()))
-        .map((mint) => Buffer.concat([mint.toBuffer(), Buffer.from([0x88, 0x13])]))
-    );
-    const legsHash = crypto.createHash("sha256").update(canonicalLegs).digest();
-    await program.methods
-      .publishVersion(basketId, 1, legs([assetMint, usdcMint], [5000, 5000]), 2, [...legsHash])
-      .accounts({ admin: admin.publicKey, approval: publishApprover.publicKey, globalConfig, publishAuthorities, basketConfig, basketVersion: versionPda(1) })
-      .signers([admin, publishApprover])
-      .rpc();
     const v = await program.account.basketVersion.fetch(versionPda(1));
     expect(v.version).toBe(1);
-    expect(Buffer.from(v.legsHash).equals(Buffer.from(legsHash))).toBe(true);
+    expect(Buffer.from(v.legsHash).equals(Buffer.from(hashLegs([assetMint, usdcMint])))).toBe(true);
     expect(v.legCount).toBe(2);
+
+    const versionMint = await createMint(provider.connection, admin, admin.publicKey, null, 6);
+    const nextHash = hashLegs([assetMint, versionMint]);
+    await program.methods
+      .publishVersion(basketId, 2, legs([assetMint, versionMint], [5000, 5000]), 2, [...nextHash])
+      .accounts({ admin: admin.publicKey, approval: publishApprover.publicKey, globalConfig, publishAuthorities, basketConfig, basketVersion: versionPda(2) })
+      .signers([admin, publishApprover])
+      .rpc();
+    try {
+      await program.methods
+        .swapAndDistributeLeg(2, 20, new anchor.BN(1_000_000), new anchor.BN(1), "version-mismatch")
+        .accounts(swapAccounts(userUsdcAta, usdcMint, 2))
+        .signers([user])
+        .rpc();
+      throw new Error("a mint outside the selected version should fail");
+    } catch (err) {
+      expect(String(err)).toContain("InvalidUserAta");
+    }
 
     try {
       await program.methods
-        .publishVersion(basketId, 2, legs([assetMint, usdcMint], [9000, 9000]), 2, [...legsHash])
-        .accounts({ admin: admin.publicKey, approval: publishApprover.publicKey, globalConfig, publishAuthorities, basketConfig, basketVersion: versionPda(2) })
+        .publishVersion(basketId, 3, legs([assetMint, usdcMint], [9000, 9000]), 2, [...hashLegs([assetMint, usdcMint])])
+        .accounts({ admin: admin.publicKey, approval: publishApprover.publicKey, globalConfig, publishAuthorities, basketConfig, basketVersion: versionPda(3) })
         .signers([admin, publishApprover])
         .rpc();
       throw new Error("should have failed");
@@ -354,7 +375,7 @@ describe("kairos-router", () => {
     );
     try {
       await program.methods
-        .swapAndDistributeLeg(new anchor.BN(1_000_000), new anchor.BN(1), "audit-memo")
+        .swapAndDistributeLeg(1, 20, new anchor.BN(1_000_000), new anchor.BN(1), "audit-memo")
         .accounts(swapAccounts(foreignAta, foreign))
         .signers([user])
         .rpc();

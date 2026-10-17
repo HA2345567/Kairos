@@ -186,12 +186,38 @@ only contains public `VITE_*` settings.
 # Terminal 1: backend on http://localhost:3001
 bun run start:backend
 
-# Terminal 2: frontend on http://localhost:8080
+# Terminal 2: frontend on http://localhost:3000
 bun run start:frontend
 ```
 
 Vite proxies `/api`, `/v1`, `/health`, and `/ws` to the backend during local
 development. `make run-backend` and `make run-frontend` are equivalent aliases.
+
+For a demo rehearsal, run the two services together and then use the browser
+smoke checker:
+
+```bash
+bun run demo
+# In a second terminal:
+bun run check:demo
+```
+
+The demo command seeds a planned devnet catalog when needed, builds the frontend, then serves it at `http://127.0.0.1:8080`; the API is at
+`http://127.0.0.1:3001`. The preview proxies the API routes. The checker captures screenshots under
+`target/demo/` and verifies `/`, `/markets`, `/portfolio`, `/labs`, and `/admin`.
+
+For a pitch walkthrough, use the production frontend build and the configured
+PostgreSQL backend together:
+
+```bash
+bun run build
+bun run demo
+```
+
+Open `http://localhost:3000`. This uses the existing backend configuration; it
+does not simulate successful transactions. `bun run check:devnet` reports the
+signer balance, program deployment state, and estimated deployment rent without
+printing secrets. Live investing requires initialized devnet tokens and pools.
 
 ### 4. Offline checks
 

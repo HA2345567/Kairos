@@ -81,20 +81,24 @@ pub mod kairos_router {
     /// BUY leg: USDC → asset (fee input-side, memo, atomic).
     pub fn swap_and_distribute_leg<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, SwapAndDistributeLeg<'info>>,
+        version: u32,
+        fee_bps: u16,
         amount_in_usdc: u64,
         min_amount_out: u64,
         memo: String,
     ) -> Result<()> {
-        instructions::swap_leg::handler(ctx, amount_in_usdc, min_amount_out, memo)
+        instructions::swap_leg::handler(ctx, version, fee_bps, amount_in_usdc, min_amount_out, memo)
     }
 
     /// SELL leg: asset → USDC (fee taken from proceeds, memo, atomic).
     pub fn swap_and_collect_leg<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, SwapAndCollectLeg<'info>>,
+        version: u32,
+        fee_bps: u16,
         amount_in_asset: u64,
         min_usdc_out: u64,
         memo: String,
     ) -> Result<()> {
-        instructions::swap_leg_reverse::handler(ctx, amount_in_asset, min_usdc_out, memo)
+        instructions::swap_leg_reverse::handler(ctx, version, fee_bps, amount_in_asset, min_usdc_out, memo)
     }
 }

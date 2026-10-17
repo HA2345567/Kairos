@@ -3,7 +3,7 @@
  *
  * Run from backend/:  bun scripts/seed.ts   (after bun scripts/devnet-setup.ts)
  *
- * Seeds backend/data/kairos.db from the devnet setup state:
+ * Seeds the configured PostgreSQL database from the devnet setup state:
  *   - token registry (devnet mints, configured test rates, leg types, market-hours flag)
  *   - 6 baskets + their v1 compositions (weights sum EXACTLY 10000 bps)
  *   - global_kill_switch=false setting
@@ -13,6 +13,8 @@
 import { repository } from "../src/db/repository";
 import { loadDevnetState } from "../src/chain/devnetState";
 import type { Basket, BasketLeg, BasketVersion, Token } from "../src/db/schema";
+import { config } from "../src/config";
+import { plannedDevnetCatalog } from "../src/chain/devnet-assets";
 
 // ---------- baskets (weights MUST sum to exactly 10000) ----------
 
@@ -107,7 +109,10 @@ const BASKETS: BasketSpec[] = [
 // ---------- main ----------
 
 async function main(): Promise<void> {
-  const state = loadDevnetState();
+  if (!config.isDevnet()) throw new Error("This seeder only supports devnet");
+  const deployedState = loadDevnetState();
+  const preview = !deployedState && process.argv.includes("--catalog-only");
+  const state = deployedState ?? (preview ? plannedDevnetCatalog() : null);
   if (!state) {
     console.error(
       `[seed] devnet-state.json not found at expected path — run "bun scripts/devnet-setup.ts" first`
@@ -118,7 +123,7 @@ async function main(): Promise<void> {
 
   const bySymbol = new Map(state.assets.map((a) => [a.symbol, a]));
 
-  // ---- tokens (real devnet mints) ----
+  // Keep existing prices and operator restrictions on rerun.
   const tokens: Token[] = [
     {
       mint: state.usdc.mint,
@@ -142,13 +147,17 @@ async function main(): Promise<void> {
       priceUsd: a.priceUsd,
     })),
   ];
-  for (const t of tokens) (await repository.saveToken(t));
-  console.log(`[seed] tokens: ${tokens.length} upserted (incl. USDC)`);
+  for (const t of tokens) {
+    if (!await repository.getToken(t.mint)) await repository.saveToken(t);
+  }
+  console.log(`[seed] tokens: ${tokens.length} checked (incl. USDC)`);
 
   // ---- baskets + v1 versions ----
   const nowIso = new Date().toISOString();
   let legCount = 0;
   for (const spec of BASKETS) {
+    // Never reset an operator pause or replace a newer active version on rerun.
+    if (await repository.getBasketBySlug(spec.slug)) continue;
     const weightSum = spec.legs.reduce((s, [, w]) => s + w, 0);
     if (weightSum !== 10000) {
       throw new Error(`[seed] basket "${spec.slug}" weights sum to ${weightSum}, expected 10000`);
@@ -178,8 +187,8 @@ async function main(): Promise<void> {
       id: versionId,
       basketId,
       version: 1,
-      changelog: "Initial composition",
-      publishedBy: "kairos-ops",
+      changelog: preview ? "Planned devnet composition; on-chain publication pending" : "Initial composition",
+      publishedBy: preview ? "devnet-preview" : "kairos-ops",
       publishedAt: nowIso,
       legs,
     };
@@ -191,7 +200,7 @@ async function main(): Promise<void> {
       name: spec.name,
       thesis: spec.thesis,
       category: spec.category,
-      status: "active",
+      status: preview ? "paused" : "active",
       activeVersionId: versionId,
       minUsdc: 25,
       protocols: ["Kairos Router"],
@@ -206,8 +215,10 @@ async function main(): Promise<void> {
   console.log(`[seed] baskets: ${BASKETS.length} versions + ${legCount} legs saved`);
 
   // ---- settings ----
-  (await repository.setSetting("global_kill_switch", "false"));
-  console.log(`[seed] settings: global_kill_switch=false`);
+  if (await repository.getSetting("global_kill_switch") === undefined) {
+    await repository.setSetting("global_kill_switch", "false");
+  }
+  if (preview) console.log("[seed] Catalog preview only: baskets paused; no chain state or performance history created.");
 
   console.log("[seed] done.");
 }

@@ -51,6 +51,17 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    preview: {
+      host: "127.0.0.1",
+      port: 8080,
+      strictPort: true,
+      proxy: {
+        "/v1": { target: "http://localhost:3001", changeOrigin: true },
+        "/health": { target: "http://localhost:3001", changeOrigin: true },
+        "/api": { target: "http://localhost:3001", changeOrigin: true, secure: false },
+        "/ws": { target: "ws://localhost:3001", ws: true, changeOrigin: true },
+      },
+    },
     optimizeDeps: {
       include: ["react-is", "recharts", "react-dom", "@tanstack/react-query"],
     },

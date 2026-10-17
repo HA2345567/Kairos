@@ -138,6 +138,17 @@ async function prepareWithLegs(opts: {
   const messageHashes: string[] = [];
   const legs: ExecutionLeg[] = [];
   const feeByLeg = allocateFeeBaseUnits(opts.feeUsdc, opts.legs);
+  const publishedVersion = config.swapBuilder === "program"
+    ? await repository.getBasketVersion(opts.basketVersionId)
+    : undefined;
+  if (config.swapBuilder === "program" &&
+      (!publishedVersion || publishedVersion.basketId !== opts.basketId ||
+       !Number.isInteger(publishedVersion.version) || publishedVersion.version < 1 || publishedVersion.version > 0xffff_ffff)) {
+    throw new AppError("BASKET_VERSION_NOT_FOUND", "The selected immutable basket version is unavailable", 409);
+  }
+  if (publishedVersion && opts.legs.some(leg => !publishedVersion.legs.some(item => item.mint === leg.mint))) {
+    throw new AppError("BASKET_VERSION_MISMATCH", "A requested mint is outside the selected basket version", 409);
+  }
 
   for (let i = 0; i < opts.legs.length; i++) {
     const legIn = opts.legs[i];
@@ -165,7 +176,7 @@ async function prepareWithLegs(opts: {
             // On-chain kairos_router path (user's build order: program → backend).
             // Fee + memo live INSIDE the program instruction; min-out slippage
             // uses the quote's min.
-            const { buildProgramBuyLeg, buildProgramSellLeg, globalConfigPda, basketConfigPda } =
+            const { buildProgramBuyLeg, buildProgramSellLeg, globalConfigPda, basketConfigPda, basketVersionPda } =
               await import("../chain/programSwap");
             const common = {
               user,
@@ -173,6 +184,9 @@ async function prepareWithLegs(opts: {
               assetMint: new PublicKey(legIn.mint),
               relayer,
               recentBlockhash: blockhash,
+              basketVersion: publishedVersion!.version,
+              basketVersionPda: basketVersionPda(opts.basketId, publishedVersion!.version),
+              feeBps: opts.type === "rebalance" ? config.rebalanceFeeBps : config.platformFeeBps,
               memo: `kairos:${opts.basketId}:${opts.basketVersionId}:leg${i + 1}`,
             };
             if (isSell) {

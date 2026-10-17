@@ -24,33 +24,13 @@ import { DEVNET_LABELS, deterministicKeypair } from "../src/chain/devnetState";
 import { ensureFundedAta, ensureMint } from "../src/chain/mints";
 import { relayerService } from "../src/services/relayer.service";
 import type { DevnetState } from "../src/db/schema";
+import { DEVNET_ASSETS } from "../src/chain/devnet-assets";
 
 const DECIMALS = 6;
 const TREASURY_ASSET_UI = 10_000_000;
 const TREASURY_USDC_UI = 1_000_000;
 const AIRDROP_SOL = 2;
 const AIRDROP_ATTEMPTS = 5;
-
-interface AssetSpec {
-  symbol: string;
-  priceUsd: number;
-  legType: "spl" | "xstock";
-  marketClosed?: boolean;
-}
-
-/** Frozen devnet asset registry (mirrors PRD §11). */
-const ASSET_SPECS: AssetSpec[] = [
-  { symbol: "tNVDA", priceUsd: 180, legType: "xstock" },
-  { symbol: "tGOLD", priceUsd: 2400, legType: "xstock" },
-  { symbol: "tTSLA", priceUsd: 250, legType: "xstock", marketClosed: true },
-  { symbol: "tJUP", priceUsd: 0.85, legType: "spl" },
-  { symbol: "tJTO", priceUsd: 2.3, legType: "spl" },
-  { symbol: "tBONK", priceUsd: 0.000021, legType: "spl" },
-  { symbol: "tRENDER", priceUsd: 5.6, legType: "spl" },
-  { symbol: "tHNT", priceUsd: 6.8, legType: "spl" },
-  { symbol: "tPYTH", priceUsd: 0.42, legType: "spl" },
-  { symbol: "tKMNO", priceUsd: 0.06, legType: "spl" },
-];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const explorer = (kind: "address" | "tx", id: string) =>
@@ -144,7 +124,7 @@ async function main(): Promise<void> {
 
   // ---- 3. asset mints + 4. funded treasury ATAs ----
   const assetEntries: DevnetState["assets"] = [];
-  for (const spec of ASSET_SPECS) {
+  for (const spec of DEVNET_ASSETS) {
     const label = DEVNET_LABELS.assetMint(spec.symbol);
     const mintKp = deterministicKeypair(label);
     await ensureMint(conn, relayer, label, DECIMALS, mintKp.publicKey);
