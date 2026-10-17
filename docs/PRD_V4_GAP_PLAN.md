@@ -2,7 +2,7 @@
 
 **Audit date:** 2026-10-17
 **Source of truth:** PRD v4.0 supplied in the working session.
-**Repository state audited:** `ce0cc40 feat: persist execution evidence and rebalance state`
+**Repository state audited:** `afb5454 feat: enforce allowlists and finalized reconciliation`
 
 ## Executive result
 
@@ -13,11 +13,11 @@ and a devnet-first web app. It is not a separate product.
 
 It is also not yet the complete PRD acceptance build. The current implementation
 is strongest in backend transaction safety, persistence, recovery, catalog
-integrity, and local Anchor transaction construction. The main missing proof is
-live devnet execution; the main missing product capabilities are finalized
-reconciliation, durable notification delivery, program/mint allowlist data,
-real-time streams, production admin identity, and several frontend hardening
-requirements.
+integrity, allowlist enforcement, finalized balance observations, and local
+Anchor transaction construction. The main missing proof is live devnet
+execution; the main missing product capabilities are event-driven
+reconciliation, durable notification delivery, real-time streams, production
+admin identity, and several frontend hardening requirements.
 
 ### Coverage score
 
@@ -25,13 +25,13 @@ The score below is deliberately a **local implementation coverage** score, not a
 claim of production or devnet readiness:
 
 - Functional requirements audited: **25** (`FR-01` through `FR-25`).
-- Locally complete: **14**.
-- Partial or architecture-deviated: **11**.
+- Locally complete: **15**.
+- Partial or architecture-deviated: **10**.
 - Completely absent from the functional list: **0**. `FR-16` is present as a
   direct-wallet UI flow but is not yet an authoritative backend/config-driven
   path, so it is counted as partial rather than fully complete.
-- Weighted score: `(14 + 0.5 × 11) / 25 = 78%` local functional coverage.
-- Must-only weighted score (`FR-01`–`FR-20`): approximately **82.5%** locally.
+- Weighted score: `(15 + 0.5 × 10) / 25 = 80%` local functional coverage.
+- Must-only weighted score (`FR-01`–`FR-20`): approximately **85%** locally.
 - Live devnet acceptance: **0 complete end-to-end acceptance runs**. The
   relayer has no SOL, the router is not executable on devnet, and no user
   transaction was attempted.
@@ -43,7 +43,7 @@ production boundary is incomplete.
 ### Post-audit implementation checkpoint
 
 Since the initial matrix was written, the following backend/core items were
-implemented and committed in `61e0551` and `ce0cc40`:
+implemented and committed in `61e0551`, `ce0cc40`, and `afb5454`:
 
 - `/v1/quotes` now applies the region gate before quote work.
 - Money mutations require the canonical `Idempotency-Key` header; clients send
@@ -54,8 +54,12 @@ implemented and committed in `61e0551` and `ce0cc40`:
 - Receipt provenance records finalized versus confirmed commitment.
 - Completed rebalances advance the position to the target version; mixed
   outcomes preserve the old version and set `REBALANCE_PARTIAL`.
+- Persisted program allowlist entries and denylisted-mint checks now run before
+  simulation/relayer signing.
+- Reconciliation reads finalized balances, records observation provenance, and
+  uses a bounded 30-second fallback cadence.
 
-This moves the local score from the initial 76% audit estimate to the 78%
+This moves the local score from the initial 76% audit estimate to the 80%
 estimate above. It does not change the live-devnet score: no live acceptance
 run has been completed.
 
@@ -70,7 +74,7 @@ run has been completed.
 | On-chain | One `kairos-router` Anchor program with version registry instructions | Functionally covers the optional registry role; no separate `kairos_registry` program |
 | Swap venue | Program path targets Raydium CPMM accounts; mock/treasury path remains for offline/local execution | Needs one explicit devnet venue decision and live account setup |
 | Data | Provider snapshots when configured; devnet registry rates are labeled and not used as historical truth | Aligned with honesty requirement |
-| Security | SIWS, wallet binding, byte verification, signer checks, append-only versions, two-credential publish flow | Strong local foundation; admin identity/CSP/allowlist gaps remain |
+| Security | SIWS, wallet binding, byte verification, signer checks, append-only versions, two-credential publish flow, persisted program allowlist | Strong local foundation; admin identity and CSP gaps remain |
 
 The existing stack should be retained unless the user explicitly changes the
 technology decision. The PRD's behavioral and security requirements are the
@@ -88,20 +92,20 @@ an unnecessary rewrite at this stage.
 | FR-05 | Complete-local | Prepare builds per-leg transactions, stores serialized bytes/hashes, fee, expiry, blockhash, and execution ID. |
 | FR-06 | Partial | Real RPC simulation is used outside simulation mode; offline mode intentionally substitutes static signer/compile checks, and live simulation has not been proven. |
 | FR-07 | Complete-local | Submit compares message hashes/bytes and verifies every required Ed25519 signature before queueing. |
-| FR-08 | Partial | Basket mint membership and a pinned CPMM program are checked, but there is no persisted `program_allowlist` table or general instruction allowlist inspection. |
-| FR-09 | Complete-local | Wallet-scoped idempotency and body conflict checks are persisted and covered by tests; the API uses body keys rather than the PRD's `Idempotency-Key` header convention. |
+| FR-08 | Complete-local | Persisted `program_allowlist` entries, compiled instruction-program validation, required router/CPMM validation, and denylisted-mint rejection run before simulation/signing. |
+| FR-09 | Complete-local | Wallet-scoped idempotency, request hashes, canonical `Idempotency-Key` headers, and body conflict checks are persisted and covered by tests. |
 | FR-10 | Complete-local | Landing persists signed bytes, rebroadcasts, checks history, handles expiry, and resumes after restart; live chain evidence is still blocked. |
 | FR-11 | Complete-local | Per-leg state produces `PARTIALLY_COMPLETED`; retry and unwind recovery paths are implemented and tested locally. |
 | FR-12 | Complete-local | Fees are allocated per leg, charged only after confirmation, and protected by an execution/leg ledger uniqueness key. |
-| FR-13 | Partial | Reconciler reads real balances and classifies drift, but its default interval is five minutes rather than the PRD's 30-second p95 target and it is polling rather than event-driven. |
+| FR-13 | Partial | Reconciler reads finalized balances, classifies drift, records provenance, and polls at a bounded 30-second cadence; event-driven indexing and measured p95 evidence remain. |
 | FR-14 | Complete-local | External balance changes mark a position `MODIFIED`, disable auto-rebalance, write audit evidence, and enqueue an event. |
 | FR-15 | Partial | Close planning and program-backed reverse legs exist; real Raydium pool accounts and a live close receipt are not verified. |
 | FR-16 | Partial | `WithdrawUsdc` signs a direct wallet transfer, but the frontend uses a fixed `DEVNET_USDC_MINT` instead of authoritative devnet state and there is no backend read/receipt contract. |
 | FR-17 | Complete-local | Backend kill switch blocks new prepare; on-chain global pause blocks buys while reverse exits and direct withdrawal remain available. |
-| FR-18 | Partial | Outbox rows are durable, leased, and deduplicated, but dedupe is event+payload rather than `(execution_id,event_type)`, and the worker marks console logging as delivered. |
+| FR-18 | Partial | Outbox rows are durable, leased, and deduplicated by execution/event identity; the devnet-local transport acknowledges delivery, but a production notification transport is not connected. |
 | FR-19 | Complete-local | Privileged publish, pause, trading-status, and execution actions write audit rows with before/after data. |
 | FR-20 | Complete-local | Execution lookup exposes legs, amounts, hashes, signatures, errors, timestamps, and recovery ancestry. |
-| FR-21 | Partial | Manual rebalance preview and sell-before-buy planning exist; pool impact is `null`, finalized version transition requires verification, and live execution is blocked. |
+| FR-21 | Partial | Manual rebalance preview, sell-before-buy planning, and local source/target version transition exist; pool impact is `null` and live execution is blocked. |
 | FR-22 | Partial | Policy checks, embedded-wallet gating, caps, revocation re-read, and publish fan-out exist; no real embedded provider/policy signer is connected, so the delegated path cannot be accepted as complete. |
 | FR-23 | Complete-local | Backtests use verified snapshots only, exclude insufficient-history legs with reasons, and return hypothetical labels/disclaimers; benchmark remains unavailable. |
 | FR-24 | Partial | `kairos-router` stores and verifies a version hash with two signers; this is a functional substitute for the optional registry, but not the PRD's separately named program and has no live proof. |
@@ -123,9 +127,9 @@ an unnecessary rewrite at this stage.
 | FE-05 money display | Partial | Backend arithmetic is integer base-unit based; several frontend display and legacy activity paths still use browser-local numeric records. |
 | FE-06 refresh recovery | Partial | Backend execution lookup is durable; the frontend has no complete WebSocket/REST resync execution page contract. |
 | NFR-01/02 latency | Unmeasured | No p95 prepare/read measurement harness is checked in. |
-| NFR-03 reconciliation | Not met locally | Five-minute polling cannot satisfy a 30-second p95 target. |
+| NFR-03 reconciliation | Partial/unmeasured | Finalized polling is bounded to 30 seconds, but event-to-projection latency has not been measured and an event-driven indexer is not connected. |
 | NFR-04/07/08/09/10 | Unverified | No availability/landing SLO evidence, restore drill, OpenTelemetry trace, or retention policy evidence is present. |
-| NFR-05 degrade-closed | Partial | Kill switch, stale prices, relayer checks, and simulation gates exist; provider/program allowlist and health semantics need consolidation. |
+| NFR-05 degrade-closed | Partial | Kill switch, stale prices, relayer checks, and simulation gates exist; provider/venue health semantics need consolidation. |
 | NFR-06 correctness | Strong-local | Tamper, signature, idempotency, fee conservation, recovery, and append-only tests exist; live-chain proof is pending. |
 
 ## Acceptance status
@@ -139,6 +143,8 @@ an unnecessary rewrite at this stage.
 - Landing queue, rebroadcast/recovery state machine, partial execution, retry, and unwind.
 - Portfolio balance refresh/reconciler logic and modified-position behavior.
 - Manual rebalance/close transaction construction and Anchor interface matching.
+- Persisted program/mint allowlist enforcement before simulation/signing.
+- Finalized reconciliation cadence and position-observation provenance.
 - Router pause/version/hash/fee guards at Rust unit/interface level.
 - Demo build and five-route browser smoke path.
 
