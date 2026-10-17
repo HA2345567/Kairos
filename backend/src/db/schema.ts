@@ -118,9 +118,12 @@ export interface Quote {
   basketId: string;
   basketVersionId: string;
   usdcAmount: number;
+  usdcBaseUnits?: string;
   legs: QuoteLeg[];
   platformFeeUsdc: number;
+  platformFeeBaseUnits?: string;
   netInvestUsdc: number;
+  netInvestBaseUnits?: string;
   expiresAt: string;
   createdAt: string;
 }
@@ -142,7 +145,9 @@ export interface ExecutionLeg {
   mint: string;
   symbol: string;
   inAmountUsdc: number;
+  inUsdcBaseUnits?: string;
   feeUsdc?: number;
+  feeBaseUnits?: string;
   side?: "buy" | "sell";
   inputBaseUnits?: string;
   receipt?: ExecutionLegReceipt;
@@ -166,7 +171,9 @@ export interface Execution {
   status: ExecutionStatus;
   idempotencyKey: string;
   totalUsdc: number;
+  totalUsdcBaseUnits?: string;
   feeUsdc: number;
+  feeUsdcBaseUnits?: string;
   preparedTxs: string[]; // base64 serialized transactions
   messageHashes: string[]; // SHA256 hashes of prepared messages for byte-verification
   blockhash?: string; // recent blockhash captured at prepare time
@@ -256,6 +263,7 @@ export interface FeeRow {
   id: string;
   executionId: string;
   amountUsdc: number;
+  amountBaseUnits?: string;
   token: string;
   ts: string;
 }

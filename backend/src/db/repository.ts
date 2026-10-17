@@ -25,6 +25,7 @@ import {
   Wallet,
 } from "./schema";
 import { all, one, run, tx } from "./postgres";
+import { usdcToBaseUnits } from "../services/money";
 
 type Row = Record<string, unknown>;
 
@@ -129,9 +130,12 @@ function mapQuote(r: Row): Quote {
     basketId: str(r.basket_id),
     basketVersionId: str(r.basket_version_id),
     usdcAmount: num(r.usdc_amount),
+    usdcBaseUnits: r.usdc_base_units == null ? undefined : str(r.usdc_base_units),
     legs: json<QuoteLeg[]>(r.legs_json, []),
     platformFeeUsdc: num(r.platform_fee_usdc),
+    platformFeeBaseUnits: r.platform_fee_base_units == null ? undefined : str(r.platform_fee_base_units),
     netInvestUsdc: num(r.net_invest_usdc),
+    netInvestBaseUnits: r.net_invest_base_units == null ? undefined : str(r.net_invest_base_units),
     expiresAt: str(r.expires_at),
     createdAt: str(r.created_at),
   };
@@ -144,7 +148,9 @@ function mapExecutionLeg(r: Row): ExecutionLeg {
     mint: str(r.mint),
     symbol: str(r.symbol),
     inAmountUsdc: num(r.in_amount_usdc),
+    inUsdcBaseUnits: r.in_usdc_base_units == null ? undefined : str(r.in_usdc_base_units),
     feeUsdc: num(r.fee_usdc),
+    feeBaseUnits: r.fee_base_units == null ? undefined : str(r.fee_base_units),
     side: r.side == null ? undefined : str(r.side) as ExecutionLeg["side"],
     inputBaseUnits: r.input_base_units == null ? undefined : str(r.input_base_units),
     receipt: r.receipt_json == null ? undefined : json<ExecutionLeg["receipt"]>(r.receipt_json, undefined),
@@ -170,7 +176,9 @@ function mapExecution(r: Row, legs: ExecutionLeg[]): Execution {
     status: str(r.status, "PREPARED") as Execution["status"],
     idempotencyKey: str(r.idempotency_key),
     totalUsdc: num(r.total_usdc),
+    totalUsdcBaseUnits: r.total_usdc_base_units == null ? undefined : str(r.total_usdc_base_units),
     feeUsdc: num(r.fee_usdc),
+    feeUsdcBaseUnits: r.fee_usdc_base_units == null ? undefined : str(r.fee_usdc_base_units),
     preparedTxs: json<string[]>(r.prepared_txs_json, []),
     messageHashes: json<string[]>(r.message_hashes_json, []),
     expiresAt: str(r.expires_at),
@@ -573,25 +581,31 @@ export class Repository {
 
   async saveQuote(quote: Quote): Promise<Quote> {
     (await run(
-      `INSERT INTO quotes (id, basket_id, basket_version_id, usdc_amount, legs_json,
-                           platform_fee_usdc, net_invest_usdc, expires_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO quotes (id, basket_id, basket_version_id, usdc_amount, usdc_base_units, legs_json,
+                           platform_fee_usdc, platform_fee_base_units, net_invest_usdc, net_invest_base_units, expires_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          basket_id = excluded.basket_id,
          basket_version_id = excluded.basket_version_id,
          usdc_amount = excluded.usdc_amount,
+         usdc_base_units = excluded.usdc_base_units,
          legs_json = excluded.legs_json,
          platform_fee_usdc = excluded.platform_fee_usdc,
+         platform_fee_base_units = excluded.platform_fee_base_units,
          net_invest_usdc = excluded.net_invest_usdc,
+         net_invest_base_units = excluded.net_invest_base_units,
          expires_at = excluded.expires_at,
          created_at = excluded.created_at`,
       quote.id,
       quote.basketId,
       quote.basketVersionId,
       quote.usdcAmount,
+      quote.usdcBaseUnits ?? String(usdcToBaseUnits(quote.usdcAmount)),
       JSON.stringify(quote.legs),
       quote.platformFeeUsdc,
+      quote.platformFeeBaseUnits ?? String(usdcToBaseUnits(quote.platformFeeUsdc)),
       quote.netInvestUsdc,
+      quote.netInvestBaseUnits ?? String(usdcToBaseUnits(quote.netInvestUsdc)),
       quote.expiresAt,
       quote.createdAt
     ));
@@ -637,10 +651,10 @@ export class Repository {
       (await tx(async () => {
         (await run(
           `INSERT INTO executions (id, wallet_id, wallet_address, basket_id, basket_version_id,
-                                   type, status, idempotency_key, total_usdc, fee_usdc,
+                                   type, status, idempotency_key, total_usdc, total_usdc_base_units, fee_usdc, fee_usdc_base_units,
                                    prepared_txs_json, message_hashes_json, blockhash,
                                    last_valid_block_height, expires_at, created_at, updated_at, base_execution_id, recovery_action)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
              wallet_id = excluded.wallet_id,
              wallet_address = excluded.wallet_address,
@@ -650,7 +664,9 @@ export class Repository {
              status = excluded.status,
              idempotency_key = excluded.idempotency_key,
              total_usdc = excluded.total_usdc,
+             total_usdc_base_units = excluded.total_usdc_base_units,
              fee_usdc = excluded.fee_usdc,
+             fee_usdc_base_units = excluded.fee_usdc_base_units,
              prepared_txs_json = excluded.prepared_txs_json,
              message_hashes_json = excluded.message_hashes_json,
              blockhash = excluded.blockhash,
@@ -667,9 +683,11 @@ export class Repository {
           execution.basketVersionId,
           execution.type,
           execution.status,
-          execution.idempotencyKey,
-          execution.totalUsdc,
-          execution.feeUsdc,
+           execution.idempotencyKey,
+           execution.totalUsdc,
+           execution.totalUsdcBaseUnits ?? String(usdcToBaseUnits(execution.totalUsdc)),
+           execution.feeUsdc,
+           execution.feeUsdcBaseUnits ?? String(usdcToBaseUnits(execution.feeUsdc)),
           JSON.stringify(execution.preparedTxs ?? []),
           JSON.stringify(execution.messageHashes ?? []),
           execution.blockhash ?? null,
@@ -683,16 +701,18 @@ export class Repository {
         (await run("DELETE FROM execution_legs WHERE execution_id = ?", execution.id));
         for (const leg of execution.legs ?? []) {
           (await run(
-            `INSERT INTO execution_legs (id, execution_id, mint, symbol, in_amount_usdc, fee_usdc,
+            `INSERT INTO execution_legs (id, execution_id, mint, symbol, in_amount_usdc, in_usdc_base_units, fee_usdc, fee_base_units,
                                          expected_out, actual_out, tx_signature, message_hash,
                                          status, error, side, receipt_json, input_base_units)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             leg.id,
             leg.executionId ?? execution.id,
             leg.mint,
             leg.symbol ?? "",
             leg.inAmountUsdc,
+            leg.inUsdcBaseUnits ?? String(usdcToBaseUnits(leg.inAmountUsdc)),
             leg.feeUsdc ?? 0,
+            leg.feeBaseUnits ?? String(usdcToBaseUnits(leg.feeUsdc ?? 0)),
             leg.expectedOut ?? "0",
             leg.actualOut ?? null,
             leg.txSignature ?? null,
@@ -1053,11 +1073,12 @@ export class Repository {
   // ================= Fee ledger =================
   async addFee(executionId: string, legId: string, amountUsdc: number, tsIso: string): Promise<void> {
     (await run(
-      "INSERT INTO fee_ledger (id, execution_id, leg_id, amount_usdc, token, ts) VALUES (?, ?, ?, ?, 'USDC', ?) ON CONFLICT (execution_id, leg_id) DO NOTHING",
+      "INSERT INTO fee_ledger (id, execution_id, leg_id, amount_usdc, amount_base_units, token, ts) VALUES (?, ?, ?, ?, ?, 'USDC', ?) ON CONFLICT (execution_id, leg_id) DO NOTHING",
       "fee-" + randomUUID(),
       executionId,
       legId,
       amountUsdc,
+      usdcToBaseUnits(amountUsdc),
       tsIso
     ));
   }
@@ -1067,6 +1088,7 @@ export class Repository {
       id: str(r.id),
       executionId: str(r.execution_id),
       amountUsdc: num(r.amount_usdc),
+      amountBaseUnits: r.amount_base_units == null ? undefined : str(r.amount_base_units),
       token: str(r.token, "USDC"),
       ts: str(r.ts),
     }));

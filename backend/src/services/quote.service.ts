@@ -104,9 +104,12 @@ export class QuoteService {
       basketId: basket.id,
       basketVersionId: version.id,
       usdcAmount,
+      usdcBaseUnits: String(usdcBaseUnits),
       legs,
       platformFeeUsdc,
+      platformFeeBaseUnits: String(platformFeeBaseUnits),
       netInvestUsdc,
+      netInvestBaseUnits: String(netInvestBaseUnits),
       expiresAt: new Date(now.getTime() + config.quoteValiditySec * 1000).toISOString(),
       createdAt: now.toISOString(),
     };

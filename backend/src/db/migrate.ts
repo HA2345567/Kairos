@@ -151,6 +151,9 @@ CREATE TABLE IF NOT EXISTS quotes (
   expires_at        TEXT NOT NULL,
   created_at        TEXT NOT NULL
 );
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS usdc_base_units BIGINT;
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS platform_fee_base_units BIGINT;
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS net_invest_base_units BIGINT;
 
 CREATE TABLE IF NOT EXISTS executions (
   rowid BIGSERIAL UNIQUE,
@@ -173,6 +176,8 @@ CREATE TABLE IF NOT EXISTS executions (
   updated_at           TEXT NOT NULL,
   UNIQUE (wallet_id, idempotency_key)
 );
+ALTER TABLE executions ADD COLUMN IF NOT EXISTS total_usdc_base_units BIGINT;
+ALTER TABLE executions ADD COLUMN IF NOT EXISTS fee_usdc_base_units BIGINT;
 CREATE INDEX IF NOT EXISTS idx_executions_status ON executions(status);
 CREATE INDEX IF NOT EXISTS idx_executions_idempotency ON executions(idempotency_key);
 CREATE INDEX IF NOT EXISTS idx_executions_wallet_created ON executions(wallet_address, created_at DESC);
@@ -205,6 +210,8 @@ ALTER TABLE execution_legs ADD COLUMN IF NOT EXISTS fee_usdc DOUBLE PRECISION NO
 ALTER TABLE execution_legs ADD COLUMN IF NOT EXISTS side TEXT CHECK (side IN ('buy', 'sell'));
 ALTER TABLE execution_legs ADD COLUMN IF NOT EXISTS receipt_json TEXT;
 ALTER TABLE execution_legs ADD COLUMN IF NOT EXISTS input_base_units TEXT;
+ALTER TABLE execution_legs ADD COLUMN IF NOT EXISTS in_usdc_base_units BIGINT;
+ALTER TABLE execution_legs ADD COLUMN IF NOT EXISTS fee_base_units BIGINT;
 
 CREATE TABLE IF NOT EXISTS positions (
   rowid BIGSERIAL UNIQUE,
@@ -305,6 +312,7 @@ CREATE TABLE IF NOT EXISTS fee_ledger (
   ts           TEXT NOT NULL
 );
 ALTER TABLE fee_ledger ADD COLUMN IF NOT EXISTS leg_id TEXT;
+ALTER TABLE fee_ledger ADD COLUMN IF NOT EXISTS amount_base_units BIGINT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_fee_ledger_execution_leg ON fee_ledger(execution_id, leg_id);
 CREATE INDEX IF NOT EXISTS idx_fee_ledger_execution ON fee_ledger(execution_id);
 
