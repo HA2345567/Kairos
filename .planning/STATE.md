@@ -5,7 +5,7 @@ milestone_name: Devnet product aligned to PRD v4.0
 status: in_progress
 stopped_at: Live devnet bootstrap blocked by unfunded relayer
 last_updated: "2026-10-17T13:22:06Z"
-state_head: c8f55a0b07d3dddb741fab24d12904d675b3bace
+state_head: bf2d268eeb4f36a9559b32c4f1af3b63ab68c09f
 progress:
   total_phases: 6
   completed_phases: 0
