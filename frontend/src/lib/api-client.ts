@@ -109,6 +109,10 @@ class KairosApiClient {
     return { ...headers, ...additional };
   }
 
+  private idempotencyHeaders(idempotencyKey: string): Record<string, string> {
+    return { 'Idempotency-Key': idempotencyKey };
+  }
+
   private async handleResponse<T>(response: Response): Promise<T> {
     const data = await response.json();
 
@@ -228,11 +232,19 @@ class KairosApiClient {
 
   // Positions endpoints
   async preparePosition(request: PreparePositionRequest): Promise<PreparePositionResponse> {
-    return this.post<PreparePositionResponse>(API_ENDPOINTS.POSITIONS_PREPARE, request);
+    return this.post<PreparePositionResponse>(
+      API_ENDPOINTS.POSITIONS_PREPARE,
+      request,
+      this.idempotencyHeaders(request.idempotencyKey),
+    );
   }
 
   async submitPosition(request: SubmitPositionRequest): Promise<SubmitPositionResponse> {
-    return this.post<SubmitPositionResponse>(API_ENDPOINTS.POSITIONS_SUBMIT, request);
+    return this.post<SubmitPositionResponse>(
+      API_ENDPOINTS.POSITIONS_SUBMIT,
+      request,
+      this.idempotencyHeaders(request.idempotencyKey ?? `submit:${request.executionId}`),
+    );
   }
 
   async getExecution(id: string): Promise<Execution> {
@@ -244,7 +256,7 @@ class KairosApiClient {
     const response = await this.post<{ execution: Execution }>(API_ENDPOINTS.EXECUTIONS_RETRY(id), {
       idempotencyKey,
       walletAddress
-    });
+    }, this.idempotencyHeaders(idempotencyKey));
     return response.execution;
   }
 
@@ -252,7 +264,7 @@ class KairosApiClient {
     const response = await this.post<{ execution: Execution }>(API_ENDPOINTS.EXECUTIONS_UNWIND(id), {
       idempotencyKey,
       walletAddress
-    });
+    }, this.idempotencyHeaders(idempotencyKey));
     return response.execution;
   }
 
@@ -268,19 +280,23 @@ class KairosApiClient {
     const response = await this.post<{ execution: Execution }>(API_ENDPOINTS.POSITION_REBALANCE_PREPARE(id), {
       idempotencyKey,
       walletAddress
-    });
+    }, this.idempotencyHeaders(idempotencyKey));
     return response.execution;
   }
 
   async prepareClosePreview(id: string) {
-    return this.post(API_ENDPOINTS.POSITION_CLOSE_PREPARE(id), {});
+    return this.post(
+      API_ENDPOINTS.POSITION_CLOSE_PREPARE(id),
+      {},
+      this.idempotencyHeaders(`close-preview:${id}`),
+    );
   }
 
   async submitCloseExecution(id: string, idempotencyKey: string, walletAddress: string): Promise<Execution> {
     const response = await this.post<{ execution: Execution }>(API_ENDPOINTS.POSITION_CLOSE_PREPARE(id), {
       idempotencyKey,
       walletAddress
-    });
+    }, this.idempotencyHeaders(idempotencyKey));
     return response.execution;
   }
 

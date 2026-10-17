@@ -11,9 +11,14 @@ const { repository } = await import("../src/db/repository");
 const { processLandingJobsOnce } = await import("../src/workers/landing");
 const { executionService } = await import("../src/services/execution.service");
 const { config } = await import("../src/config");
-const { all } = await import("../src/db/postgres");
+const { all, run } = await import("../src/db/postgres");
 const { getConnection, getFallbackConnection } = await import("../src/chain/connection");
 const { resolveUsdcAsset } = await import("../src/services/portfolio.service");
+const {
+  drainOutboxOnce,
+  setOutboxTransport,
+  devnetLocalOutboxTransport,
+} = await import("../src/workers/outbox");
 
 async function fixture(status: "PREPARED" | "SUBMITTED" = "SUBMITTED") {
   const id = `landing-recovery-${randomUUID()}`;
@@ -208,6 +213,111 @@ test("submission rolls back on audit failure and concurrent retries enqueue once
   assert.equal((await eventsFor(id)).length, 1);
   await processLandingJobsOnce();
   assert.equal((await repository.getExecution(id))!.status, "COMPLETED");
+});
+
+async function clearPendingOutbox(): Promise<void> {
+  const claims = await repository.claimOutbox(1_000, Date.now() + 60_000);
+  for (const claim of claims) await repository.acknowledgeOutbox(claim.id, claim.leaseToken);
+}
+
+test("execution notifications dedupe by execution id and event type", async () => {
+  await clearPendingOutbox();
+  const executionId = `outbox-identity-${randomUUID()}`;
+
+  await repository.enqueueOutbox("execution.completed", { executionId, status: "COMPLETED" });
+  await repository.enqueueOutbox("execution.completed", {
+    executionId,
+    status: "COMPLETED",
+    observedAt: new Date().toISOString(),
+  });
+  await repository.enqueueOutbox("execution.failed", { executionId, error: "RETRYABLE" });
+
+  const executionRows = await all<{ event: string; execution_id: string; event_type: string }>(
+    "SELECT event, execution_id, event_type FROM outbox WHERE execution_id = ? ORDER BY rowid ASC",
+    executionId
+  );
+  assert.equal(executionRows.length, 2);
+  assert.deepEqual(executionRows.map((row) => row.event), ["execution.completed", "execution.failed"]);
+  assert.ok(executionRows.every((row) => row.execution_id === executionId && row.event_type === row.event));
+
+  const nonExecutionEvent = `position.modified.${randomUUID()}`;
+  await repository.enqueueOutbox(nonExecutionEvent, { positionId: "p1", changed: true });
+  await repository.enqueueOutbox(nonExecutionEvent, { changed: true, positionId: "p1" });
+  await repository.enqueueOutbox(nonExecutionEvent, { positionId: "p1", changed: false });
+  assert.equal(
+    (await all("SELECT id FROM outbox WHERE event = ?", nonExecutionEvent)).length,
+    2,
+    "non-execution identity is deterministic but still includes meaningful payload changes"
+  );
+});
+
+test("outbox claims persist attempts, recover after lease expiry, and reject stale acknowledgements", async () => {
+  await clearPendingOutbox();
+  const event = `execution.lease-${randomUUID()}`;
+  const executionId = `outbox-lease-${randomUUID()}`;
+  await repository.enqueueOutbox(event, { executionId });
+
+  const first = (await repository.claimOutbox(1))[0];
+  assert.ok(first);
+  assert.equal(first.attempts, 1);
+  assert.ok(first.leaseUntilMs > Date.now());
+  assert.ok(first.leaseToken);
+
+  const withinLease = await repository.claimOutbox(1);
+  assert.equal(withinLease.some((claim) => claim.id === first.id), false);
+
+  const recovered = (await repository.claimOutbox(1, first.leaseUntilMs + 1))[0];
+  assert.equal(recovered.id, first.id);
+  assert.equal(recovered.attempts, 2);
+  assert.notEqual(recovered.leaseToken, first.leaseToken);
+  assert.equal(await repository.acknowledgeOutbox(first.id, first.leaseToken), false);
+  assert.equal(await repository.acknowledgeOutbox(recovered.id, recovered.leaseToken), true);
+
+  const row = (await all<{ attempts: number; sent_at: string | null }>(
+    "SELECT attempts, sent_at FROM outbox WHERE id = ?",
+    first.id
+  ))[0];
+  assert.equal(Number(row.attempts), 2);
+  assert.ok(row.sent_at);
+});
+
+test("outbox delivery remains pending without acknowledgement and sends only after transport acknowledgement", async () => {
+  await clearPendingOutbox();
+  const event = `execution.transport-${randomUUID()}`;
+  const executionId = `outbox-transport-${randomUUID()}`;
+  await repository.enqueueOutbox(event, { executionId });
+  const [row] = await all<{ id: string }>("SELECT id FROM outbox WHERE execution_id = ?", executionId);
+
+  setOutboxTransport(null);
+  await drainOutboxOnce();
+  let stored = (await all<{ attempts: number; sent_at: string | null }>(
+    "SELECT attempts, sent_at FROM outbox WHERE id = ?",
+    row.id
+  ))[0];
+  assert.equal(Number(stored.attempts), 1);
+  assert.equal(stored.sent_at, null);
+
+  await run("UPDATE outbox SET lease_until_ms = 0 WHERE id = ?", row.id);
+  setOutboxTransport({ deliver: async () => false });
+  await drainOutboxOnce();
+  stored = (await all<{ attempts: number; sent_at: string | null }>(
+    "SELECT attempts, sent_at FROM outbox WHERE id = ?",
+    row.id
+  ))[0];
+  assert.equal(Number(stored.attempts), 2);
+  assert.equal(stored.sent_at, null);
+
+  await run("UPDATE outbox SET lease_until_ms = 0 WHERE id = ?", row.id);
+  setOutboxTransport({ deliver: async () => ({ acknowledged: true }) });
+  await drainOutboxOnce();
+  stored = (await all<{ attempts: number; sent_at: string | null }>(
+    "SELECT attempts, sent_at FROM outbox WHERE id = ?",
+    row.id
+  ))[0];
+  assert.equal(Number(stored.attempts), 3);
+  assert.ok(stored.sent_at);
+
+  setOutboxTransport(devnetLocalOutboxTransport);
 });
 
 test("confirmed status waits for a receipt, then persists actual output and balance", async () => {

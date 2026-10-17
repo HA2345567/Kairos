@@ -525,6 +525,47 @@ describe("HTTP surface (inject)", () => {
     assert.equal(badQuote.json().error, "MIN_INVESTMENT");
   });
 
+  test("blocks restricted regions before quote validation/provider work", async () => {
+    const response = await buildApp().inject({
+      method: "POST",
+      url: "/v1/quotes",
+      headers: { "x-region": "ir" },
+      payload: { basket: "test-basket", usdcAmount: 50 },
+    });
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.json().error, "REGION_BLOCKED");
+  });
+
+  test("requires the Idempotency-Key header and rejects a mismatched body compatibility key", async () => {
+    const walletAddress = Keypair.generate().publicKey.toBase58();
+    const missingHeader = await buildApp().inject({
+      method: "POST",
+      url: "/v1/positions/prepare",
+      payload: {
+        basket: "test-basket",
+        usdc: 50,
+        walletAddress,
+        idempotencyKey: "legacy-body-only",
+      },
+    });
+    assert.equal(missingHeader.statusCode, 400);
+    assert.equal(missingHeader.json().error, "MISSING_IDEMPOTENCY_KEY");
+
+    const mismatched = await buildApp().inject({
+      method: "POST",
+      url: "/v1/positions/prepare",
+      headers: { "Idempotency-Key": "canonical-header-key" },
+      payload: {
+        basket: "test-basket",
+        usdc: 50,
+        walletAddress,
+        idempotencyKey: "different-legacy-body-key",
+      },
+    });
+    assert.equal(mismatched.statusCode, 400);
+    assert.equal(mismatched.json().error, "IDEMPOTENCY_KEY_MISMATCH");
+  });
+
   test("NAV history returns only the basket's hypothetical snapshot series", async () => {
     (await seedRegistry());
     const start = Date.now() - 12 * 3600_000;

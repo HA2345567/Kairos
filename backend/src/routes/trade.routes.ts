@@ -4,7 +4,7 @@ import { quoteService } from "../services/quote.service";
 import { executionService } from "../services/execution.service";
 import { portfolioService } from "../services/portfolio.service";
 import { rebalanceService } from "../services/rebalance.service";
-import { rateLimit } from "../middleware";
+import { geoCheck, rateLimit, requireIdempotencyKey } from "../middleware";
 import { AppError } from "../errors";
 import { authService } from "../services/auth.service";
 
@@ -79,6 +79,7 @@ export function registerTradeRoutes(app: KairosHttpServer): void {
   const readGuard = rateLimit("trade-read", { max: 120, windowMs: 60_000 });
 
   app.post("/v1/quotes", async (req, reply) => {
+    if (!geoCheck(req, reply)) return;
     if (!quoteGuard(req, reply)) return;
     const { basket, usdcAmount } = (req.body || {}) as { basket?: string; usdcAmount?: number };
     if (!basket || !usdcAmount) return reply.status(400).send({ error: "INVALID_QUOTE_PARAMETERS" });
@@ -93,13 +94,15 @@ export function registerTradeRoutes(app: KairosHttpServer): void {
   // ---- invest: prepare → sign (client) → submit → poll ----
   app.post("/v1/positions/prepare", async (req, reply) => {
     if (!moneyGuard(req, reply)) return;
-    const { basket, usdc, walletAddress, idempotencyKey } = (req.body || {}) as {
+    const { basket, usdc, walletAddress, idempotencyKey: bodyIdempotencyKey } = (req.body || {}) as {
       basket?: string;
       usdc?: number;
       walletAddress?: string;
       idempotencyKey?: string;
     };
-    if (!basket || !usdc || !walletAddress || !idempotencyKey) {
+    const idempotencyKey = requireIdempotencyKey(req, reply, bodyIdempotencyKey);
+    if (!idempotencyKey) return;
+    if (!basket || !usdc || !walletAddress) {
       return reply.status(400).send({ error: "MISSING_REQUIRED_PREPARE_FIELDS" });
     }
     const sessionWallet = requireWallet(req, reply, walletAddress);
@@ -115,11 +118,13 @@ export function registerTradeRoutes(app: KairosHttpServer): void {
 
   app.post("/v1/positions/submit", async (req, reply) => {
     if (!moneyGuard(req, reply)) return;
-    const { executionId, signedTxs, idempotencyKey } = (req.body || {}) as {
+    const { executionId, signedTxs, idempotencyKey: bodyIdempotencyKey } = (req.body || {}) as {
       executionId?: string;
       signedTxs?: string[];
       idempotencyKey?: string;
     };
+    const idempotencyKey = requireIdempotencyKey(req, reply, bodyIdempotencyKey);
+    if (!idempotencyKey) return;
     if (!executionId || !signedTxs) {
       return reply.status(400).send({ error: "MISSING_EXECUTION_OR_SIGNED_TXS" });
     }
@@ -149,13 +154,13 @@ export function registerTradeRoutes(app: KairosHttpServer): void {
   app.post("/v1/executions/:id/retry", async (req, reply) => {
     if (!moneyGuard(req, reply)) return;
     const { id } = req.params;
-    const { idempotencyKey, walletAddress } = (req.body || {}) as {
+    const { idempotencyKey: bodyIdempotencyKey, walletAddress } = (req.body || {}) as {
       idempotencyKey?: string;
       walletAddress?: string;
     };
-    if (!idempotencyKey || !walletAddress) {
-      return reply.status(400).send({ error: "MISSING_IDEMPOTENCY_KEY_OR_WALLET" });
-    }
+    const idempotencyKey = requireIdempotencyKey(req, reply, bodyIdempotencyKey);
+    if (!idempotencyKey) return;
+    if (!walletAddress) return reply.status(400).send({ error: "MISSING_IDEMPOTENCY_KEY_OR_WALLET" });
     const sessionWallet = requireWallet(req, reply, walletAddress);
     if (!sessionWallet) return;
     if (!(await requireExecutionWallet(req, reply, id))) return;
@@ -166,13 +171,13 @@ export function registerTradeRoutes(app: KairosHttpServer): void {
   app.post("/v1/executions/:id/unwind", async (req, reply) => {
     if (!moneyGuard(req, reply)) return;
     const { id } = req.params;
-    const { idempotencyKey, walletAddress } = (req.body || {}) as {
+    const { idempotencyKey: bodyIdempotencyKey, walletAddress } = (req.body || {}) as {
       idempotencyKey?: string;
       walletAddress?: string;
     };
-    if (!idempotencyKey || !walletAddress) {
-      return reply.status(400).send({ error: "MISSING_IDEMPOTENCY_KEY_OR_WALLET" });
-    }
+    const idempotencyKey = requireIdempotencyKey(req, reply, bodyIdempotencyKey);
+    if (!idempotencyKey) return;
+    if (!walletAddress) return reply.status(400).send({ error: "MISSING_IDEMPOTENCY_KEY_OR_WALLET" });
     const sessionWallet = requireWallet(req, reply, walletAddress);
     if (!sessionWallet) return;
     if (!(await requireExecutionWallet(req, reply, id))) return;
@@ -203,13 +208,13 @@ export function registerTradeRoutes(app: KairosHttpServer): void {
   app.post("/v1/positions/:id/rebalance/prepare", async (req, reply) => {
     if (!moneyGuard(req, reply)) return;
     const { id } = req.params;
-    const { idempotencyKey, walletAddress } = (req.body || {}) as {
+    const { idempotencyKey: bodyIdempotencyKey, walletAddress } = (req.body || {}) as {
       idempotencyKey?: string;
       walletAddress?: string;
     };
-    if (!idempotencyKey || !walletAddress) {
-      return reply.status(400).send({ error: "MISSING_IDEMPOTENCY_KEY_OR_WALLET" });
-    }
+    const idempotencyKey = requireIdempotencyKey(req, reply, bodyIdempotencyKey);
+    if (!idempotencyKey) return;
+    if (!walletAddress) return reply.status(400).send({ error: "MISSING_IDEMPOTENCY_KEY_OR_WALLET" });
     const sessionWallet = await requirePositionWallet(req, reply, id, walletAddress);
     if (!sessionWallet) return;
     const execution = await rebalanceService.prepareRebalance(id, idempotencyKey, sessionWallet);
@@ -219,13 +224,15 @@ export function registerTradeRoutes(app: KairosHttpServer): void {
   app.post("/v1/positions/:id/close/prepare", async (req, reply) => {
     if (!moneyGuard(req, reply)) return;
     const { id } = req.params;
-    const { idempotencyKey, walletAddress } = (req.body || {}) as {
+    const { idempotencyKey: bodyIdempotencyKey, walletAddress } = (req.body || {}) as {
       idempotencyKey?: string;
       walletAddress?: string;
     };
+    const idempotencyKey = requireIdempotencyKey(req, reply, bodyIdempotencyKey);
+    if (!idempotencyKey) return;
     const sessionWallet = await requirePositionWallet(req, reply, id, walletAddress);
     if (!sessionWallet) return;
-    if (!idempotencyKey || !walletAddress) {
+    if (!walletAddress) {
       // Preview-only close still requires the owning wallet session.
       const preview = await portfolioService.prepareClose(id);
       return { preview };

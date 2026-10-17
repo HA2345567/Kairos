@@ -47,6 +47,49 @@ const jsonStr = (v: unknown, d = "null"): string =>
   v === undefined || v === null ? d : typeof v === "string" ? v : JSON.stringify(v);
 const nowIso = (): string => new Date().toISOString();
 
+function stableJsonValue(value: unknown, seen = new Set<object>()): unknown {
+  if (value === null || typeof value !== "object") return value;
+  if (value instanceof Date) return value.toISOString();
+  if (seen.has(value)) throw new TypeError("OUTBOX_PAYLOAD_MUST_BE_ACYCLIC");
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) return value.map((item) => stableJsonValue(item, seen));
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.keys(record)
+        .sort()
+        .filter((key) => record[key] !== undefined)
+        .map((key) => [key, stableJsonValue(record[key], seen)])
+    );
+  } finally {
+    seen.delete(value);
+  }
+}
+
+function stableOutboxPayload(payload: unknown): string {
+  if (payload === undefined) return "{}";
+  if (typeof payload === "string") return payload;
+  return JSON.stringify(stableJsonValue(payload)) ?? "null";
+}
+
+function executionNotificationId(event: string, payload: unknown): string | null {
+  if (!event.startsWith("execution.")) return null;
+  let candidate: unknown = payload;
+  if (typeof candidate === "string") {
+    try {
+      candidate = JSON.parse(candidate);
+    } catch {
+      return null;
+    }
+  }
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    return null;
+  }
+  const record = candidate as Record<string, unknown>;
+  const value = record.executionId ?? record.execution_id;
+  return value === undefined || value === null || String(value).length === 0 ? null : String(value);
+}
+
 function mapUser(r: Row): User {
   return {
     id: str(r.id),
@@ -1096,26 +1139,58 @@ export class Repository {
 
   // ================= Outbox =================
   async enqueueOutbox(event: string, payload: unknown): Promise<void> {
-    const serialized = jsonStr(payload, "{}");
-    const dedupeKey = createHash("sha256").update(event).update(serialized).digest("hex");
+    const serialized = stableOutboxPayload(payload);
+    const executionId = executionNotificationId(event, payload);
+    // Execution notifications have one durable identity per execution and event
+    // type. Other events retain a content-based identity, with separators and
+    // canonical JSON so equivalent payloads cannot collide accidentally or
+    // duplicate merely because their object keys were inserted in another order.
+    const dedupeKey = createHash("sha256")
+      .update(executionId ? "execution\0" : "event\0")
+      .update(executionId ?? event)
+      .update("\0")
+      .update(executionId ? event : serialized)
+      .digest("hex");
     (await run(
-      "INSERT INTO outbox (id, event, payload, created_at, sent_at, dedupe_key) VALUES (?, ?, ?, ?, NULL, ?) ON CONFLICT (dedupe_key) DO NOTHING",
+      `INSERT INTO outbox
+         (id, event, event_type, execution_id, payload, created_at, sent_at, dedupe_key, attempts, lease_until_ms)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 0, 0)
+       ON CONFLICT DO NOTHING`,
       "outbox-" + randomUUID(),
       event,
+      event,
+      executionId,
       serialized,
       nowIso(),
       dedupeKey
     ));
   }
 
-  // At-least-once delivery: returns unsent rows; caller must markOutboxSent(id).
-  async claimOutbox(limit: number): Promise<{ id: string; event: string; payload: any }[]> {
+  // At-least-once delivery: each claim gets a durable lease token. The token
+  // is required for acknowledgement so a worker that lost its lease cannot
+  // mark a later worker's delivery as sent.
+  async claimOutbox(
+    limit: number,
+    nowMs: number = Date.now()
+  ): Promise<{ id: string; event: string; payload: any; attempts: number; leaseUntilMs: number; leaseToken: string }[]> {
+    if (limit <= 0) return [];
+    const leaseToken = randomUUID();
+    const leaseUntilMs = nowMs + 30_000;
     return (await all<Row>(
-      `UPDATE outbox SET lease_until_ms = ? WHERE id IN (
-        SELECT id FROM outbox WHERE sent_at IS NULL AND lease_until_ms < ?
-        ORDER BY rowid ASC LIMIT ? FOR UPDATE SKIP LOCKED
-      ) RETURNING id, event, payload`,
-      Date.now() + 30_000, Date.now(), limit
+      `UPDATE outbox SET
+         lease_until_ms = ?,
+         lease_token = ?,
+         attempts = attempts + 1
+       WHERE id IN (
+         SELECT id FROM outbox
+          WHERE sent_at IS NULL AND lease_until_ms < ?
+          ORDER BY rowid ASC LIMIT ? FOR UPDATE SKIP LOCKED
+       )
+       RETURNING id, event, payload, attempts, lease_until_ms, lease_token`,
+      leaseUntilMs,
+      leaseToken,
+      nowMs,
+      limit
     )).map((r) => {
       const raw = r.payload === null || r.payload === undefined ? null : str(r.payload);
       let payload: any = raw;
@@ -1126,12 +1201,35 @@ export class Repository {
           payload = raw;
         }
       }
-      return { id: str(r.id), event: str(r.event), payload };
+      return {
+        id: str(r.id),
+        event: str(r.event),
+        payload,
+        attempts: num(r.attempts),
+        leaseUntilMs: num(r.lease_until_ms),
+        leaseToken: str(r.lease_token),
+      };
     });
   }
 
-  async markOutboxSent(id: string): Promise<void> {
-    (await run("UPDATE outbox SET sent_at = ? WHERE id = ?", nowIso(), id));
+  async acknowledgeOutbox(id: string, leaseToken: string): Promise<boolean> {
+    return (await run(
+      `UPDATE outbox
+          SET sent_at = ?, lease_until_ms = 0, lease_token = NULL
+        WHERE id = ?
+          AND sent_at IS NULL
+          AND lease_token = ?
+          AND lease_until_ms >= ?`,
+      nowIso(),
+      id,
+      leaseToken,
+      Date.now()
+    )) === 1;
+  }
+
+  async markOutboxSent(id: string, leaseToken: string): Promise<void> {
+    const acknowledged = await this.acknowledgeOutbox(id, leaseToken);
+    if (!acknowledged) throw new Error("OUTBOX_LEASE_LOST");
   }
 
   // ================= Jobs (landing queue) =================

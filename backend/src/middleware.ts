@@ -34,8 +34,9 @@ export const RESTRICTED_REGIONS: readonly string[] = ["KP", "IR", "CU", "SY"];
 function headerValue(req: MiddlewareRequest, name: string): string | undefined {
   const raw =
     req.headers[name] ?? req.headers[name.toLowerCase()] ?? req.headers[name.toUpperCase()];
-  if (typeof raw === "string") return raw;
-  if (Array.isArray(raw) && typeof raw[0] === "string") return raw[0];
+  const candidate = raw ?? Object.entries(req.headers).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
+  if (typeof candidate === "string") return candidate;
+  if (Array.isArray(candidate) && typeof candidate[0] === "string") return candidate[0];
   return undefined;
 }
 
@@ -83,4 +84,29 @@ export function geoCheck(req: MiddlewareRequest, reply: MiddlewareReply): boolea
     return false;
   }
   return true;
+}
+
+/**
+ * Require the PRD's canonical Idempotency-Key header for money mutations.
+ *
+ * Existing callers may continue to include the legacy body `idempotencyKey`,
+ * but only as a compatibility echo: the header is still mandatory and the
+ * values must match exactly. The normalized header value is always returned
+ * to the route, so a body-only key can never weaken the header contract.
+ */
+export function requireIdempotencyKey(
+  req: MiddlewareRequest,
+  reply: MiddlewareReply,
+  bodyKey?: unknown,
+): string | null {
+  const headerKey = headerValue(req, "idempotency-key")?.trim();
+  if (!headerKey) {
+    reply.status(400).send({ error: "MISSING_IDEMPOTENCY_KEY" });
+    return null;
+  }
+  if (bodyKey !== undefined && bodyKey !== headerKey) {
+    reply.status(400).send({ error: "IDEMPOTENCY_KEY_MISMATCH" });
+    return null;
+  }
+  return headerKey;
 }

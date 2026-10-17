@@ -294,13 +294,27 @@ CREATE TABLE IF NOT EXISTS outbox (
   rowid BIGSERIAL UNIQUE,
   id         TEXT PRIMARY KEY,
   event      TEXT NOT NULL,
+  event_type TEXT,
+  execution_id TEXT,
   payload    TEXT,
   created_at TEXT NOT NULL,
-  sent_at    TEXT
-  ,dedupe_key TEXT UNIQUE
-  ,lease_until_ms BIGINT NOT NULL DEFAULT 0
+  sent_at    TEXT,
+  dedupe_key TEXT UNIQUE,
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  lease_until_ms BIGINT NOT NULL DEFAULT 0,
+  lease_token TEXT
 );
+ALTER TABLE outbox ADD COLUMN IF NOT EXISTS event_type TEXT;
+ALTER TABLE outbox ADD COLUMN IF NOT EXISTS execution_id TEXT;
+ALTER TABLE outbox ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE outbox ADD COLUMN IF NOT EXISTS lease_until_ms BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE outbox ADD COLUMN IF NOT EXISTS lease_token TEXT;
+UPDATE outbox SET event_type = event WHERE event_type IS NULL;
 CREATE INDEX IF NOT EXISTS idx_outbox_sent ON outbox(sent_at);
+CREATE INDEX IF NOT EXISTS idx_outbox_pending_lease ON outbox(sent_at, lease_until_ms);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_outbox_execution_event
+  ON outbox(execution_id, event_type)
+  WHERE execution_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS fee_ledger (
   rowid BIGSERIAL UNIQUE,

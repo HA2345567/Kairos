@@ -254,9 +254,14 @@ export interface JobRow {
 export interface OutboxRow {
   id: string;
   event: string;
+  eventType?: string;
+  executionId?: string | null;
   payload: string | null;
   createdAt: string;
   sentAt: string | null;
+  attempts: number;
+  leaseUntilMs: number;
+  leaseToken?: string | null;
 }
 
 export interface FeeRow {
