@@ -2,7 +2,7 @@
 
 **Audit date:** 2026-10-17
 **Source of truth:** PRD v4.0 supplied in the working session.
-**Repository state audited:** `2e24357 docs: align demo checkpoint state head`
+**Repository state audited:** `ce0cc40 feat: persist execution evidence and rebalance state`
 
 ## Executive result
 
@@ -25,13 +25,13 @@ The score below is deliberately a **local implementation coverage** score, not a
 claim of production or devnet readiness:
 
 - Functional requirements audited: **25** (`FR-01` through `FR-25`).
-- Locally complete: **13**.
-- Partial or architecture-deviated: **12**.
+- Locally complete: **14**.
+- Partial or architecture-deviated: **11**.
 - Completely absent from the functional list: **0**. `FR-16` is present as a
   direct-wallet UI flow but is not yet an authoritative backend/config-driven
   path, so it is counted as partial rather than fully complete.
-- Weighted score: `(13 + 0.5 × 12) / 25 = 76%` local functional coverage.
-- Must-only weighted score (`FR-01`–`FR-20`): approximately **80%** locally.
+- Weighted score: `(14 + 0.5 × 11) / 25 = 78%` local functional coverage.
+- Must-only weighted score (`FR-01`–`FR-20`): approximately **82.5%** locally.
 - Live devnet acceptance: **0 complete end-to-end acceptance runs**. The
   relayer has no SOL, the router is not executable on devnet, and no user
   transaction was attempted.
@@ -39,6 +39,25 @@ claim of production or devnet readiness:
 The score is useful for prioritization only. A partial requirement receives 0.5
 even when its local code is substantial but its acceptance proof or required
 production boundary is incomplete.
+
+### Post-audit implementation checkpoint
+
+Since the initial matrix was written, the following backend/core items were
+implemented and committed in `61e0551` and `ce0cc40`:
+
+- `/v1/quotes` now applies the region gate before quote work.
+- Money mutations require the canonical `Idempotency-Key` header; clients send
+  it and legacy body keys must match rather than silently substitute it.
+- Execution request hashes persist with support records.
+- Execution outbox identity is `(execution_id,event_type)`, with attempts,
+  lease tokens, and acknowledgement only after transport acceptance.
+- Receipt provenance records finalized versus confirmed commitment.
+- Completed rebalances advance the position to the target version; mixed
+  outcomes preserve the old version and set `REBALANCE_PARTIAL`.
+
+This moves the local score from the initial 76% audit estimate to the 78%
+estimate above. It does not change the live-devnet score: no live acceptance
+run has been completed.
 
 ## Architecture alignment
 
@@ -65,7 +84,7 @@ an unnecessary rewrite at this stage.
 | FR-01 | Complete-local | `basket_versions` and legs are append-only; edits create new versions; DB triggers reject mutation. |
 | FR-02 | Complete-local | Service validation plus PostgreSQL deferred weight trigger enforce positive unique legs totaling 10,000 bps. |
 | FR-03 | Partial | Unknown/denylisted/inactive mints are rejected, but the PRD's liquidity evidence and backtestability fields are not authoritative. |
-| FR-04 | Partial | `geoCheck` exists and protects auth routes; `/v1/quotes` does not currently apply the region gate before quote work. |
+| FR-04 | Complete-local | `geoCheck` now runs before `/v1/quotes` validation and provider work. |
 | FR-05 | Complete-local | Prepare builds per-leg transactions, stores serialized bytes/hashes, fee, expiry, blockhash, and execution ID. |
 | FR-06 | Partial | Real RPC simulation is used outside simulation mode; offline mode intentionally substitutes static signer/compile checks, and live simulation has not been proven. |
 | FR-07 | Complete-local | Submit compares message hashes/bytes and verifies every required Ed25519 signature before queueing. |
