@@ -5,7 +5,7 @@ milestone_name: Devnet product aligned to PRD v4.0
 status: in_progress
 stopped_at: Program-backed rebalance and demo checkpoint
 last_updated: "2026-10-17T16:46:33Z"
-state_head: 5784a8a4d1ed0b94412a1655bfed9f52fb8f720e
+state_head: 72e08d05bdf04fbfd11b2b124f89ecb14519e6db
 progress:
   total_phases: 6
   completed_phases: 0
