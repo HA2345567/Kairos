@@ -3,9 +3,9 @@ gsd_state_version: "1.0"
 milestone: v1.0
 milestone_name: Devnet product aligned to PRD v4.0
 status: in_progress
-stopped_at: Base-unit precision checkpoint
-last_updated: "2026-10-17T13:03:57Z"
-state_head: 90b4f5e8e7da0fcf8fb0150397eeed438fda99f0
+stopped_at: Base-unit persistence checkpoint
+last_updated: "2026-10-17T13:14:28Z"
+state_head: c8f55a0b07d3dddb741fab24d12904d675b3bace
 progress:
   total_phases: 6
   completed_phases: 0
@@ -18,7 +18,7 @@ current_phase: 1
 
 # Current Position
 
-Phase 1 — Catalog truth and foundation. Plan 01 is implemented and locally verified; Phase 1 still retains registry/oracle and live-devnet acceptance gaps. SIWS sessions now bind protected money-path routes and frontend wallet actions, and quote/execution allocation now uses integer USDC base units. Phase 3 has partial local verification but remains open for live receipt/restart evidence.
+Phase 1 — Catalog truth and foundation. Plan 01 is implemented and locally verified; Phase 1 still retains registry/oracle and live-devnet acceptance gaps. SIWS sessions now bind protected money-path routes and frontend wallet actions, and quote/execution/fee persistence now carries integer USDC base units alongside legacy display amounts. Phase 3 has partial local verification but remains open for live receipt/restart evidence.
 
 ## Implemented; local verification complete
 
@@ -39,7 +39,7 @@ Phase 1 — Catalog truth and foundation. Plan 01 is implemented and locally ver
 
 - Replaced SQLite with a PostgreSQL repository and async queries. Backend startup loads `backend/.env` from its module path; Neon pooled connections use `public` because the pooler rejects startup `search_path` parameters. The Neon connection and migration smoke check passed.
 - Backend typecheck and bundle passed. Latest backend suite: 55 passed, 3 devnet-only skipped; frontend typecheck, production build, and tests passed: 20 passed, 1 live-simulation skipped. `cargo check` previously passed with Anchor macro cfg warnings. The earlier Solana SBF build completed.
-- Latest precision/security checkpoint: backend suite 61 passed, 3 devnet-only skipped; frontend suite 21 passed, 1 live-simulation skipped. Backend and frontend builds passed; the Vite build still reports the existing large-chunk warning.
+- Latest precision/security checkpoint: backend suite 62 passed, 3 devnet-only skipped; frontend suite 21 passed, 1 live-simulation skipped. Backend and frontend builds passed; the Vite build still reports the existing large-chunk warning. PostgreSQL migration smoke check passed after adding quote/execution/fee base-unit columns.
 - Follow-up security audit: both swap instruction account contexts now box global and basket accounts to fit the BPF stack; SBF compilation no longer reports the prior 4 KiB stack overflow. Submission now verifies every required Ed25519 signature and the prepared wallet signer. Malformed messages, mismatched messages, and invalid signatures are rejected without consuming the still-valid PREPARED execution. Added a regression test; backend typecheck and tests pass.
 - Allocated platform fees across open, retry, close, unwind, and rebalance sell legs. Each confirmed leg records only its own fee; the PostgreSQL ledger deduplicates by execution and leg. Added conservation and idempotency tests.
 - Added a direct, wallet-signed devnet USDC withdrawal to any Solana address, including recipient ATA creation; this bypasses the server queue and kill switch. On-chain withdrawal acceptance remains pending.
@@ -73,7 +73,7 @@ Immediate follow-up: obtain the missing operator access for live devnet acceptan
 
 1. Configure the Pyth API key/feed IDs and verified SOL benchmark, then validate freshness and historical snapshots.
 2. Provide a funded devnet deployment/relayer wallet and working RPC/faucet access; deploy and initialize the updated router, then exercise two-wallet publication and a real investment.
-3. Recheck integer base-unit persistence in PostgreSQL columns and finish any remaining catalog/registry acceptance gaps.
+3. Finish any remaining catalog/registry acceptance gaps and verify the base-unit columns against live deployment data.
 4. Continue through execution, landing/recovery, portfolio, governance, and devnet release phases; do not mark the milestone complete until PRD acceptance evidence exists.
 
 ## Rebalance and program builder follow-up (2026-10-17)
@@ -88,6 +88,6 @@ Immediate follow-up: obtain the missing operator access for live devnet acceptan
 
 ## Session
 
-**Last session:** 2026-10-17T13:03:57Z
-**Stopped at:** Base-unit precision checkpoint
+**Last session:** 2026-10-17T13:14:28Z
+**Stopped at:** Base-unit persistence checkpoint
 **Resume file:** .planning/phases/01-catalog-truth-and-foundation/01-VERIFICATION.md
