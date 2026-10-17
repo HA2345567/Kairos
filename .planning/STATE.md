@@ -3,9 +3,9 @@ gsd_state_version: "1.0"
 milestone: v1.0
 milestone_name: Devnet product aligned to PRD v4.0
 status: in_progress
-stopped_at: Live devnet bootstrap blocked by unfunded relayer
-last_updated: "2026-10-17T13:22:06Z"
-state_head: bf2d268eeb4f36a9559b32c4f1af3b63ab68c09f
+stopped_at: Program-backed rebalance and demo checkpoint
+last_updated: "2026-10-17T16:46:33Z"
+state_head: 5784a8a4d1ed0b94412a1655bfed9f52fb8f720e
 progress:
   total_phases: 6
   completed_phases: 0
@@ -18,7 +18,7 @@ current_phase: 1
 
 # Current Position
 
-Phase 1 — Catalog truth and foundation. Plan 01 is implemented and locally verified; Phase 1 still retains registry/oracle and live-devnet acceptance gaps. SIWS sessions now bind protected money-path routes and frontend wallet actions, and quote/execution/fee persistence now carries integer USDC base units alongside legacy display amounts. Phase 3 has partial local verification but remains open for live receipt/restart evidence.
+Program-backed rebalance/close and the demo rehearsal path are now locally verified. The milestone still retains live-devnet, oracle, benchmark, notification, and production-admin gaps.
 
 ## Implemented; local verification complete
 
@@ -40,6 +40,7 @@ Phase 1 — Catalog truth and foundation. Plan 01 is implemented and locally ver
 - Replaced SQLite with a PostgreSQL repository and async queries. Backend startup loads `backend/.env` from its module path; Neon pooled connections use `public` because the pooler rejects startup `search_path` parameters. The Neon connection and migration smoke check passed.
 - Backend typecheck and bundle passed. Latest backend suite: 55 passed, 3 devnet-only skipped; frontend typecheck, production build, and tests passed: 20 passed, 1 live-simulation skipped. `cargo check` previously passed with Anchor macro cfg warnings. The earlier Solana SBF build completed.
 - Latest precision/security checkpoint: backend suite 62 passed, 3 devnet-only skipped; frontend suite 21 passed, 1 live-simulation skipped. Backend and frontend builds passed; the Vite build still reports the existing large-chunk warning. PostgreSQL migration smoke check passed after adding quote/execution/fee base-unit columns.
+- Program-backed checkpoint: backend suite 63 passed, 3 devnet-only skipped; frontend suite 21 passed, 1 live-simulation skipped; production build passed; Rust check passed; Rust library tests 2 passed; builder/IDL check passed; browser demo smoke passed for five routes. Program mode now assembles source-version sells and target-version buys with operation-specific fee bps.
 - Follow-up security audit: both swap instruction account contexts now box global and basket accounts to fit the BPF stack; SBF compilation no longer reports the prior 4 KiB stack overflow. Submission now verifies every required Ed25519 signature and the prepared wallet signer. Malformed messages, mismatched messages, and invalid signatures are rejected without consuming the still-valid PREPARED execution. Added a regression test; backend typecheck and tests pass.
 - Allocated platform fees across open, retry, close, unwind, and rebalance sell legs. Each confirmed leg records only its own fee; the PostgreSQL ledger deduplicates by execution and leg. Added conservation and idempotency tests.
 - Added a direct, wallet-signed devnet USDC withdrawal to any Solana address, including recipient ATA creation; this bypasses the server queue and kill switch. On-chain withdrawal acceptance remains pending.
@@ -69,12 +70,12 @@ Rebalance funding now gates each buy broadcast on all current sells settling suc
 
 Recovery reservations now serialize each source/action under a PostgreSQL row lock. Repeated requests with different keys return the same prepared/submitted/terminal recovery. Reservation, execution, and audit commit together; audit faults roll back. An expired preview can be replaced only after finalized block-height expiry and empty signature history; a concurrent submit prevents replacement. RPC failover does not override a known chain outcome. The UI exposes Refresh recovery, and reused recovery keys cannot masquerade as ordinary invest/close/rebalance requests. Six regression cases pass locally; Neon migrations and nine recovery columns passed the database check. Live concurrency/recovery acceptance is still outstanding.
 
-Immediate follow-up: fund the configured relayer and make the Anchor deployment signer available for live devnet acceptance. Root `bun run test` invokes the backend and frontend test runners explicitly; `bun run build` builds both workspaces. The reproducibility contract is now pinned by `.bun-version`, `Dockerfile`, `Makefile`, `bun.lock`, and the updated `README.md`.
+Immediate follow-up: use the documented demo runbook for tomorrow, then fund the configured relayer and make the Anchor deployment signer available for live devnet acceptance. Root `bun run test` invokes the backend and frontend test runners explicitly; `bun run build` builds both workspaces. The reproducibility contract is pinned by `.bun-version`, `Dockerfile`, `Makefile`, `bun.lock`, and `README.md`.
 
-1. Fund the configured relayer (`76ERXGuZsC2V8jzxGyuohW75UYfDLvPKyXGYSUEsn6UJ` currently has 0 SOL) and provide a working devnet faucet/RPC path; deploy and initialize the updated router, then exercise two-wallet publication and a real investment.
-2. Configure the Pyth API key/feed IDs and verified SOL benchmark, then validate freshness and historical snapshots.
-3. Finish any remaining catalog/registry acceptance gaps and verify the base-unit columns against live deployment data.
-4. Continue through execution, landing/recovery, portfolio, governance, and devnet release phases; do not mark the milestone complete until PRD acceptance evidence exists.
+1. Demo locally using `docs/DEMO_READINESS.md`; do not claim live transactions until evidence exists.
+2. Fund the configured relayer (`76ERXGuZsC2V8jzxGyuohW75UYfDLvPKyXGYSUEsn6UJ` currently has 0 SOL) and provide a working devnet faucet/RPC path; deploy and initialize the updated router, then exercise two-wallet publication and a real investment.
+3. Configure the Pyth API key/feed IDs and verified SOL benchmark, then validate freshness and historical snapshots.
+4. Replace console-only outbox delivery with the chosen notification transport and finish production admin identity/2FA requirements.
 
 ## Rebalance and program builder follow-up (2026-10-17)
 
@@ -90,6 +91,6 @@ Immediate follow-up: fund the configured relayer and make the Anchor deployment 
 
 ## Session
 
-**Last session:** 2026-10-17T13:22:06Z
-**Stopped at:** Live devnet bootstrap blocked by unfunded relayer
+**Last session:** 2026-10-17T16:46:33Z
+**Stopped at:** Program-backed rebalance and demo checkpoint
 **Resume file:** .planning/phases/01-catalog-truth-and-foundation/01-VERIFICATION.md
