@@ -3,22 +3,22 @@ gsd_state_version: "1.0"
 milestone: v1.0
 milestone_name: Devnet product aligned to PRD v4.0
 status: in_progress
-stopped_at: Phase 1 context gathered
-last_updated: "2026-10-17T11:09:48.734Z"
-state_head: 30c1e92fc3709194323905bd9ccd45f840ef1bc7
+stopped_at: Reproducible build contract checkpoint
+last_updated: "2026-10-17T11:50:54Z"
+state_head: 3317fa93c3bc4fd66ba5cae6df07118470ce5c8a
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 1
+  completed_plans: 1
   percent: 0
 updated: 2026-10-17
-current_phase: 3
+current_phase: 1
 ---
 
 # Current Position
 
-Phase 3 — Landing, fees, and recovery. Phase 1 and the remaining phases retain their open acceptance gaps.
+Phase 1 — Catalog truth and foundation. Plan 01 is implemented and locally verified; Phase 1 still retains registry/oracle and live-devnet acceptance gaps. Phase 3 has partial local verification but remains open for live receipt/restart evidence.
 
 ## Implemented; local verification complete
 
@@ -38,7 +38,7 @@ Phase 3 — Landing, fees, and recovery. Phase 1 and the remaining phases retain
 ## Local verification
 
 - Replaced SQLite with a PostgreSQL repository and async queries. Backend startup loads `backend/.env` from its module path; Neon pooled connections use `public` because the pooler rejects startup `search_path` parameters. The Neon connection and migration smoke check passed.
-- Backend typecheck and bundle passed. Latest backend suite: 51 passed, 3 devnet-only skipped; frontend typecheck, production build, and tests passed: 20 passed, 1 live-simulation skipped. `cargo check` previously passed with Anchor macro cfg warnings. The earlier Solana SBF build completed.
+- Backend typecheck and bundle passed. Latest backend suite: 55 passed, 3 devnet-only skipped; frontend typecheck, production build, and tests passed: 20 passed, 1 live-simulation skipped. `cargo check` previously passed with Anchor macro cfg warnings. The earlier Solana SBF build completed.
 - Follow-up security audit: both swap instruction account contexts now box global and basket accounts to fit the BPF stack; SBF compilation no longer reports the prior 4 KiB stack overflow. Submission now verifies every required Ed25519 signature and the prepared wallet signer. Malformed messages, mismatched messages, and invalid signatures are rejected without consuming the still-valid PREPARED execution. Added a regression test; backend typecheck and tests pass.
 - Allocated platform fees across open, retry, close, unwind, and rebalance sell legs. Each confirmed leg records only its own fee; the PostgreSQL ledger deduplicates by execution and leg. Added conservation and idempotency tests.
 - Added a direct, wallet-signed devnet USDC withdrawal to any Solana address, including recipient ATA creation; this bypasses the server queue and kill switch. On-chain withdrawal acceptance remains pending.
@@ -68,12 +68,13 @@ Rebalance funding now gates each buy broadcast on all current sells settling suc
 
 Recovery reservations now serialize each source/action under a PostgreSQL row lock. Repeated requests with different keys return the same prepared/submitted/terminal recovery. Reservation, execution, and audit commit together; audit faults roll back. An expired preview can be replaced only after finalized block-height expiry and empty signature history; a concurrent submit prevents replacement. RPC failover does not override a known chain outcome. The UI exposes Refresh recovery, and reused recovery keys cannot masquerade as ordinary invest/close/rebalance requests. Six regression cases pass locally; Neon migrations and nine recovery columns passed the database check. Live concurrency/recovery acceptance is still outstanding.
 
-Immediate follow-up: connect rebalance preparation to the configured program builder, including fee semantics and dependent simulation. Root `bun run test` invokes the backend and frontend test runners explicitly; `bun run build` builds both workspaces.
+Immediate follow-up: enforce the existing SIWS session identity across the quote/prepare/submit, portfolio, and recovery money paths. Root `bun run test` invokes the backend and frontend test runners explicitly; `bun run build` builds both workspaces. The reproducibility contract is now pinned by `.bun-version`, `Dockerfile`, `Makefile`, `bun.lock`, and the updated `README.md`.
 
-1. Configure the Pyth API key and feed IDs for eligible mints, then validate freshness and historical snapshots; connect a verified SOL benchmark before showing a comparison.
-2. Finish Phase 1 by reconciling registry prices and token eligibility with devnet setup, then perform the requested acceptance verification.
-3. Retry the devnet faucet/bootstrap when the faucet RPC recovers; then deploy and initialize the updated program on devnet and exercise the two-wallet publication flow.
-4. Continue through execution, landing/recovery, portfolio, governance, and devnet release phases; do not mark the milestone complete until PRD acceptance evidence exists.
+1. Add SIWS nonce/sign/verify/session enforcement to all money-path routes and connect the frontend wallet-signing/session state.
+2. Configure the Pyth API key and feed IDs for eligible mints, then validate freshness and historical snapshots; connect a verified SOL benchmark before showing a comparison.
+3. Finish Phase 1 by reconciling registry prices and token eligibility with devnet setup, then perform the requested acceptance verification.
+4. Retry the devnet faucet/bootstrap when the faucet RPC recovers; then deploy and initialize the updated program on devnet and exercise the two-wallet publication flow.
+5. Continue through execution, landing/recovery, portfolio, governance, and devnet release phases; do not mark the milestone complete until PRD acceptance evidence exists.
 
 ## Rebalance and program builder follow-up (2026-10-17)
 
@@ -87,6 +88,6 @@ Immediate follow-up: connect rebalance preparation to the configured program bui
 
 ## Session
 
-**Last session:** 2026-10-17T11:09:48.590Z
-**Stopped at:** Phase 1 context gathered
-**Resume file:** .planning/phases/01-catalog-truth-and-foundation/01-CONTEXT.md
+**Last session:** 2026-10-17T11:50:54Z
+**Stopped at:** Reproducible build contract checkpoint
+**Resume file:** .planning/phases/01-catalog-truth-and-foundation/01-VERIFICATION.md
