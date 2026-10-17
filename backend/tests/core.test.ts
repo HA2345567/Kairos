@@ -166,6 +166,67 @@ describe("auth (PRD §4.1)", () => {
   });
 });
 
+describe("money-path session binding (PRD §4.1, §4.4)", () => {
+  test("rejects protected position and execution reads without a SIWS session", async () => {
+    const app = buildApp();
+    const positions = await app.inject({
+      method: "GET",
+      url: "/v1/positions?walletAddress=11111111111111111111111111111111",
+    });
+    assert.equal(positions.statusCode, 401);
+    assert.equal(positions.json().error, "UNAUTHORIZED");
+
+    const execution = await app.inject({
+      method: "GET",
+      url: "/v1/executions/exec-protected-test",
+    });
+    assert.equal(execution.statusCode, 401);
+    assert.equal(execution.json().error, "UNAUTHORIZED");
+  });
+
+  test("binds protected reads to the wallet in the verified JWT", async () => {
+    const owner = Keypair.generate().publicKey.toBase58();
+    const other = Keypair.generate().publicKey.toBase58();
+    const token = authService.signJwt({ sub: "usr-session-test", wallet: owner }, 900);
+    const app = buildApp();
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/positions?walletAddress=${other}`,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.json().error, "WALLET_SESSION_MISMATCH");
+  });
+
+  test("does not expose an existing position to another authenticated wallet", async () => {
+    const owner = Keypair.generate().publicKey.toBase58();
+    const other = Keypair.generate().publicKey.toBase58();
+    await repository.savePosition({
+      id: "position-session-owner",
+      walletAddress: owner,
+      basketId: "bkt-test",
+      basketVersionId: "bv-test-1",
+      entryUsdc: 50,
+      currentValueUsd: 50,
+      status: "ACTIVE",
+      autoRebalance: false,
+      driftPct: 0,
+      rebalanceAvailable: true,
+      legs: [],
+      updatedAt: new Date().toISOString(),
+    });
+    const token = authService.signJwt({ sub: "usr-other-session-test", wallet: other }, 900);
+    const response = await buildApp().inject({
+      method: "GET",
+      url: "/v1/positions/position-session-owner",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.json().error, "POSITION_NOT_OWNED_BY_WALLET");
+  });
+});
+
 describe("execution submit security controls (PRD §4.4)", () => {
   test("tampered message bytes are rejected (byte verification)", async () => {
     (await seedRegistry());

@@ -28,6 +28,7 @@ import { Button } from "@/components/arc/button";
 import { kairosApi } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/lib/api-endpoints";
 import type { QuoteLeg } from "@/lib/api-types";
+import { useWalletAuth } from "@/components/auth/WalletAuthProvider";
 
 interface InvestModalProps {
   basket: Basket | null;
@@ -51,6 +52,7 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
   const { connected, publicKey, signAllTransactions, signTransaction } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { connection } = useConnection();
+  const { ensureAuthenticated } = useWalletAuth();
 
   const isConnected = connected && !!publicKey;
   const activeAddressStr = publicKey?.toBase58() || null;
@@ -159,6 +161,7 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
 
       // Step 2: Prepare position with real VersionedTransactions
       setStep("signing");
+      await ensureAuthenticated();
       const idempotencyKey = `inv-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const prepRes = await kairosApi.preparePosition({
         basket: basket.slug,

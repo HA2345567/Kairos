@@ -9,36 +9,44 @@ import type { Execution } from "@/lib/api-types";
 import { formatTokenBaseUnits } from "@/lib/usdc";
 import { Button } from "@/components/ui/button";
 import { WithdrawUsdc } from "./WithdrawUsdc";
+import { useWalletAuth } from "@/components/auth/WalletAuthProvider";
 
 const terminal = new Set(["COMPLETED", "PARTIALLY_COMPLETED", "FAILED", "EXPIRED"]);
 
 export function PositionActions({ address }: { address: string }) {
   const wallet = useWallet();
+  const { authenticated, authenticating, error: authError, ensureAuthenticated } = useWalletAuth();
   const cache = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [prepared, setPrepared] = useState<Execution | null>(null);
   const positions = useQuery({
     queryKey: ["positions", address],
-    queryFn: () => kairosApi.getPositions(address),
+    queryFn: async () => { await ensureAuthenticated(); return kairosApi.getPositions(address); },
+    enabled: authenticated,
     refetchInterval: 15_000,
   });
   const history = useQuery({
     queryKey: ["executions", address],
-    queryFn: () => kairosApi.get<{ executions: Execution[] }>(`/v1/executions?walletAddress=${encodeURIComponent(address)}`),
+    queryFn: async () => {
+      await ensureAuthenticated();
+      return kairosApi.get<{ executions: Execution[] }>(`/v1/executions?walletAddress=${encodeURIComponent(address)}`);
+    },
+    enabled: authenticated,
     refetchInterval: 3_000,
   });
   const executionId = selected || history.data?.executions[0]?.id;
   const status = useQuery({
     queryKey: ["execution", executionId],
-    queryFn: () => kairosApi.getExecution(executionId!),
-    enabled: Boolean(executionId),
+    queryFn: async () => { await ensureAuthenticated(); return kairosApi.getExecution(executionId!); },
+    enabled: Boolean(executionId) && authenticated,
     refetchInterval: query => terminal.has(query.state.data?.status || "") ? false : 2_000,
   });
   const execution = status.data || prepared;
   async function review(action: () => Promise<Execution>) {
     setBusy(true);
     try {
+      await ensureAuthenticated();
       const next = await action();
       setPrepared(next);
       setSelected(next.id);
@@ -52,6 +60,7 @@ export function PositionActions({ address }: { address: string }) {
     if (!wallet.signAllTransactions && !wallet.signTransaction) return toast.error("Wallet signing is unavailable");
     setBusy(true);
     try {
+      await ensureAuthenticated();
       if (Date.now() >= Date.parse(execution.expiresAt)) throw new Error("This preview expired. Prepare a new transaction.");
       const transactions = execution.preparedTxs.map(value => VersionedTransaction.deserialize(Buffer.from(value, "base64")));
       const signed = wallet.signAllTransactions
@@ -70,6 +79,13 @@ export function PositionActions({ address }: { address: string }) {
     <h2 className="text-xl font-semibold">Manage your basket positions</h2>
     <p className="text-sm text-muted-foreground">Test assets stay in your wallet. Closing and rebalancing require your signature. Values use indicative devnet rates.</p>
     <WithdrawUsdc />
+    {!authenticated && <div className="rounded-xl border border-border p-4 space-y-3" role="status">
+      <p className="text-sm">Sign a one-time wallet message to load your protected positions and execution history.</p>
+      {authError && <p className="text-sm text-red-400" role="alert">{authError}</p>}
+      <Button disabled={authenticating} onClick={() => ensureAuthenticated().catch(() => undefined)}>
+        {authenticating ? "Waiting for wallet…" : "Sign in to Kairos"}
+      </Button>
+    </div>}
     {(positions.isError || history.isError) && <p role="alert">Position service unavailable. Refresh to try again.</p>}
     {positions.isLoading && <p role="status">Loading positions…</p>}
     {positions.data?.positions.filter(position => position.status !== "CLOSED").map(position => <article key={position.id} className="rounded-xl border border-border p-4 space-y-3">

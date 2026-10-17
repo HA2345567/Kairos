@@ -261,15 +261,15 @@ export interface AuthNonceResponse {
 }
 
 export interface AuthVerifyResponse {
-  success: boolean;
-  token?: string;
-  refreshToken?: string;
+  token: string;
+  refreshToken: string;
+  user: { id: string; authProvider: string; createdAt: string; status: string; region: string };
+  wallet: { id: string; address: string; type: string; delegatedSigning: boolean };
 }
 
 export interface AuthRefreshResponse {
-  success: boolean;
-  token?: string;
-  refreshToken?: string;
+  token: string;
+  refreshToken: string;
 }
 
 export interface FaucetAirdropResponse {

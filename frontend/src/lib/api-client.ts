@@ -41,19 +41,41 @@ class KairosApiClient {
   private baseUrl: string;
   private authToken: string | null = null;
   private refreshToken: string | null = null;
+  private authWallet: string | null = null;
 
   constructor(baseUrl: string = import.meta.env.VITE_API_URL || '') {
     this.baseUrl = baseUrl.replace(/\/$/, '');
+    if (typeof window !== "undefined") {
+      this.authToken = window.sessionStorage.getItem("kairos.auth.token");
+      this.refreshToken = window.sessionStorage.getItem("kairos.auth.refresh");
+      this.authWallet = window.sessionStorage.getItem("kairos.auth.wallet");
+    }
   }
 
-  setAuth(token: string, refreshToken?: string) {
+  setAuth(token: string, refreshToken?: string, walletAddress?: string) {
     this.authToken = token;
     this.refreshToken = refreshToken ?? null;
+    this.authWallet = walletAddress ?? this.authWallet;
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("kairos.auth.token", token);
+      if (this.refreshToken) window.sessionStorage.setItem("kairos.auth.refresh", this.refreshToken);
+      if (this.authWallet) window.sessionStorage.setItem("kairos.auth.wallet", this.authWallet);
+    }
   }
 
   clearAuth() {
     this.authToken = null;
     this.refreshToken = null;
+    this.authWallet = null;
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem("kairos.auth.token");
+      window.sessionStorage.removeItem("kairos.auth.refresh");
+      window.sessionStorage.removeItem("kairos.auth.wallet");
+    }
+  }
+
+  isAuthenticatedFor(walletAddress: string): boolean {
+    return Boolean(this.authToken && this.authWallet === walletAddress);
   }
 
   private getHeaders(additional: Record<string, string> = {}): HeadersInit {

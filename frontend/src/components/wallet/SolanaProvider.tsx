@@ -3,6 +3,7 @@ import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
+import { WalletAuthProvider } from "@/components/auth/WalletAuthProvider";
 
 export function SolanaProvider({ children }: { children: ReactNode }) {
   const endpoint = useMemo(() => {
@@ -28,7 +29,9 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
           console.warn("Solana Wallet Adapter warning:", error.message || error);
         }}
       >
-        <WalletModalProvider>{children}</WalletModalProvider>
+        <WalletModalProvider>
+          <WalletAuthProvider>{children}</WalletAuthProvider>
+        </WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
   );
