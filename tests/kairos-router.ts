@@ -146,6 +146,16 @@ describe("kairos-router", () => {
   });
 
   it("initializes global config (admin, USDC pin, treasury, fee)", async () => {
+    try {
+      await program.methods
+        .initializeGlobal(usdcMint, treasury.publicKey, 76)
+        .accounts({ payer: admin.publicKey, globalConfig })
+        .signers([admin])
+        .rpc();
+      throw new Error("fee above the PRD cap should fail");
+    } catch (err) {
+      expect(String(err)).toContain("InvalidFeeBps");
+    }
     await program.methods
       .initializeGlobal(usdcMint, treasury.publicKey, 20)
       .accounts({ payer: admin.publicKey, globalConfig })

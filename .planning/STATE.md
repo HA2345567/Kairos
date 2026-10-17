@@ -85,6 +85,8 @@ Immediate follow-up: fund the configured relayer and make the Anchor deployment 
 - Program close/rebalance fails explicitly instead of falling back to treasury trades. On-chain fee policy and dependent simulation remain unfinished.
 - Resolved the Anchor IDL compatibility failure by upgrading Rust and all JS workspaces to 0.31.1. IDL generation passed using the installed 0.30.1 CLI; both swap instructions have 20 accounts, writable USDC, and Memo program accounts. The updated Anchor 0.31 Rust code passes IDL generation, `cargo check`, and optimized `cargo build-sbf`.
 - Anchor test runner now uses Bun. Aligning all JS workspaces to 0.31.1 repaired the missing discriminator.js import. The contract test bundle passes, and tests construct Program from generated IDL instead of the unavailable ESM workspace export. Live contract execution still requires a validator and signing wallet.
+- Aligned the on-chain global fee ceiling with PRD OD-2 (75 bps); added Rust boundary coverage (75 accepted, 76 rejected) and a validator contract case. Current verification: `cargo test -p kairos-router --lib` passed (2 tests), `cargo check` and optimized `cargo build-sbf` passed with existing Anchor cfg/deprecation warnings; root Bun tests passed (62 backend/3 devnet skips, 21 frontend/1 simulation skip); backend/frontend production build passed. Contract test source bundles, but validator-backed contract execution was not run.
+- Rechecked devnet with the configured RPC: the relayer still has 0 SOL, the supplied wallet has 5 SOL, and the configured router address is not executable. No deployment or live swap was attempted.
 
 ## Session
 

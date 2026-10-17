@@ -21,7 +21,11 @@ pub struct GlobalConfig {
 }
 
 impl GlobalConfig {
-    pub const MAX_FEE_BPS: u16 = 5_000; // hard cap: 50%
+    pub const MAX_FEE_BPS: u16 = 75; // PRD cap across platform execution fees
+
+    pub fn fee_bps_is_valid(fee_bps: u16) -> bool {
+        fee_bps <= Self::MAX_FEE_BPS
+    }
 
     pub const LEN: usize =
         8 +  // discriminator
@@ -32,6 +36,17 @@ impl GlobalConfig {
         1 +  // paused
         1 +  // bump
         16; // buffer
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GlobalConfig;
+
+    #[test]
+    fn fee_cap_matches_prd_boundary() {
+        assert!(GlobalConfig::fee_bps_is_valid(75));
+        assert!(!GlobalConfig::fee_bps_is_valid(76));
+    }
 }
 
 /// Three distinct keys authorized to publish versions (admin + two approvers).
