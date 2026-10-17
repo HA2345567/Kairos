@@ -3,9 +3,9 @@ gsd_state_version: "1.0"
 milestone: v1.0
 milestone_name: Devnet product aligned to PRD v4.0
 status: in_progress
-stopped_at: Reproducible build contract checkpoint
-last_updated: "2026-10-17T11:50:54Z"
-state_head: 3317fa93c3bc4fd66ba5cae6df07118470ce5c8a
+stopped_at: SIWS money-path session checkpoint
+last_updated: "2026-10-17T12:22:15Z"
+state_head: 792323a8c3ce9adf85f26663c3dccb6db2c4514e
 progress:
   total_phases: 6
   completed_phases: 0
@@ -18,7 +18,7 @@ current_phase: 1
 
 # Current Position
 
-Phase 1 — Catalog truth and foundation. Plan 01 is implemented and locally verified; Phase 1 still retains registry/oracle and live-devnet acceptance gaps. Phase 3 has partial local verification but remains open for live receipt/restart evidence.
+Phase 1 — Catalog truth and foundation. Plan 01 is implemented and locally verified; Phase 1 still retains registry/oracle and live-devnet acceptance gaps. SIWS sessions now bind protected money-path routes and frontend wallet actions. Phase 3 has partial local verification but remains open for live receipt/restart evidence.
 
 ## Implemented; local verification complete
 
@@ -68,9 +68,9 @@ Rebalance funding now gates each buy broadcast on all current sells settling suc
 
 Recovery reservations now serialize each source/action under a PostgreSQL row lock. Repeated requests with different keys return the same prepared/submitted/terminal recovery. Reservation, execution, and audit commit together; audit faults roll back. An expired preview can be replaced only after finalized block-height expiry and empty signature history; a concurrent submit prevents replacement. RPC failover does not override a known chain outcome. The UI exposes Refresh recovery, and reused recovery keys cannot masquerade as ordinary invest/close/rebalance requests. Six regression cases pass locally; Neon migrations and nine recovery columns passed the database check. Live concurrency/recovery acceptance is still outstanding.
 
-Immediate follow-up: enforce the existing SIWS session identity across the quote/prepare/submit, portfolio, and recovery money paths. Root `bun run test` invokes the backend and frontend test runners explicitly; `bun run build` builds both workspaces. The reproducibility contract is now pinned by `.bun-version`, `Dockerfile`, `Makefile`, `bun.lock`, and the updated `README.md`.
+Immediate follow-up: finish auth expiry/refresh behavior and close the remaining server-side security/data gaps. Root `bun run test` invokes the backend and frontend test runners explicitly; `bun run build` builds both workspaces. The reproducibility contract is now pinned by `.bun-version`, `Dockerfile`, `Makefile`, `bun.lock`, and the updated `README.md`.
 
-1. Add SIWS nonce/sign/verify/session enforcement to all money-path routes and connect the frontend wallet-signing/session state.
+1. Finish auth expiry/refresh behavior and protect the devnet faucet/admin-adjacent wallet endpoints with the same session binding where appropriate.
 2. Configure the Pyth API key and feed IDs for eligible mints, then validate freshness and historical snapshots; connect a verified SOL benchmark before showing a comparison.
 3. Finish Phase 1 by reconciling registry prices and token eligibility with devnet setup, then perform the requested acceptance verification.
 4. Retry the devnet faucet/bootstrap when the faucet RPC recovers; then deploy and initialize the updated program on devnet and exercise the two-wallet publication flow.
@@ -88,6 +88,6 @@ Immediate follow-up: enforce the existing SIWS session identity across the quote
 
 ## Session
 
-**Last session:** 2026-10-17T11:50:54Z
-**Stopped at:** Reproducible build contract checkpoint
+**Last session:** 2026-10-17T12:22:15Z
+**Stopped at:** SIWS money-path session checkpoint
 **Resume file:** .planning/phases/01-catalog-truth-and-foundation/01-VERIFICATION.md
