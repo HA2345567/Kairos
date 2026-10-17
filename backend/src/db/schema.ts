@@ -137,6 +137,7 @@ export interface ExecutionLegReceipt {
   assetBalanceAfter: string;
   assetDecimals: number;
   slot: number;
+  commitment: "confirmed" | "finalized";
 }
 
 export interface ExecutionLeg {
@@ -170,6 +171,7 @@ export interface Execution {
   type: ExecutionType;
   status: ExecutionStatus;
   idempotencyKey: string;
+  requestHash?: string;
   totalUsdc: number;
   totalUsdcBaseUnits?: string;
   feeUsdc: number;
@@ -200,6 +202,7 @@ export interface Position {
   entryUsdc: number;
   currentValueUsd: number;
   status: "ACTIVE" | "MODIFIED" | "CLOSED";
+  rebalanceState?: "NONE" | "REBALANCE_PARTIAL";
   autoRebalance: boolean;
   driftPct: number;
   rebalanceAvailable: boolean;

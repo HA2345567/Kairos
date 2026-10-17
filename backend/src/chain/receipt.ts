@@ -5,6 +5,7 @@ import { withFailover } from "./connection";
 type ReceiptTransaction = Pick<VersionedTransactionResponse, "slot" | "meta"> & {
   transaction: Pick<VersionedTransactionResponse["transaction"], "signatures">;
 };
+type ReceiptCommitment = "confirmed" | "finalized";
 
 function walletBalance(balances: TokenBalance[], owner: string, mint: string) {
   const rows = balances.filter(row => row.owner === owner && row.mint === mint);
@@ -25,7 +26,8 @@ export function parseLegReceipt(
   wallet: string,
   assetMint: string,
   usdcMint: string,
-  expectedSide?: "buy" | "sell"
+  expectedSide?: "buy" | "sell",
+  commitment: "confirmed" | "finalized" = "confirmed"
 ): ExecutionLegReceipt {
   if (transaction.transaction.signatures[0] !== signature) throw new Error("RECEIPT_SIGNATURE_MISMATCH");
   const meta = transaction.meta;
@@ -55,19 +57,25 @@ export function parseLegReceipt(
     assetBalanceAfter: after.amount.toString(),
     assetDecimals,
     slot: transaction.slot,
+    commitment,
   };
 }
 
 export async function getLegReceipt(
-  signature: string, wallet: string, assetMint: string, usdcMint: string, side?: "buy" | "sell"
+  signature: string,
+  wallet: string,
+  assetMint: string,
+  usdcMint: string,
+  side?: "buy" | "sell",
+  commitment: ReceiptCommitment = "finalized"
 ): Promise<ExecutionLegReceipt> {
   // Null can mean provider indexing lag. Try the fallback, then let the job
   // retry; never replace a missing receipt with the prepared quote.
   return withFailover(async connection => {
     const transaction = await connection.getTransaction(signature, {
-      commitment: "confirmed", maxSupportedTransactionVersion: 0,
+      commitment, maxSupportedTransactionVersion: 0,
     });
     if (!transaction) throw new Error("TRANSACTION_RECEIPT_PENDING");
-    return parseLegReceipt(transaction, signature, wallet, assetMint, usdcMint, side);
+    return parseLegReceipt(transaction, signature, wallet, assetMint, usdcMint, side, commitment);
   });
 }

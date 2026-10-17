@@ -185,6 +185,9 @@ function mapQuote(r: Row): Quote {
 }
 
 function mapExecutionLeg(r: Row): ExecutionLeg {
+  const storedReceipt = r.receipt_json == null
+    ? undefined
+    : json<Partial<NonNullable<ExecutionLeg["receipt"]>>>(r.receipt_json, {});
   const leg: ExecutionLeg = {
     id: str(r.id),
     executionId: str(r.execution_id),
@@ -196,7 +199,9 @@ function mapExecutionLeg(r: Row): ExecutionLeg {
     feeBaseUnits: r.fee_base_units == null ? undefined : str(r.fee_base_units),
     side: r.side == null ? undefined : str(r.side) as ExecutionLeg["side"],
     inputBaseUnits: r.input_base_units == null ? undefined : str(r.input_base_units),
-    receipt: r.receipt_json == null ? undefined : json<ExecutionLeg["receipt"]>(r.receipt_json, undefined),
+    receipt: storedReceipt
+      ? { ...storedReceipt, commitment: storedReceipt.commitment ?? "confirmed" } as ExecutionLeg["receipt"]
+      : undefined,
     expectedOut: str(r.expected_out, "0"),
     messageHash: str(r.message_hash),
     status: str(r.status, "PENDING") as ExecutionLeg["status"],
@@ -218,6 +223,7 @@ function mapExecution(r: Row, legs: ExecutionLeg[]): Execution {
     type: str(r.type, "open") as Execution["type"],
     status: str(r.status, "PREPARED") as Execution["status"],
     idempotencyKey: str(r.idempotency_key),
+    requestHash: r.request_hash == null ? undefined : str(r.request_hash),
     totalUsdc: num(r.total_usdc),
     totalUsdcBaseUnits: r.total_usdc_base_units == null ? undefined : str(r.total_usdc_base_units),
     feeUsdc: num(r.fee_usdc),
@@ -256,6 +262,7 @@ function mapPosition(r: Row, legs: PositionLeg[]): Position {
     entryUsdc: num(r.entry_usdc),
     currentValueUsd: num(r.current_value_usd),
     status: str(r.status, "ACTIVE") as Position["status"],
+    rebalanceState: str(r.rebalance_state, "NONE") as Position["rebalanceState"],
     autoRebalance: bool(r.auto_rebalance),
     driftPct: num(r.drift_pct),
     rebalanceAvailable: bool(r.rebalance_available ?? 1),
@@ -694,19 +701,20 @@ export class Repository {
       (await tx(async () => {
         (await run(
           `INSERT INTO executions (id, wallet_id, wallet_address, basket_id, basket_version_id,
-                                   type, status, idempotency_key, total_usdc, total_usdc_base_units, fee_usdc, fee_usdc_base_units,
+                                   type, status, idempotency_key, request_hash, total_usdc, total_usdc_base_units, fee_usdc, fee_usdc_base_units,
                                    prepared_txs_json, message_hashes_json, blockhash,
                                    last_valid_block_height, expires_at, created_at, updated_at, base_execution_id, recovery_action)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
              wallet_id = excluded.wallet_id,
              wallet_address = excluded.wallet_address,
              basket_id = excluded.basket_id,
              basket_version_id = excluded.basket_version_id,
-             type = excluded.type,
-             status = excluded.status,
-             idempotency_key = excluded.idempotency_key,
-             total_usdc = excluded.total_usdc,
+              type = excluded.type,
+              status = excluded.status,
+              idempotency_key = excluded.idempotency_key,
+              request_hash = excluded.request_hash,
+              total_usdc = excluded.total_usdc,
              total_usdc_base_units = excluded.total_usdc_base_units,
              fee_usdc = excluded.fee_usdc,
              fee_usdc_base_units = excluded.fee_usdc_base_units,
@@ -724,10 +732,11 @@ export class Repository {
           execution.walletAddress,
           execution.basketId,
           execution.basketVersionId,
-          execution.type,
-          execution.status,
-           execution.idempotencyKey,
-           execution.totalUsdc,
+           execution.type,
+           execution.status,
+            execution.idempotencyKey,
+            execution.requestHash ?? null,
+            execution.totalUsdc,
            execution.totalUsdcBaseUnits ?? String(usdcToBaseUnits(execution.totalUsdc)),
            execution.feeUsdc,
            execution.feeUsdcBaseUnits ?? String(usdcToBaseUnits(execution.feeUsdc)),
@@ -851,18 +860,19 @@ export class Repository {
       ));
       (await run(
         `INSERT INTO positions (id, wallet_address, wallet_id, basket_id, basket_version_id,
-                                entry_usdc, current_value_usd, status, auto_rebalance,
+                                entry_usdc, current_value_usd, status, rebalance_state, auto_rebalance,
                                 drift_pct, rebalance_available, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            wallet_address = excluded.wallet_address,
            wallet_id = COALESCE(excluded.wallet_id, positions.wallet_id),
            basket_id = excluded.basket_id,
            basket_version_id = excluded.basket_version_id,
-           entry_usdc = excluded.entry_usdc,
-           current_value_usd = excluded.current_value_usd,
-           status = excluded.status,
-           auto_rebalance = excluded.auto_rebalance,
+            entry_usdc = excluded.entry_usdc,
+            current_value_usd = excluded.current_value_usd,
+            status = excluded.status,
+            rebalance_state = excluded.rebalance_state,
+            auto_rebalance = excluded.auto_rebalance,
            drift_pct = excluded.drift_pct,
            rebalance_available = excluded.rebalance_available,
            updated_at = excluded.updated_at`,
@@ -874,6 +884,7 @@ export class Repository {
         position.entryUsdc,
         position.currentValueUsd,
         position.status,
+        position.rebalanceState ?? "NONE",
         position.autoRebalance,
         position.driftPct,
         position.rebalanceAvailable,

@@ -7,6 +7,7 @@ import { getAllKnownPositions, type PolicyShape, portfolioService } from "./port
 import { executionService } from "./execution.service";
 import { computeRebalancePlan, type RebalancePlan } from "./rebalance-plan";
 import { assembleRebalanceExecution, type PreparedExecution } from "./rebalance-build";
+import { hashExecutionRequest } from "./request-hash";
 export type { PreparedExecution, RebalancePreview } from "./rebalance-build";
 
 /**
@@ -129,6 +130,21 @@ export class RebalanceService {
       plan,
       fromVersionId: live.basketVersionId,
     });
+    execution.requestHash = hashExecutionRequest({
+      type: execution.type,
+      basketId: execution.basketId,
+      basketVersionId: execution.basketVersionId,
+      totalUsdcBaseUnits: execution.totalUsdcBaseUnits ?? String(Math.round(execution.totalUsdc * 1_000_000)),
+      feeUsdcBaseUnits: execution.feeUsdcBaseUnits ?? String(Math.round(execution.feeUsdc * 1_000_000)),
+      legs: execution.legs.map((leg) => ({
+        mint: leg.mint,
+        side: leg.side,
+        inUsdcBaseUnits: leg.inUsdcBaseUnits,
+        inputBaseUnits: leg.inputBaseUnits,
+        feeBaseUnits: leg.feeBaseUnits,
+        expectedOut: leg.expectedOut,
+      })),
+    });
 
     (await repository.saveExecution(execution));
     (await repository.addRebalanceEvent(live.id, live.basketVersionId, version.id, "PREPARED"));
@@ -179,6 +195,21 @@ export class RebalanceService {
       basketVersionId: live.basketVersionId,
       plan,
       fromVersionId: live.basketVersionId,
+    });
+    execution.requestHash = hashExecutionRequest({
+      type: execution.type,
+      basketId: execution.basketId,
+      basketVersionId: execution.basketVersionId,
+      totalUsdcBaseUnits: execution.totalUsdcBaseUnits ?? String(Math.round(execution.totalUsdc * 1_000_000)),
+      feeUsdcBaseUnits: execution.feeUsdcBaseUnits ?? String(Math.round(execution.feeUsdc * 1_000_000)),
+      legs: execution.legs.map((leg) => ({
+        mint: leg.mint,
+        side: leg.side,
+        inUsdcBaseUnits: leg.inUsdcBaseUnits,
+        inputBaseUnits: leg.inputBaseUnits,
+        feeBaseUnits: leg.feeBaseUnits,
+        expectedOut: leg.expectedOut,
+      })),
     });
 
     (await repository.saveExecution(execution));

@@ -165,6 +165,7 @@ CREATE TABLE IF NOT EXISTS executions (
   type                 TEXT NOT NULL CHECK (type IN ('open', 'rebalance', 'close')),
   status               TEXT NOT NULL,
   idempotency_key      TEXT NOT NULL,
+  request_hash         TEXT,
   total_usdc           DOUBLE PRECISION NOT NULL DEFAULT 0,
   fee_usdc             DOUBLE PRECISION NOT NULL DEFAULT 0,
   prepared_txs_json    TEXT NOT NULL DEFAULT '[]',
@@ -176,10 +177,12 @@ CREATE TABLE IF NOT EXISTS executions (
   updated_at           TEXT NOT NULL,
   UNIQUE (wallet_id, idempotency_key)
 );
+ALTER TABLE executions ADD COLUMN IF NOT EXISTS request_hash TEXT;
 ALTER TABLE executions ADD COLUMN IF NOT EXISTS total_usdc_base_units BIGINT;
 ALTER TABLE executions ADD COLUMN IF NOT EXISTS fee_usdc_base_units BIGINT;
 CREATE INDEX IF NOT EXISTS idx_executions_status ON executions(status);
 CREATE INDEX IF NOT EXISTS idx_executions_idempotency ON executions(idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_executions_request_hash ON executions(request_hash);
 CREATE INDEX IF NOT EXISTS idx_executions_wallet_created ON executions(wallet_address, created_at DESC);
 ALTER TABLE executions ADD COLUMN IF NOT EXISTS base_execution_id TEXT REFERENCES executions(id);
 ALTER TABLE executions ADD COLUMN IF NOT EXISTS recovery_action TEXT CHECK (recovery_action IN ('retry', 'unwind'));
@@ -223,11 +226,13 @@ CREATE TABLE IF NOT EXISTS positions (
   entry_usdc        DOUBLE PRECISION NOT NULL DEFAULT 0,
   current_value_usd DOUBLE PRECISION NOT NULL DEFAULT 0,
   status            TEXT NOT NULL DEFAULT 'ACTIVE',
+  rebalance_state   TEXT NOT NULL DEFAULT 'NONE',
   auto_rebalance    INTEGER NOT NULL DEFAULT 0,
   drift_pct         DOUBLE PRECISION NOT NULL DEFAULT 0,
   rebalance_available INTEGER NOT NULL DEFAULT 1,
   updated_at        TEXT NOT NULL
 );
+ALTER TABLE positions ADD COLUMN IF NOT EXISTS rebalance_state TEXT NOT NULL DEFAULT 'NONE';
 CREATE INDEX IF NOT EXISTS idx_positions_wallet ON positions(wallet_address);
 
 CREATE TABLE IF NOT EXISTS position_legs (

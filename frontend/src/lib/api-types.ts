@@ -189,6 +189,7 @@ export interface Execution {
   type: "open" | "rebalance" | "close";
   status: "PREPARED" | "SUBMITTED" | "LANDING" | "COMPLETED" | "PARTIALLY_COMPLETED" | "FAILED" | "EXPIRED";
   idempotencyKey: string;
+  requestHash?: string;
   totalUsdc: number;
   feeUsdc: number;
   preparedTxs: string[];
@@ -219,6 +220,7 @@ export interface ExecutionLeg {
     assetBalanceAfter: string;
     assetDecimals: number;
     slot: number;
+    commitment: "confirmed" | "finalized";
   };
   expectedOut: string;
   actualOut?: string;
@@ -248,6 +250,7 @@ export interface Position {
   entryUsdc: number;
   currentValueUsd: number;
   status: "ACTIVE" | "MODIFIED" | "CLOSED";
+  rebalanceState?: "NONE" | "REBALANCE_PARTIAL";
   autoRebalance: boolean;
   driftPct: number;
   rebalanceAvailable: boolean;

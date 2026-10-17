@@ -24,6 +24,7 @@ test("buy receipt uses exact token deltas and ignores treasury balances", () => 
   assert.equal(receipt.actualIn, "10000000");
   assert.equal(receipt.assetBalanceAfter, "90071992549809931");
   assert.equal(receipt.outputMint, "asset");
+  assert.equal(receipt.commitment, "confirmed");
 });
 
 test("new ATA output and closed ATA input are accounted for", () => {

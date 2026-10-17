@@ -21,6 +21,7 @@ import {
 import { getTokenBalances } from "../chain/balances";
 import { DEVNET_LABELS, deterministicKeypair, loadDevnetState } from "../chain/devnetState";
 import { usdcToBaseUnits } from "./money";
+import { hashExecutionRequest } from "./request-hash";
 
 /**
  * Execution engine (PRD §4.4): prepare → sign (client) → submit → land.
@@ -309,6 +310,23 @@ async function prepareWithLegs(opts: {
     type: opts.type,
     status: "PREPARED",
     idempotencyKey: opts.idempotencyKey,
+    requestHash: hashExecutionRequest({
+      type: opts.type,
+      basketId: opts.basketId,
+      basketVersionId: opts.basketVersionId,
+      totalUsdcBaseUnits: String(usdcToBaseUnits(opts.totalUsdc)),
+      feeUsdcBaseUnits: String(usdcToBaseUnits(opts.feeUsdc)),
+      legs: legs.map((leg) => ({
+        mint: leg.mint,
+        side: leg.side,
+        inUsdcBaseUnits: leg.inUsdcBaseUnits ?? String(usdcToBaseUnits(leg.inAmountUsdc)),
+        inputBaseUnits: leg.inputBaseUnits,
+        feeBaseUnits: leg.feeBaseUnits ?? String(usdcToBaseUnits(leg.feeUsdc ?? 0)),
+        expectedOut: leg.expectedOut,
+      })),
+      baseExecutionId: opts.baseExecutionId,
+      recoveryAction: opts.recoveryAction,
+    }),
     totalUsdc: opts.totalUsdc,
     totalUsdcBaseUnits: String(usdcToBaseUnits(opts.totalUsdc)),
     feeUsdc: opts.feeUsdc,

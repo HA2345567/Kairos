@@ -8,7 +8,7 @@ import bs58 from "bs58";
 import { Keypair, SystemProgram, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
 
 const { repository } = await import("../src/db/repository");
-const { processLandingJobsOnce } = await import("../src/workers/landing");
+const { processLandingJobsOnce, recomputeExecutionStatus } = await import("../src/workers/landing");
 const { executionService } = await import("../src/services/execution.service");
 const { config } = await import("../src/config");
 const { all, run } = await import("../src/db/postgres");
@@ -65,6 +65,47 @@ async function fixture(status: "PREPARED" | "SUBMITTED" = "SUBMITTED") {
 
 const jobsFor = (id: string) => all<{ id: string; status: string }>("SELECT id, status FROM jobs WHERE execution_id = ?", id);
 const eventsFor = (id: string) => all("SELECT id FROM outbox WHERE payload::jsonb->>'executionId' = ?", id);
+
+test("completed rebalance advances the position to the target version", async () => {
+  const { id, mint, walletAddress } = await fixture();
+  const execution = (await repository.getExecution(id))!;
+  const targetVersionId = `${id}-target-version`;
+  await repository.saveBasketVersion({
+    id: targetVersionId,
+    basketId: execution.basketId,
+    version: 2,
+    changelog: "target",
+    publishedBy: "test",
+    publishedAt: new Date().toISOString(),
+    legs: [{ id: `${targetVersionId}-leg`, versionId: targetVersionId, mint, weightBps: 10_000, legType: "spl" }],
+  });
+  await repository.savePosition({
+    id: `${id}-position`,
+    walletAddress,
+    basketId: execution.basketId,
+    basketVersionId: execution.basketVersionId,
+    entryUsdc: 10,
+    currentValueUsd: 10,
+    status: "ACTIVE",
+    autoRebalance: false,
+    driftPct: 10,
+    rebalanceAvailable: true,
+    legs: [{ mint, symbol: "TEST", targetBps: 10_000, currentAmount: 2, currentValueUsd: 2 }],
+    updatedAt: new Date().toISOString(),
+  });
+
+  execution.type = "rebalance";
+  execution.basketVersionId = targetVersionId;
+  execution.status = "SUBMITTED";
+  execution.legs[0] = { ...execution.legs[0], side: "buy", status: "CONFIRMED", txSignature: "sim-rebalance" };
+  await repository.saveExecution(execution);
+
+  assert.equal(await recomputeExecutionStatus(id), "COMPLETED");
+  const [position] = await repository.getPositionsForWallet(walletAddress);
+  assert.equal(position.basketVersionId, targetVersionId);
+  assert.equal(position.rebalanceAvailable, false);
+  assert.equal(position.rebalanceState, "NONE");
+});
 
 test("a queued rebalance buy cannot overtake its delayed funding sell", async () => {
   const { id, payload } = await fixture();

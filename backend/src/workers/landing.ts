@@ -63,6 +63,7 @@ async function ensurePosition(execution: Execution): Promise<Position> {
     entryUsdc: Number((execution.totalUsdc - execution.feeUsdc).toFixed(4)),
     currentValueUsd: 0,
     status: "ACTIVE",
+    rebalanceState: "NONE",
     autoRebalance: false,
     driftPct: 0,
     rebalanceAvailable: false,
@@ -307,6 +308,49 @@ async function onLegConfirmed(
   }));
 }
 
+async function transitionRebalancePosition(
+  execution: Execution,
+  status: "COMPLETED" | "PARTIALLY_COMPLETED"
+): Promise<void> {
+  const position = (await repository.getPositionsForWallet(execution.walletAddress))
+    .find((candidate) => candidate.basketId === execution.basketId);
+  if (!position) return;
+
+  if (status === "PARTIALLY_COMPLETED") {
+    // Mixed rebalance outcomes never silently move the position to the target
+    // version. The old version remains authoritative until the recovery path
+    // completes, while the explicit flag drives UI/ops handling.
+    position.rebalanceState = "REBALANCE_PARTIAL";
+    position.rebalanceAvailable = true;
+    position.updatedAt = new Date().toISOString();
+    await repository.savePosition(position);
+    return;
+  }
+
+  const targetVersion = await repository.getBasketVersion(execution.basketVersionId);
+  if (!targetVersion) throw new Error("TARGET_REBALANCE_VERSION_NOT_FOUND");
+  const targetByMint = new Map(targetVersion.legs.map((leg) => [leg.mint, leg]));
+  for (const leg of position.legs) {
+    leg.targetBps = targetByMint.get(leg.mint)?.weightBps ?? 0;
+  }
+  for (const targetLeg of targetVersion.legs) {
+    if (!position.legs.some((leg) => leg.mint === targetLeg.mint)) {
+      position.legs.push({
+        mint: targetLeg.mint,
+        symbol: "",
+        targetBps: targetLeg.weightBps,
+        currentAmount: 0,
+        currentValueUsd: 0,
+      });
+    }
+  }
+  position.basketVersionId = execution.basketVersionId;
+  position.rebalanceAvailable = false;
+  position.rebalanceState = "NONE";
+  position.updatedAt = new Date().toISOString();
+  await repository.savePosition(position);
+}
+
 /** Drive the execution state machine from per-leg statuses (PRD §4.4). */
 export async function recomputeExecutionStatus(executionId: string): Promise<string | null> {
   return repository.withExecutionLock(executionId, async (execution) => {
@@ -332,6 +376,9 @@ export async function recomputeExecutionStatus(executionId: string): Promise<str
         });
       }
       await repository.updateExecutionStatus(execution.id, next);
+    }
+    if (execution.type === "rebalance" && (next === "COMPLETED" || next === "PARTIALLY_COMPLETED")) {
+      await transitionRebalancePosition(execution, next);
     }
     // Close the position in the same transaction; retry also repairs old
     // terminal executions whose position update was interrupted.
