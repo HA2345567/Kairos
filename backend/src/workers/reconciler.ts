@@ -81,14 +81,14 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
 
   let positions: Position[];
   try {
-    positions = getAllKnownPositions().filter((p) => p.status === "ACTIVE" || p.status === "MODIFIED");
+    positions = (await getAllKnownPositions()).filter((p) => p.status === "ACTIVE" || p.status === "MODIFIED");
   } catch (err) {
     console.error(`[reconciler] failed to list positions: ${errMsg(err)}`);
     summary.errors.push({ positionId: "*", error: errMsg(err) });
     return summary;
   }
 
-  const usdc = resolveUsdcAsset();
+  const usdc = (await resolveUsdcAsset());
 
   for (const pos of positions) {
     if (pos.legs.length === 0) continue;
@@ -104,11 +104,11 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
 
       const diffs: ReconcileLegDiff[] = [];
       for (const leg of pos.legs) {
-        const decimals = repository.getToken(leg.mint)?.decimals ?? 6;
+        const decimals = (await repository.getToken(leg.mint))?.decimals ?? 6;
         const raw = onChain[leg.mint] ?? 0;
         const onChainAmount = toUiAmount(raw, decimals);
         const lastKnown = leg.currentAmount;
-        const price = priceOf(leg.mint);
+        const price = (await priceOf(leg.mint));
 
         const valueDeltaUsdc = Number((Math.abs(onChainAmount - lastKnown) * price).toFixed(4));
         const relative =
@@ -160,7 +160,7 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
         const reason = `RECONCILER: ${diffs.length} leg(s) changed externally (${diffs
           .map((d) => `${d.mint}${d.wentToZero ? " went to zero" : ` ${d.deltaPct}%`}`)
           .join(", ")})`;
-        portfolioService.markPositionModified(pos.id, reason, {
+        (await portfolioService.markPositionModified(pos.id, reason, {
           before: {
             legs: diffs.map((d) => ({ mint: d.mint, lastKnownAmount: d.lastKnownAmount })),
           },
@@ -169,7 +169,7 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
             status: "MODIFIED",
             autoRebalance: false,
           },
-        });
+        }));
         summary.modified.push({
           positionId: pos.id,
           walletAddress: pos.walletAddress,
@@ -181,11 +181,11 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
         // Re-price + persist absorbed amounts (values may still move with price).
         let total = 0;
         for (const leg of pos.legs) {
-          leg.currentValueUsd = Number((leg.currentAmount * priceOf(leg.mint)).toFixed(2));
+          leg.currentValueUsd = Number((leg.currentAmount * (await priceOf(leg.mint))).toFixed(2));
           total += leg.currentValueUsd;
         }
         pos.currentValueUsd = Number(total.toFixed(2));
-        portfolioService.persistRefresh(pos);
+        (await portfolioService.persistRefresh(pos));
         summary.absorbed += 1;
       }
     } catch (err) {
@@ -204,10 +204,10 @@ let timer: ReturnType<typeof setInterval> | null = null;
  * RECONCILE_INTERVAL_MS (default 5 min). Returns the interval handle so the
  * boot path can clear it on shutdown.
  */
-export function startReconciler(): ReturnType<typeof setInterval> {
+export async function startReconciler(): Promise<ReturnType<typeof setInterval>> {
   const intervalMs = Number(process.env.RECONCILE_INTERVAL_MS) || DEFAULT_INTERVAL_MS;
 
-  const tick = () => {
+  const tick = async () => {
     try {
       runReconcilerOnce()
         .then((summary) => {
@@ -223,7 +223,7 @@ export function startReconciler(): ReturnType<typeof setInterval> {
     }
   };
 
-  tick(); // initial run (guarded, non-blocking)
+  (await tick()); // initial run (guarded, non-blocking)
   timer = setInterval(tick, intervalMs);
   timer.unref?.(); // never keep the process alive just for the reconciler
   return timer;

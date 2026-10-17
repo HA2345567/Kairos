@@ -40,4 +40,7 @@ pub enum KairosError {
 
     #[msg("Signer is not authorized to manage baskets.")]
     UnauthorizedAdmin,
+
+    #[msg("The legs_hash does not match the canonical mint and weight encoding.")]
+    LegsHashMismatch,
 }

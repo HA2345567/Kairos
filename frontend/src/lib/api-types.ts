@@ -35,7 +35,11 @@ export interface QuoteLeg {
   inUsdcAmount: number;
   expectedOutTokens: string;
   minOutTokens: string;
-  priceImpactPct: string;
+  priceImpactPct: string | null;
+  priceSource?: "pyth" | "chainlink" | "devnet-registry";
+  priceSourceRef?: string;
+  priceAsOf?: string | null;
+  priceConfidenceUsd?: number | null;
   routeHint?: string;
 }
 
@@ -68,7 +72,28 @@ export interface BasketVersion {
   changelog: string;
   publishedBy: string;
   publishedAt: string;
+  legsHash?: string;
+  registryTx?: string;
   legs: BasketLeg[];
+}
+
+export type BasketVersionDraft = Pick<BasketVersion, "version" | "changelog" | "publishedBy"> & {
+  legs: Array<
+    Pick<BasketLeg, "mint" | "weightBps" | "legType"> &
+    Partial<Pick<BasketLeg, "id" | "venueHint" | "slippageBps">>
+  >;
+};
+
+export interface BasketPublishProposal {
+  id: string;
+  basketSlug: string;
+  proposedBy: string;
+  createdAt: string;
+  versionData: BasketVersionDraft;
+  status: "pending" | "approved";
+  approvedBy?: string;
+  approvedAt?: string;
+  approvalNote?: string;
 }
 
 export interface Basket {
@@ -80,13 +105,39 @@ export interface Basket {
   status: "active" | "paused" | "deprecated";
   activeVersionId: string;
   minUsdc: number;
-  performance: {
-    "1W": number;
-    "1M": number;
-    "6M": number;
-    "1Y": number;
-  };
   protocols: string[];
+}
+
+export interface BasketCatalogToken {
+  mint: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  type: string;
+  tradingStatus: string;
+  denylisted: boolean;
+  priceUsd: number;
+  weightBps: number;
+}
+
+export interface BasketCatalogItem extends Basket {
+  activeVersion: BasketVersion | null;
+  tokens: BasketCatalogToken[];
+}
+
+export interface TokenRegistryItem {
+  mint: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  type: string;
+  tradingStatus: string;
+  denylisted: boolean;
+  priceUsd: number;
+}
+
+export interface TokenRegistryResponse {
+  tokens: TokenRegistryItem[];
 }
 
 export interface QuoteRequest {
@@ -129,6 +180,8 @@ export interface SubmitPositionResponse {
 
 export interface Execution {
   id: string;
+  baseExecutionId?: string;
+  recoveryAction?: "retry" | "unwind";
   walletId: string;
   walletAddress: string;
   basketId: string;
@@ -154,6 +207,19 @@ export interface ExecutionLeg {
   mint: string;
   symbol: string;
   inAmountUsdc: number;
+  feeUsdc?: number;
+  side?: "buy" | "sell";
+  inputBaseUnits?: string;
+  receipt?: {
+    side: "buy" | "sell";
+    inputMint: string;
+    outputMint: string;
+    actualIn: string;
+    actualOut: string;
+    assetBalanceAfter: string;
+    assetDecimals: number;
+    slot: number;
+  };
   expectedOut: string;
   actualOut?: string;
   txSignature?: string;
@@ -222,16 +288,17 @@ export interface AdminKillSwitchResponse {
 }
 
 export interface BasketsResponse {
-  baskets: Basket[];
+  baskets: BasketCatalogItem[];
 }
 
 export interface BasketBySlugResponse {
   basket: Basket;
-  activeVersion: any; // BasketVersion | null
+  activeVersion: BasketVersion | null;
+  tokens: BasketCatalogToken[];
 }
 
 export interface RebalancesResponse {
-  versions: string[]; // version IDs
+  versions: BasketVersion[];
 }
 
 export interface KillSwitchToggleRequest {

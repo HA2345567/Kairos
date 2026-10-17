@@ -1,39 +1,18 @@
 /**
  * Kairos DB seeder (plan.md §4, PRD §11).
  *
- * Run from backend/:  npx tsx scripts/seed.ts   (after scripts/devnet-setup.ts)
+ * Run from backend/:  bun scripts/seed.ts   (after bun scripts/devnet-setup.ts)
  *
- * Seeds backend/data/kairos.db from the REAL devnet state:
- *   - token registry (real deterministic mints, prices, leg types, market-hours flag)
+ * Seeds backend/data/kairos.db from the devnet setup state:
+ *   - token registry (devnet mints, configured test rates, leg types, market-hours flag)
  *   - 6 baskets + their v1 compositions (weights sum EXACTLY 10000 bps)
- *   - 3 years of hourly price_snapshots per asset: deterministic random walk
- *     seeded by symbol, starting at 40% of the current price and engineered to
- *     end exactly at the current price
  *   - global_kill_switch=false setting
  *
- * Idempotent: tokens/baskets upsert; snapshot history is seeded once per mint
- * (skipped when the mint already has any snapshot).
+ * Idempotent: tokens and baskets are upserted; market history is never seeded.
  */
-import { createHash } from "node:crypto";
 import { repository } from "../src/db/repository";
 import { loadDevnetState } from "../src/chain/devnetState";
 import type { Basket, BasketLeg, BasketVersion, Token } from "../src/db/schema";
-
-// ---------- deterministic PRNG (seeded by symbol) ----------
-
-function seedFromSymbol(symbol: string): number {
-  return createHash("sha256").update(symbol).digest().readUInt32BE(0);
-}
-
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 // ---------- baskets (weights MUST sum to exactly 10000) ----------
 
@@ -125,67 +104,13 @@ const BASKETS: BasketSpec[] = [
   },
 ];
 
-/** Placeholder performance figures (deterministic, cosmetic until pricing lane computes real ones). */
-function performanceFor(slug: string): Basket["performance"] {
-  const h = seedFromSymbol(slug);
-  const r = (base: number) => Number(((h % 100) / 100 + base).toFixed(2));
-  return { "1W": r(0.4), "1M": r(2.1), "6M": r(7.3), "1Y": r(15.8) };
-}
-
-// ---------- snapshot walk ----------
-
-const HISTORY_HOURS = 3 * 365 * 24; // 26,280 hourly points
-const WALK_VOLATILITY = 0.004; // ±0.4% per-hour noise bound
-
-function generateWalk(symbol: string, currentPrice: number): number[] {
-  const rand = mulberry32(seedFromSymbol(symbol));
-  const startPrice = 0.4 * currentPrice;
-  const n = HISTORY_HOURS;
-  const totalLogDrift = Math.log(currentPrice / startPrice);
-
-  // log-space walk with noise, then a linear correction in log space so the
-  // series starts at exactly startPrice and ends at exactly currentPrice.
-  const logWalk = new Array<number>(n + 1);
-  logWalk[0] = Math.log(startPrice);
-  for (let i = 1; i <= n; i++) {
-    const noise = (rand() * 2 - 1) * WALK_VOLATILITY;
-    logWalk[i] = logWalk[i - 1] + (totalLogDrift / n) + noise;
-  }
-  const endError = Math.log(currentPrice) - logWalk[n];
-  const out = new Array<number>(n + 1);
-  for (let i = 0; i <= n; i++) {
-    const corrected = logWalk[i] + (endError * i) / n;
-    out[i] = Number(Math.exp(corrected).toPrecision(10));
-  }
-  return out;
-}
-
-function seedSnapshots(symbol: string, mint: string, currentPrice: number): number {
-  if (repository.latestPrice(mint) !== null) {
-    console.log(`[seed] snapshots for ${symbol}: already present, skipping`);
-    return 0;
-  }
-  const series = generateWalk(symbol, currentPrice);
-  const endMs = Date.now();
-  const startMs = endMs - HISTORY_HOURS * 3_600_000;
-  const t0 = Date.now();
-  for (let i = 0; i <= HISTORY_HOURS; i++) {
-    const ts = new Date(startMs + i * 3_600_000).toISOString();
-    repository.addSnapshot(mint, ts, series[i], "seed-walk");
-  }
-  console.log(
-    `[seed] snapshots for ${symbol}: ${series.length} rows in ${((Date.now() - t0) / 1000).toFixed(1)}s`
-  );
-  return series.length;
-}
-
 // ---------- main ----------
 
-function main(): void {
+async function main(): Promise<void> {
   const state = loadDevnetState();
   if (!state) {
     console.error(
-      `[seed] ${"devnet-state.json"} not found at expected path — run "npx tsx scripts/devnet-setup.ts" first`
+      `[seed] devnet-state.json not found at expected path — run "bun scripts/devnet-setup.ts" first`
     );
     process.exitCode = 1;
     return;
@@ -217,7 +142,7 @@ function main(): void {
       priceUsd: a.priceUsd,
     })),
   ];
-  for (const t of tokens) repository.saveToken(t);
+  for (const t of tokens) (await repository.saveToken(t));
   console.log(`[seed] tokens: ${tokens.length} upserted (incl. USDC)`);
 
   // ---- baskets + v1 versions ----
@@ -258,7 +183,7 @@ function main(): void {
       publishedAt: nowIso,
       legs,
     };
-    repository.saveBasketVersion(version);
+    (await repository.saveBasketVersion(version));
 
     const basket: Basket = {
       id: basketId,
@@ -269,10 +194,9 @@ function main(): void {
       status: "active",
       activeVersionId: versionId,
       minUsdc: 25,
-      performance: performanceFor(spec.slug),
       protocols: ["Kairos Router"],
     };
-    repository.saveBasket(basket);
+    (await repository.saveBasket(basket));
     console.log(
       `[seed] basket ${spec.slug.padEnd(28)} legs ${spec.legs.length}  weights ${spec.legs
         .map(([s, w]) => `${s}:${w}`)
@@ -281,18 +205,11 @@ function main(): void {
   }
   console.log(`[seed] baskets: ${BASKETS.length} versions + ${legCount} legs saved`);
 
-  // ---- 3y hourly price history ----
-  let snapshotCount = 0;
-  for (const asset of state.assets) {
-    snapshotCount += seedSnapshots(asset.symbol, asset.mint, asset.priceUsd);
-  }
-  console.log(`[seed] snapshots: ${snapshotCount} rows added (3y hourly per asset)`);
-
   // ---- settings ----
-  repository.setSetting("global_kill_switch", "false");
+  (await repository.setSetting("global_kill_switch", "false"));
   console.log(`[seed] settings: global_kill_switch=false`);
 
   console.log("[seed] done.");
 }
 
-main();
+(await main());

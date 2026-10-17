@@ -1,23 +1,23 @@
-import React, { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { PageShell } from "@/components/layout/PageShell";
-import { useTokenPrices } from "@/hooks/useTokenPrices";
 import {
   ChevronLeft,
-  Sparkles,
   FlaskConical,
   Plus,
   Trash2,
   Send,
   PieChart as PieIcon,
-  LineChart as ChartIcon,
   Search,
   Check,
   X,
   Equal,
 } from "lucide-react";
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, AreaChart, Area, XAxis, YAxis } from "recharts";
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import { kairosApi } from "@/lib/api-client";
+import type { TokenRegistryItem } from "@/lib/api-types";
 import "./labs-create.css";
 
 export interface LabTokenAllocation {
@@ -29,140 +29,10 @@ export interface LabTokenAllocation {
   category: string;
 }
 
-export const VERIFIED_SOLANA_TOKENS: {
-  symbol: string;
-  name: string;
-  mint: string;
+interface LabRegistryToken extends TokenRegistryItem {
   icon: string;
-  category: "DeFi" | "AI & Compute" | "DePIN" | "Culture & Memes" | "Infrastructure";
-}[] = [
-  {
-    symbol: "SOL",
-    name: "Solana",
-    mint: "So11111111111111111111111111111111111111112",
-    icon: "/tokens/sol.png",
-    category: "Infrastructure",
-  },
-  {
-    symbol: "JUP",
-    name: "Jupiter",
-    mint: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
-    icon: "/tokens/jup.png",
-    category: "DeFi",
-  },
-  {
-    symbol: "JTO",
-    name: "Jito Governance",
-    mint: "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
-    icon: "/tokens/jto.png",
-    category: "Infrastructure",
-  },
-  {
-    symbol: "PYTH",
-    name: "Pyth Network",
-    mint: "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3",
-    icon: "/tokens/pyth.png",
-    category: "Infrastructure",
-  },
-  {
-    symbol: "KMNO",
-    name: "Kamino",
-    mint: "KMNo3nJsBXfcpJTVhZcXLW7RmTwTt4GVFE7suUBo9sS",
-    icon: "/tokens/kmno.png",
-    category: "DeFi",
-  },
-  {
-    symbol: "RAY",
-    name: "Raydium",
-    mint: "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
-    icon: "/tokens/ray.png",
-    category: "DeFi",
-  },
-  {
-    symbol: "ORCA",
-    name: "Orca",
-    mint: "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
-    icon: "/tokens/orca.png",
-    category: "DeFi",
-  },
-  {
-    symbol: "RENDER",
-    name: "Render Network",
-    mint: "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof",
-    icon: "/tokens/render.png",
-    category: "AI & Compute",
-  },
-  {
-    symbol: "FARTCOIN",
-    name: "Fartcoin",
-    mint: "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump",
-    icon: "/tokens/fartcoin.png",
-    category: "AI & Compute",
-  },
-  {
-    symbol: "PIPPIN",
-    name: "Pippin AI",
-    mint: "Dfh5DzRgSvvCFDoYc2ciTkMrbDfRKybA4So2gDEqpump",
-    icon: "/tokens/pippin.png",
-    category: "AI & Compute",
-  },
-  {
-    symbol: "GOAT",
-    name: "Goatseus Maximus",
-    mint: "CzLSujWBLFsSjncfkh59rUFqvafWcY5tzedWJSuypump",
-    icon: "/tokens/goat.png",
-    category: "AI & Compute",
-  },
-  {
-    symbol: "HNT",
-    name: "Helium",
-    mint: "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux",
-    icon: "/tokens/hnt.png",
-    category: "DePIN",
-  },
-  {
-    symbol: "IOT",
-    name: "Helium IOT",
-    mint: "iotEVVZLEywoTn1QdwNPddxPWszn3zFhEotwmRiQsDa",
-    icon: "/tokens/iot.png",
-    category: "DePIN",
-  },
-  {
-    symbol: "MOBILE",
-    name: "Helium Mobile",
-    mint: "mb1eu7TzEc71KxDvmsK93pfmVJaRwDJXcvBzZqMDyMr",
-    icon: "/tokens/mobile.png",
-    category: "DePIN",
-  },
-  {
-    symbol: "BONK",
-    name: "Bonk",
-    mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
-    icon: "/tokens/bonk.png",
-    category: "Culture & Memes",
-  },
-  {
-    symbol: "TRUMP",
-    name: "Official Trump",
-    mint: "6p6xgHyF7AeQHydaKVtQapED88WNVEK551uk5bQSpump",
-    icon: "/tokens/trump.png",
-    category: "Culture & Memes",
-  },
-  {
-    symbol: "PENGU",
-    name: "Pudgy Penguins",
-    mint: "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv",
-    icon: "/tokens/pengu.png",
-    category: "Culture & Memes",
-  },
-  {
-    symbol: "CLOUD",
-    name: "Sanctum",
-    mint: "CLoUDKc4Ane7HeQcPpE3YHnznRxhMimJ4MyaUqyHFzAu",
-    icon: "/tokens/cloud.png",
-    category: "Infrastructure",
-  },
-];
+  category: string;
+}
 
 // Sleek high-contrast palette with ZERO green
 const DONUT_COLORS = [
@@ -182,17 +52,26 @@ export default function LabsCreate() {
   // Form states
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [generateAiCover, setGenerateAiCover] = useState(true);
   const [customCoverUrl, setCustomCoverUrl] = useState("");
   const [allocations, setAllocations] = useState<LabTokenAllocation[]>([]);
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("All");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Live prices for constituent allocations
-  const constituentMints = useMemo(() => allocations.map((a) => a.mint), [allocations]);
-  const { prices: livePrices } = useTokenPrices(constituentMints);
+  const { data: tokenResponse, isLoading: tokensLoading, isError: tokensFailed } = useQuery({
+    queryKey: ["token-registry"],
+    queryFn: () => kairosApi.getTokens(),
+    staleTime: 60_000,
+  });
+  const availableTokens = useMemo<LabRegistryToken[]>(
+    () => (tokenResponse?.tokens ?? [])
+      .filter((token) => !token.denylisted && token.tradingStatus === "active" && token.type !== "stablecoin")
+      .map((token) => ({
+        ...token,
+        icon: `/tokens/${token.symbol.replace(/^t/, "").toLowerCase()}.png`,
+        category: token.type === "xstock" || token.type === "ondo" ? "Tokenized assets" : "Devnet assets",
+      })),
+    [tokenResponse]
+  );
 
   // Total weight calculation
   const totalWeight = useMemo(() => {
@@ -233,29 +112,26 @@ export default function LabsCreate() {
   }
 
   // Add token handler
-  function handleAddToken(token: (typeof VERIFIED_SOLANA_TOKENS)[0]) {
+  function handleAddToken(token: LabRegistryToken) {
     if (allocations.some((a) => a.mint === token.mint)) {
       toast.info(`${token.symbol} is already added`);
       return;
     }
 
     const nextCount = allocations.length + 1;
-    const initialWeight = Math.floor(100 / nextCount);
-
+    const baseWeight = Math.floor(100 / nextCount);
+    const remainder = 100 - baseWeight * nextCount;
     const updated = [
-      ...allocations.map((a) => ({
-        ...a,
-        weightPct: Math.floor((100 - initialWeight) / allocations.length) || initialWeight,
-      })),
+      ...allocations,
       {
         symbol: token.symbol,
         name: token.name,
         mint: token.mint,
         icon: token.icon,
-        weightPct: initialWeight,
+        weightPct: baseWeight,
         category: token.category,
       },
-    ];
+    ].map((item, index) => ({ ...item, weightPct: baseWeight + (index === 0 ? remainder : 0) }));
 
     setAllocations(updated);
     setIsAssetModalOpen(false);
@@ -279,50 +155,8 @@ export default function LabsCreate() {
     }
   }
 
-  // Magic AI Generator
-  function handleMagicGenerate() {
-    const presets = [
-      {
-        title: "Solana AI Agent Infrastructure",
-        desc: "Curated high-conviction exposure to decentralized compute backbone, autonomous inference models, and memory networks on Solana. Rebalanced monthly based on protocol revenue and developer adoption.",
-        tokens: ["RENDER", "FARTCOIN", "PIPPIN", "GOAT"],
-      },
-      {
-        title: "Liquid Staking & MEV Alpha",
-        desc: "Dominant liquid staking protocols and validator MEV routing capture on Solana. Direct staking rewards combined with governance capture.",
-        tokens: ["JTO", "JUP", "CLOUD", "SOL"],
-      },
-      {
-        title: "Decentralized Physical Wireless (DePIN)",
-        desc: "Tokenizing real-world 5G telecom, decentralized IoT coverage, and sensor grids capturing enterprise wireless bandwidth.",
-        tokens: ["HNT", "IOT", "MOBILE"],
-      },
-    ];
-
-    const pick = presets[Math.floor(Math.random() * presets.length)];
-    setTitle(pick.title);
-    setDescription(pick.desc);
-
-    const matchedTokens = VERIFIED_SOLANA_TOKENS.filter((t) => pick.tokens.includes(t.symbol));
-    const equalShare = Math.floor(100 / matchedTokens.length);
-    const remainder = 100 - equalShare * matchedTokens.length;
-
-    setAllocations(
-      matchedTokens.map((t, idx) => ({
-        symbol: t.symbol,
-        name: t.name,
-        mint: t.mint,
-        icon: t.icon,
-        category: t.category,
-        weightPct: idx === 0 ? equalShare + remainder : equalShare,
-      }))
-    );
-
-    toast.success("Generated strategy suggestion!");
-  }
-
   // Publish Basket Handler
-  function handlePublish(e: React.FormEvent) {
+  function handlePublish(e: FormEvent) {
     e.preventDefault();
 
     if (!title.trim()) {
@@ -340,19 +174,14 @@ export default function LabsCreate() {
       return;
     }
 
-    setIsSubmitting(true);
-
     const newIdea = {
       id: `lab-${Date.now()}`,
       title: title.trim(),
       description: description.trim() || "Community curated thematic narrative basket on Solana.",
       author: "You",
-      votes: 1,
-      userVoted: "up" as const,
+      votes: 0,
       date: "Just now",
-      image: generateAiCover
-        ? "/baskets/solana-infrastructure.jpg"
-        : customCoverUrl || "/baskets/solana-infrastructure.jpg",
+      image: customCoverUrl || "/baskets/solana-infrastructure.jpg",
       tags: Array.from(new Set(allocations.map((a) => a.category))),
       tokens: allocations.map((a) => ({
         symbol: a.symbol,
@@ -360,50 +189,28 @@ export default function LabsCreate() {
         mint: a.mint,
         icon: a.icon,
         weightBps: Math.round(a.weightPct * 100),
-        priceUsd: livePrices[a.mint]?.priceUsd || 1.0,
-        change24h: livePrices[a.mint]?.change24h || 0,
       })),
-      returnsEst: "+24.5%",
-      isCommunity: true,
     };
 
     // Save to localStorage
     const saved = JSON.parse(localStorage.getItem("kairos_community_lab_ideas") || "[]");
     localStorage.setItem("kairos_community_lab_ideas", JSON.stringify([newIdea, ...saved]));
 
-    setTimeout(() => {
-      setIsSubmitting(false);
-      toast.success("Basket idea published successfully!");
-      navigate("/ideas");
-    }, 600);
+    toast.success("Saved in this browser. Community publishing is not connected yet.");
+    navigate("/labs");
   }
-
-  // Simulated Backtest curve
-  const backtestData = useMemo(() => {
-    if (allocations.length === 0) return [];
-
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"];
-    let base = 100;
-    return months.map((m, idx) => {
-      const drift = 1 + idx * 0.04 + Math.sin(idx) * 0.03;
-      base = Number((100 * drift).toFixed(2));
-      return {
-        month: m,
-        nav: base,
-      };
-    });
-  }, [allocations]);
 
   // Filtered tokens in modal
   const filteredTokens = useMemo(() => {
-    return VERIFIED_SOLANA_TOKENS.filter((t) => {
+    return availableTokens.filter((t) => {
       const matchSearch =
         t.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
         t.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchCat = activeCategory === "All" || t.category === activeCategory;
       return matchSearch && matchCat;
     });
-  }, [searchQuery, activeCategory]);
+  }, [availableTokens, searchQuery, activeCategory]);
+  const categories = ["All", ...new Set(availableTokens.map((token) => token.category))];
 
   return (
     <PageShell>
@@ -431,18 +238,10 @@ export default function LabsCreate() {
             </div>
             <div>
               <h1>Share a Basket Idea</h1>
-              <p>Describe your strategy, pick tokens or markets, set allocations, and publish.</p>
+              <p>Describe your strategy and choose active assets from the devnet registry.</p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleMagicGenerate}
-            className="labs-create-magic-btn"
-          >
-            <Sparkles className="size-3.5" />
-            <span>Magic</span>
-          </button>
         </div>
 
         {/* Two-Column Form & Preview Layout */}
@@ -482,47 +281,18 @@ export default function LabsCreate() {
               <span className="labs-create-char-counter">{description.length}/1000</span>
             </div>
 
-            {/* Cover Image Toggle */}
+            {/* Optional cover image */}
             <div className="labs-create-cover-group">
               <div className="labs-create-field-header">
-                <label className="labs-create-label">
-                  Cover Image <span className="optional">(optional)</span>
-                </label>
-
-                {/* Neutral High-Contrast Switch */}
-                <div className="labs-create-ai-toggle-row">
-                  <Sparkles className="size-3 text-muted-foreground" />
-                  <span>Generate with AI</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={generateAiCover}
-                    onClick={() => setGenerateAiCover(!generateAiCover)}
-                    className={`labs-create-switch ${generateAiCover ? "active" : ""}`}
-                  >
-                    <span className="labs-create-switch-thumb" />
-                  </button>
-                </div>
+                <label className="labs-create-label">Cover Image (optional)</label>
               </div>
-
-              {/* AI Banner */}
-              {generateAiCover ? (
-                <div className="labs-create-ai-banner">
-                  <Sparkles className="size-4 labs-create-ai-banner-icon" />
-                  <div>
-                    <strong>AI will generate a cover image</strong>
-                    <span>Based on your title and description when you publish.</span>
-                  </div>
-                </div>
-              ) : (
-                <input
-                  type="url"
-                  value={customCoverUrl}
-                  onChange={(e) => setCustomCoverUrl(e.target.value)}
-                  placeholder="https://example.com/cover.png"
-                  className="labs-create-input"
-                />
-              )}
+              <input
+                type="url"
+                value={customCoverUrl}
+                onChange={(e) => setCustomCoverUrl(e.target.value)}
+                placeholder="https://example.com/cover.png"
+                className="labs-create-input"
+              />
             </div>
 
             {/* Allocation Section */}
@@ -531,7 +301,7 @@ export default function LabsCreate() {
                 <div>
                   <label className="labs-create-label">Allocation</label>
                   <p className="labs-create-alloc-desc">
-                    Pick tokens, stocks, and/or prediction markets and set each target weight (must total 100%).
+                    Pick active devnet registry assets and set each target weight (must total 100%).
                   </p>
                 </div>
 
@@ -551,9 +321,6 @@ export default function LabsCreate() {
               {allocations.length > 0 && (
                 <div className="labs-create-allocations-table">
                   {allocations.map((item) => {
-                    const price = livePrices[item.mint]?.priceUsd;
-                    const change = livePrices[item.mint]?.change24h;
-
                     return (
                       <div key={item.mint} className="labs-create-allocation-row">
                         <div className="labs-create-token-info">
@@ -570,25 +337,6 @@ export default function LabsCreate() {
                             <span className="labs-create-token-name">{item.name}</span>
                           </div>
                         </div>
-
-                        {/* Live Price Tag */}
-                        {price !== undefined && (
-                          <div className="labs-create-token-price-col">
-                            <div className="labs-create-token-price">
-                              ${price < 0.01 ? price.toFixed(6) : price.toFixed(2)}
-                            </div>
-                            {change !== undefined && (
-                              <div
-                                className={`labs-create-token-change ${
-                                  change >= 0 ? "positive" : "negative"
-                                }`}
-                              >
-                                {change >= 0 ? "+" : ""}
-                                {change.toFixed(2)}%
-                              </div>
-                            )}
-                          </div>
-                        )}
 
                         {/* Weight Input Box */}
                         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -657,11 +405,11 @@ export default function LabsCreate() {
 
               <button
                 type="submit"
-                disabled={isSubmitting || !title.trim() || allocations.length === 0 || !isValidWeight}
+                disabled={!title.trim() || allocations.length === 0 || !isValidWeight}
                 className="labs-create-publish-btn"
               >
                 <Send className="size-3.5" />
-                <span>{isSubmitting ? "Publishing..." : "Publish Basket"}</span>
+                <span>Save Idea</span>
               </button>
             </div>
           </div>
@@ -736,48 +484,12 @@ export default function LabsCreate() {
               )}
             </div>
 
-            {/* Card 2: Backtested Data (~365px min-height) */}
-            <div className="labs-create-preview-card labs-create-card-backtest">
-              <h3 className="labs-create-card-title">
-                <ChartIcon className="size-4" />
-                <span>Backtested Data</span>
-              </h3>
-
-              {allocations.length === 0 ? (
-                <div className="labs-create-empty-state">
-                  <p>Graph data will appear here after simulation.</p>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ height: "11rem", width: "100%" }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={backtestData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="backtestGradNeutral" x1="0" y1="0" x2="0" y2="1">
-                            <stop stopColor="#38bdf8" stopOpacity={0.25} />
-                            <stop offset="1" stopColor="#38bdf8" stopOpacity={0.0} />
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="month" tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
-                        <YAxis tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
-                        <Area
-                          type="monotone"
-                          dataKey="nav"
-                          stroke="#38bdf8"
-                          strokeWidth={2}
-                          fill="url(#backtestGradNeutral)"
-                          dot={false}
-                          isAnimationActive={false}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="labs-create-stat-row">
-                    <span>Backtested Return: <strong className="labs-create-stat-val">+38.4%</strong></span>
-                    <span>1Y Simulation</span>
-                  </div>
-                </div>
-              )}
+            {/* Historical performance is only shown after verified snapshots exist. */}
+            <div className="labs-create-preview-card labs-create-card-history">
+              <h3 className="labs-create-card-title">Historical Performance</h3>
+              <div className="labs-create-empty-state">
+                <p>Unavailable until verified historical price data is connected.</p>
+              </div>
             </div>
           </div>
         </form>
@@ -808,7 +520,7 @@ export default function LabsCreate() {
 
               {/* Categories Pills */}
               <div className="labs-create-pills-wrap">
-                {["All", "DeFi", "AI & Compute", "DePIN", "Culture & Memes", "Infrastructure"].map((cat) => (
+                {categories.map((cat) => (
                   <button
                     key={cat}
                     type="button"
@@ -822,9 +534,13 @@ export default function LabsCreate() {
 
               {/* Tokens List */}
               <div className="labs-create-modal-list">
-                {filteredTokens.length === 0 ? (
+                {tokensLoading ? (
+                  <div className="labs-create-modal-empty">Loading devnet assets…</div>
+                ) : tokensFailed ? (
+                  <div className="labs-create-modal-empty">Token registry is unavailable. Try again later.</div>
+                ) : filteredTokens.length === 0 ? (
                   <div className="labs-create-modal-empty">
-                    No tokens match "{searchQuery}"
+                    {availableTokens.length ? `No tokens match "${searchQuery}"` : "No active devnet assets are available."}
                   </div>
                 ) : (
                   filteredTokens.map((t) => {

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import {
@@ -19,7 +20,7 @@ describe("Kairos Router - Step 5 Assembly & Simulation Gate Tests", () => {
   const fundedPayer = new PublicKey("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
   const mockProgramId = Keypair.generate().publicKey;
 
-  it(
+  it.skipIf(process.env.KAIROS_RUN_LIVE_SIMULATION !== "1")(
     "assembles Versioned Transaction (v0) with ALT and validates Compute Unit ceiling",
     async () => {
       // 1. Live simulation of the combined dual-swap instructions using Jupiter ALTs

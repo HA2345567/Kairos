@@ -17,6 +17,9 @@ import type {
   AdminKillSwitchResponse,
   BasketsResponse,
   BasketBySlugResponse,
+  BasketPublishProposal,
+  BasketVersion,
+  TokenRegistryResponse,
   RebalancesResponse,
   ErrorResponse,
   NotFoundError,
@@ -39,8 +42,8 @@ class KairosApiClient {
   private authToken: string | null = null;
   private refreshToken: string | null = null;
 
-  constructor(baseUrl: string = '') {
-    this.baseUrl = baseUrl || API_ENDPOINTS.HEALTH.replace('/health', '');
+  constructor(baseUrl: string = import.meta.env.VITE_API_URL || '') {
+    this.baseUrl = baseUrl.replace(/\/$/, '');
   }
 
   setAuth(token: string, refreshToken?: string) {
@@ -88,18 +91,18 @@ class KairosApiClient {
     return data as T;
   }
 
-  async get<T>(endpoint: string): Promise<T> {
+  async get<T>(endpoint: string, headers: Record<string, string> = {}): Promise<T> {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       method: 'GET',
-      headers: this.getHeaders(),
+      headers: this.getHeaders(headers),
     });
     return this.handleResponse<T>(response);
   }
 
-  async post<T>(endpoint: string, body: unknown): Promise<T> {
+  async post<T>(endpoint: string, body: unknown, headers: Record<string, string> = {}): Promise<T> {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       method: 'POST',
-      headers: this.getHeaders(),
+      headers: this.getHeaders(headers),
       body: JSON.stringify(body),
     });
     return this.handleResponse<T>(response);
@@ -153,8 +156,8 @@ class KairosApiClient {
   }
 
   // Catalog endpoints
-  async getTokens() {
-    return this.get<{ tokens: any[] }>(API_ENDPOINTS.TOKENS);
+  async getTokens(): Promise<TokenRegistryResponse> {
+    return this.get<TokenRegistryResponse>(API_ENDPOINTS.TOKENS);
   }
 
   async getBaskets() {
@@ -192,21 +195,24 @@ class KairosApiClient {
   }
 
   async getExecution(id: string): Promise<Execution> {
-    return this.get<Execution>(API_ENDPOINTS.EXECUTIONS(id));
+    const response = await this.get<{ execution: Execution }>(API_ENDPOINTS.EXECUTIONS(id));
+    return response.execution;
   }
 
   async retryExecution(id: string, idempotencyKey: string, walletAddress: string): Promise<Execution> {
-    return this.post<Execution>(API_ENDPOINTS.EXECUTIONS_RETRY(id), {
+    const response = await this.post<{ execution: Execution }>(API_ENDPOINTS.EXECUTIONS_RETRY(id), {
       idempotencyKey,
       walletAddress
     });
+    return response.execution;
   }
 
   async unwindExecution(id: string, idempotencyKey: string, walletAddress: string): Promise<Execution> {
-    return this.post<Execution>(API_ENDPOINTS.EXECUTIONS_UNWIND(id), {
+    const response = await this.post<{ execution: Execution }>(API_ENDPOINTS.EXECUTIONS_UNWIND(id), {
       idempotencyKey,
       walletAddress
     });
+    return response.execution;
   }
 
   async getPositions(walletAddress: string): Promise<PositionsResponse> {
@@ -214,39 +220,35 @@ class KairosApiClient {
   }
 
   async getPosition(id: string): Promise<Position> {
-    return this.get<Position>(API_ENDPOINTS.POSITION_BY_ID(id));
+    return (await this.get<{ position: Position }>(API_ENDPOINTS.POSITION_BY_ID(id))).position;
   }
 
   async prepareRebalance(id: string, idempotencyKey: string, walletAddress: string): Promise<Execution> {
-    return this.post<Execution>(API_ENDPOINTS.POSITION_REBALANCE_PREPARE(id), {
+    const response = await this.post<{ execution: Execution }>(API_ENDPOINTS.POSITION_REBALANCE_PREPARE(id), {
       idempotencyKey,
       walletAddress
     });
+    return response.execution;
   }
 
   async prepareClosePreview(id: string) {
-    // Close preview doesn't require auth keys, so we can call without them
-    const originalAuth = this.authToken;
-    this.clearAuth();
-    try {
-      return this.get(API_ENDPOINTS.POSITION_CLOSE_PREPARE(id));
-    } finally {
-      this.authToken = originalAuth;
-    }
+    return this.post(API_ENDPOINTS.POSITION_CLOSE_PREPARE(id), {});
   }
 
   async submitCloseExecution(id: string, idempotencyKey: string, walletAddress: string): Promise<Execution> {
-    return this.post<Execution>(API_ENDPOINTS.POSITION_CLOSE_PREPARE(id), {
+    const response = await this.post<{ execution: Execution }>(API_ENDPOINTS.POSITION_CLOSE_PREPARE(id), {
       idempotencyKey,
       walletAddress
     });
+    return response.execution;
   }
 
   async setAutoRebalance(id: string, enabled: boolean, policy?: any): Promise<Position> {
-    return this.put<Position>(API_ENDPOINTS.POSITION_AUTO_REBALANCE(id), {
+    const response = await this.put<{ position: Position }>(API_ENDPOINTS.POSITION_AUTO_REBALANCE(id), {
       enabled,
       policy
     });
+    return response.position;
   }
 
   // Admin endpoints (require x-admin-token header - handled separately)
@@ -269,7 +271,7 @@ class KairosApiClient {
     return this.post(API_ENDPOINTS.ADMIN_TOKEN_STATUS(mint), { tradingStatus });
   }
 
-  async publishBasketVersion(
+  async proposeBasketVersion(
     slug: string,
     version: number,
     changelog: string,
@@ -280,16 +282,41 @@ class KairosApiClient {
       venueHint?: string;
       slippageBps?: number
     }>,
-    publishedBy: string,
-    requireApproval?: { approver: string; note?: string }
-  ) {
-    return this.post(API_ENDPOINTS.ADMIN_BASKET_PUBLISH(slug), {
-      version,
-      changelog,
-      legs,
-      publishedBy,
-      requireApproval
+    adminToken: string
+  ): Promise<{ proposal: BasketPublishProposal }> {
+    return this.post<{ proposal: BasketPublishProposal }>(
+      API_ENDPOINTS.ADMIN_BASKET_PUBLISH(slug),
+      { version, changelog, legs },
+      { 'x-admin-token': adminToken }
+    );
+  }
+
+  async getBasketPublishProposals(approverToken: string) {
+    return this.get<{ proposals: BasketPublishProposal[] }>(API_ENDPOINTS.ADMIN_PUBLISH_PROPOSALS, {
+      'x-admin-approver-token': approverToken,
     });
+  }
+
+  async prepareBasketPublishTransaction(id: string, adminToken: string, approvalAddress: string) {
+    return this.post<{ transaction: string; admin: string; approval: string; lastValidBlockHeight: number }>(
+      API_ENDPOINTS.ADMIN_PUBLISH_TRANSACTION(id),
+      { approvalAddress },
+      { 'x-admin-token': adminToken }
+    );
+  }
+
+  async approveBasketPublishProposal(
+    id: string,
+    approverToken: string,
+    signedTransaction: string,
+    approvalAddress: string,
+    note = ""
+  ) {
+    return this.post<{ proposal: BasketPublishProposal; version: BasketVersion }>(
+      API_ENDPOINTS.ADMIN_PUBLISH_APPROVE(id),
+      { note, signedTransaction, approvalAddress },
+      { 'x-admin-approver-token': approverToken }
+    );
   }
 
   async getExecutions(status?: string, limit?: number) {

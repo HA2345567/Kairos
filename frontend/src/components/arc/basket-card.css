@@ -131,22 +131,6 @@
   font-weight: 600;
 }
 
-.kairos-card-points {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  padding: 2.5px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface-hover);
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.4;
-  white-space: nowrap;
-}
-
 .kairos-card-return {
   display: flex;
   flex-direction: column;

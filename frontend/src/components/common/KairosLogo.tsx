@@ -1,7 +1,7 @@
-import React from "react";
+import type { SVGProps } from "react";
 import { cn } from "@/lib/utils";
 
-interface KairosLogoProps extends React.SVGProps<SVGSVGElement> {
+interface KairosLogoProps extends SVGProps<SVGSVGElement> {
   className?: string;
   size?: number | string;
   variant?: "current" | "white" | "lime" | "silver";

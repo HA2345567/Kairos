@@ -1,10 +1,9 @@
-import { useMemo } from "react";
 import { Basket } from "@/lib/baskets-data";
 import { Link } from "react-router-dom";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TokenAvatar } from "@/components/common/TokenAvatar";
-import { RealtimeSparkline } from "@/components/common/RealtimeSparkline";
+import { BasketSparkline } from "@/components/common/BasketSparkline";
 import { useBasketNavHistory } from "@/hooks/useBasketNavHistory";
 import { Button } from "@/components/arc/button";
 
@@ -12,33 +11,15 @@ interface BasketRowProps {
   basket: Basket;
   index: number;
   onInvestClick?: (basket: Basket) => void;
-  livePrices?: Record<string, { priceUsd: number; change24h: number }>;
 }
 
-export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRowProps) {
+export function BasketRow({ basket, index, onInvestClick }: BasketRowProps) {
   const { data: navSummary, isLoading: isNavLoading } = useBasketNavHistory(basket.id);
 
   const hasData = Boolean(navSummary && navSummary.history && navSummary.history.length > 0);
   const allTimeReturn = hasData ? navSummary!.allTimeReturnPct : null;
   const isPositive = allTimeReturn !== null ? allTimeReturn >= 0 : true;
   const returnString = allTimeReturn !== null ? `${allTimeReturn >= 0 ? "+" : ""}${allTimeReturn.toFixed(2)}%` : null;
-
-  // Find top performer token for the subline with real-time live prices
-  const topToken = useMemo(() => {
-    if (!basket.tokens || basket.tokens.length === 0) return null;
-    const tokensWithLive = basket.tokens.map((t) => {
-      const lookup = t.priceMint ?? t.mint;
-      const live = livePrices?.[lookup] || livePrices?.[t.mint];
-      return {
-        ...t,
-        change24h: live?.change24h !== undefined ? live.change24h : t.change24h,
-        priceUsd: live?.priceUsd !== undefined ? live.priceUsd : t.priceUsd,
-      };
-    });
-    return tokensWithLive.sort(
-      (a, b) => Math.abs(b.change24h || 0) - Math.abs(a.change24h || 0)
-    )[0];
-  }, [basket.tokens, livePrices]);
 
   return (
     <div className="group relative flex items-center justify-between gap-3 sm:gap-6 bg-surface hover:bg-surface-hover px-4 py-3.5 sm:px-6 sm:py-4 transition-colors duration-150">
@@ -91,21 +72,6 @@ export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRo
               ))}
             </div>
 
-            {/* Top Gainer Badge matching Cesto screenshot (e.g. · PUMP +7.6% today) */}
-            {topToken && (
-              <span className="text-[11px] sm:text-xs font-mono text-text-secondary flex items-center gap-1 shrink-0">
-                <span className="text-text-muted">·</span>
-                <span className="font-semibold text-foreground">{topToken.symbol}</span>
-                <span
-                  className={
-                    topToken.change24h >= 0 ? "text-emerald-400 font-semibold" : "text-rose-400 font-semibold"
-                  }
-                >
-                  {topToken.change24h >= 0 ? "+" : ""}
-                  {topToken.change24h}% today
-                </span>
-              </span>
-            )}
           </div>
         </div>
       </div>
@@ -119,13 +85,11 @@ export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRo
               <span className="inline-block w-16 h-3 bg-surface-hover animate-pulse rounded" />
             </div>
           ) : hasData ? (
-            <RealtimeSparkline
-              id={basket.id}
-              initialData={navSummary!.sparkline}
+            <BasketSparkline
+              values={navSummary!.sparkline}
               isPositive={isPositive}
               width={140}
               height={38}
-              enableLiveTicks={true}
             />
           ) : (
             <div className="w-[140px] h-[38px] flex items-center justify-center">

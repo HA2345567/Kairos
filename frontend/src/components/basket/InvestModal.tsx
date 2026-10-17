@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, VersionedTransaction } from "@solana/web3.js";
 import { getAssociatedTokenAddress } from "@solana/spl-token";
 import {
   Dialog,
@@ -24,8 +24,10 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { toast } from "sonner";
-import { buildInvestTransaction } from "@/lib/solana-tx-builder";
 import { Button } from "@/components/arc/button";
+import { kairosApi } from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/lib/api-endpoints";
+import type { QuoteLeg } from "@/lib/api-types";
 
 interface InvestModalProps {
   basket: Basket | null;
@@ -35,9 +37,18 @@ interface InvestModalProps {
   onSuccess?: () => void;
 }
 
+const decodeTransaction = (base64: string) =>
+  VersionedTransaction.deserialize(Uint8Array.from(atob(base64), (character) => character.charCodeAt(0)));
+
+const encodeTransaction = (transaction: VersionedTransaction) => {
+  let binary = "";
+  for (const byte of transaction.serialize()) binary += String.fromCharCode(byte);
+  return btoa(binary);
+};
+
 export function InvestModal({ basket, open, onOpenChange, initialAmount, onSuccess }: InvestModalProps) {
   // Solana Wallet Adapter
-  const { connected, publicKey, sendTransaction } = useWallet();
+  const { connected, publicKey, signAllTransactions, signTransaction } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { connection } = useConnection();
 
@@ -48,15 +59,17 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
   const [amountUsdc, setAmountUsdc] = useState<string>(initialAmount || "10");
 
   useEffect(() => {
-    if (open && initialAmount && parseFloat(initialAmount) > 0) {
-      setAmountUsdc(initialAmount);
+    if (open) {
+      const requested = Number(initialAmount);
+      setAmountUsdc(String(requested >= (basket?.minUsdc ?? 25) ? requested : basket?.minUsdc ?? 25));
     }
-  }, [open, initialAmount]);
+  }, [open, initialAmount, basket?.minUsdc]);
   const [isInvesting, setIsInvesting] = useState(false);
   const [step, setStep] = useState<"input" | "quoting" | "signing" | "success">("input");
   const [txSignature, setTxSignature] = useState<string>("");
   const [simError, setSimError] = useState<string | null>(null);
-  const [liveQuote, setLiveQuote] = useState<{ jupTokens: number; jtoTokens: number } | null>(null);
+  const [liveQuote, setLiveQuote] = useState<QuoteLeg[] | null>(null);
+  const [quoteTotals, setQuoteTotals] = useState<{ platformFeeUsdc: number; netInvestUsdc: number } | null>(null);
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
   const [isMintingFaucet, setIsMintingFaucet] = useState(false);
 
@@ -122,121 +135,75 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
       return;
     }
 
-    if (numAmount <= 0) {
-      toast.error("Please enter a valid investment amount.");
+    if (numAmount < basket.minUsdc) {
+      toast.error(`Minimum investment is $${basket.minUsdc} USDC.`);
       return;
     }
 
     setSimError(null);
     setIsInvesting(true);
+    setLiveQuote(null);
+    setQuoteTotals(null);
 
     try {
-      // Step 1: Real live quote from backend
+      // Step 1: Quote from the backend's configured devnet price source
       setStep("quoting");
-      let quoteLegs: any[] = [];
-      try {
-        const quoteRes = await kairosApi.getQuote(basket.slug, numAmount);
-        if (quoteRes?.quote?.legs) {
-          quoteLegs = quoteRes.quote.legs;
-          setLiveQuote({
-            jupTokens: parseFloat(quoteLegs[0]?.expectedOutTokens || "0"),
-            jtoTokens: parseFloat(quoteLegs[1]?.expectedOutTokens || "0"),
-          });
-        }
-      } catch (quoteErr) {
-        console.warn("[InvestModal] Backend quote fetch:", quoteErr);
-      }
+      const quoteRes = await kairosApi.getQuote(basket.slug, numAmount);
+      const quoteLegs = quoteRes?.quote?.legs;
+      if (!quoteLegs?.length) throw new Error("The quote did not include any investable basket legs.");
+      setLiveQuote(quoteLegs);
+      setQuoteTotals({
+        platformFeeUsdc: quoteRes.quote.platformFeeUsdc,
+        netInvestUsdc: quoteRes.quote.netInvestUsdc,
+      });
 
       // Step 2: Prepare position with real VersionedTransactions
       setStep("signing");
       const idempotencyKey = `inv-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      let preparedTxs: string[] = [];
-      let execId = "";
-
-      try {
-        const prepRes = await kairosApi.preparePosition({
-          basket: basket.slug,
-          usdc: numAmount,
-          walletAddress: effectivePublicKey.toBase58(),
-          idempotencyKey,
-        });
-        if (prepRes?.execution?.preparedTxs) {
-          preparedTxs = prepRes.execution.preparedTxs;
-          execId = prepRes.execution.id;
-        }
-      } catch (prepErr: any) {
-        console.warn("[InvestModal] Backend prepare position:", prepErr);
+      const prepRes = await kairosApi.preparePosition({
+        basket: basket.slug,
+        usdc: numAmount,
+        walletAddress: effectivePublicKey.toBase58(),
+        idempotencyKey,
+      });
+      const preparedTxs = prepRes?.execution?.preparedTxs ?? [];
+      const execId = prepRes?.execution?.id ?? "";
+      if (!execId || preparedTxs.length === 0) {
+        throw new Error("The server did not prepare executable basket transactions.");
       }
 
       let sig = "";
 
-      if (preparedTxs.length > 0) {
-        const txObjects = preparedTxs.map((b64) =>
-          VersionedTransaction.deserialize(Buffer.from(b64, "base64"))
-        );
-
-        let signedTxs: VersionedTransaction[] = [];
-        if (signAllTransactions) {
-          signedTxs = await signAllTransactions(txObjects);
-        } else if (signTransaction) {
-          for (const txObj of txObjects) {
-            signedTxs.push(await signTransaction(txObj));
-          }
-        } else {
-          for (const txObj of txObjects) {
-            sig = await sendTransaction(txObj, connection, {
-              skipPreflight: true,
-              preflightCommitment: "confirmed",
-            });
-          }
-        }
-
-        if (signedTxs.length > 0) {
-          const signedBase64 = signedTxs.map((t) =>
-            Buffer.from(t.serialize()).toString("base64")
-          );
-
-          // Step 3: Submit signed transaction to backend landing engine
-          const submitRes = await kairosApi.submitPosition({
-            executionId: execId,
-            signedTxs: signedBase64,
-            idempotencyKey,
-          });
-
-          // Step 4: Poll execution until landed / confirmed
-          if (submitRes?.execution) {
-            let curExec = submitRes.execution;
-            for (let i = 0; i < 20; i++) {
-              if (
-                curExec.status === "CONFIRMED" ||
-                curExec.status === "LANDED" ||
-                curExec.status === "SETTLED"
-              ) {
-                break;
-              }
-              await new Promise((r) => setTimeout(r, 1000));
-              try {
-                curExec = await kairosApi.getExecution(execId);
-              } catch {}
-            }
-          }
-          sig = execId;
-        }
-      } else {
-        // Fallback to local tx builder
-        const amountLamports = Math.floor(numAmount * 1_000_000);
-        const { tx } = await buildInvestTransaction(
-          connection,
-          effectivePublicKey,
-          amountLamports
-        );
-        sig = await sendTransaction(tx, connection, {
-          skipPreflight: true,
-          preflightCommitment: "confirmed",
-          maxRetries: 3,
-        });
-        await connection.confirmTransaction(sig, "confirmed");
+      const txObjects = preparedTxs.map(decodeTransaction);
+      if (!signAllTransactions && !signTransaction) {
+        throw new Error("This wallet cannot return signed transactions for Kairos verification.");
       }
+      const signedTxs: VersionedTransaction[] = signAllTransactions
+        ? await signAllTransactions(txObjects)
+        : await Promise.all(txObjects.map((tx) => signTransaction!(tx)));
+      if (signedTxs.length !== txObjects.length) {
+        throw new Error("The wallet did not sign every prepared basket leg.");
+      }
+
+      await kairosApi.submitPosition({
+        executionId: execId,
+        signedTxs: signedTxs.map(encodeTransaction),
+        idempotencyKey,
+      });
+      let curExec = await kairosApi.getExecution(execId);
+      for (let i = 0; i < 30 && ["SUBMITTED", "LANDING"].includes(curExec.status); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        curExec = await kairosApi.getExecution(execId);
+      }
+      if (curExec.status !== "COMPLETED") {
+        throw new Error(
+          curExec.status === "PARTIALLY_COMPLETED"
+            ? `Execution ${execId} completed partially. Resume or unwind it from execution history.`
+            : `Execution ${execId} is ${curExec.status.toLowerCase()}. Check execution history before retrying.`
+        );
+      }
+      sig = curExec.legs.find((leg) => leg.txSignature)?.txSignature ?? "";
+      if (!sig) throw new Error(`Execution ${execId} completed without a recorded transaction signature.`);
 
       // Step 5: Persist in local wallet ledger
       try {
@@ -248,14 +215,10 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
           basketName: basket.name,
           amountUsdc: numAmount,
           txSignature: sig,
-          tokensDescription: quoteLegs.length
-            ? quoteLegs
-                .map(
-                  (l: any) =>
-                    `~${parseFloat(l.expectedOutTokens || "0").toFixed(3)} ${l.symbol}`
-                )
-                .join(" + ")
-            : "~15.96 tJUP + ~4.80 tJTO",
+          executionId: execId,
+          tokensDescription: quoteLegs
+            .map((leg) => `~${Number(leg.expectedOutTokens).toFixed(3)} ${leg.symbol}`)
+            .join(" + "),
           timestamp: new Date().toISOString(),
         });
         localStorage.setItem(storageKey, JSON.stringify(prev));
@@ -282,12 +245,13 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
     setTxSignature("");
     setSimError(null);
     setLiveQuote(null);
+    setQuoteTotals(null);
     onOpenChange(false);
   };
 
   const stepLabel =
     step === "quoting"
-      ? "Fetching live quotes via Jupiter..."
+      ? "Fetching basket quote..."
       : step === "signing"
       ? "Waiting for wallet signature..."
       : "Confirming on-chain...";
@@ -300,7 +264,7 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
             Invest in {basket.name}
           </DialogTitle>
           <DialogDescription className="text-text-secondary text-xs leading-relaxed">
-            USDC is split and swapped via Raydium CPMM directly into constituent tokens in your wallet's ATAs.
+            Review the backend quote, sign the prepared devnet transactions, and receive basket assets in your wallet.
           </DialogDescription>
         </DialogHeader>
 
@@ -312,7 +276,7 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
             <div>
               <h3 className="font-display font-bold text-xl text-foreground">Investment Executed!</h3>
               <p className="text-xs text-text-secondary mt-1 max-w-xs mx-auto">
-                Both tokens were delivered directly to your wallet Associated Token Accounts.
+                Basket assets were delivered to your wallet after the signed execution completed.
               </p>
             </div>
 
@@ -331,24 +295,14 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
                   ${numAmount.toFixed(2)} USDC
                 </span>
               </div>
-              <div className="flex justify-between items-center text-text-secondary">
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-cyan-400" />
-                  {basket.tokens[0]?.symbol || "tJUP"} received:
-                </span>
-                <span className="text-foreground font-semibold font-mono">
-                  ~{liveQuote ? liveQuote.jupTokens.toFixed(4) : "1.1724"} {basket.tokens[0]?.symbol || "tJUP"}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-text-secondary">
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-purple-400" />
-                  {basket.tokens[1]?.symbol || "tJTO"} received:
-                </span>
-                <span className="text-foreground font-semibold font-mono">
-                  ~{liveQuote ? liveQuote.jtoTokens.toFixed(4) : "0.4289"} {basket.tokens[1]?.symbol || "tJTO"}
-                </span>
-              </div>
+              {liveQuote?.map((leg) => (
+                <div key={leg.mint} className="flex justify-between items-center text-text-secondary">
+                  <span>{leg.symbol} received:</span>
+                  <span className="text-foreground font-semibold font-mono">
+                    ~{Number(leg.expectedOutTokens).toFixed(4)} {leg.symbol}
+                  </span>
+                </div>
+              ))}
               <div className="flex justify-between items-center pt-2 border-t border-border-subtle text-text-muted">
                 <span>Transaction:</span>
                 <a
@@ -420,10 +374,14 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
               <div className="relative flex items-center">
                 <input
                   type="number"
-                  min="2"
+                min={basket.minUsdc}
                   step="1"
                   value={amountUsdc}
-                  onChange={(e) => setAmountUsdc(e.target.value)}
+                  onChange={(e) => {
+                    setAmountUsdc(e.target.value);
+                    setLiveQuote(null);
+                    setQuoteTotals(null);
+                  }}
                   disabled={isInvesting}
                   placeholder="0.00"
                   className="w-full bg-background border border-border rounded-[14px] px-4 py-3 text-xl font-mono font-bold text-foreground placeholder:text-text-muted focus:outline-none focus:border-text-primary disabled:opacity-50"
@@ -435,13 +393,17 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
 
               {/* Quick Presets */}
               <div className="flex items-center gap-1.5 mt-2">
-                {["10", "25", "50", "100"].map((preset) => (
+                {[...new Set([basket.minUsdc, 50, 100].filter((value) => value >= basket.minUsdc))].map((preset) => (
                   <button
                     key={preset}
-                    onClick={() => setAmountUsdc(preset)}
+                    onClick={() => {
+                      setAmountUsdc(String(preset));
+                      setLiveQuote(null);
+                      setQuoteTotals(null);
+                    }}
                     disabled={isInvesting}
                     className={`flex-1 py-1.5 text-xs rounded-[10px] border font-mono transition-colors cursor-pointer ${
-                      amountUsdc === preset
+                      amountUsdc === String(preset)
                         ? "border-foreground bg-primary text-primary-foreground font-bold shadow-sm"
                         : "border-border bg-surface hover:bg-surface-hover text-text-secondary hover:text-foreground"
                     }`}
@@ -482,13 +444,28 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
               )}
             </div>
 
-            {/* Allocation breakdown */}
+            {/* Backend allocation quote */}
             <div className="space-y-2">
-              <span className="text-xs text-text-secondary font-medium">Allocation (50/50):</span>
+              <span className="text-xs text-text-secondary font-medium">Basket allocation:</span>
+              {liveQuote && (
+                <p className="text-[10px] text-text-muted">
+                  Rate source: {[...new Set(liveQuote.map((leg) => leg.priceSource ?? "unknown"))].join(", ")}. Devnet test values may not track market prices.
+                </p>
+              )}
+              {liveQuote && liveQuote.some((leg) => leg.priceImpactPct === null) && (
+                <p className="text-[10px] text-text-muted">Price impact is unavailable for this fixed-rate devnet route.</p>
+              )}
+              {quoteTotals && (
+                <div className="flex justify-between text-[11px] text-text-secondary">
+                  <span>Platform fee: ${quoteTotals.platformFeeUsdc.toFixed(2)} USDC</span>
+                  <span>Net allocation: ${quoteTotals.netInvestUsdc.toFixed(2)} USDC</span>
+                </div>
+              )}
               <div className="space-y-1.5 bg-background border border-border-subtle rounded-[16px] p-3.5">
-                {basket.tokens.slice(0, 2).map((token) => {
+                {basket.tokens.map((token) => {
                   const weightPct = token.weightBps / 100;
-                  const tokenDollarValue = (numAmount * weightPct) / 100;
+                  const quotedLeg = liveQuote?.find((leg) => leg.mint === token.mint);
+                  const quotedAmount = quotedLeg?.inUsdcAmount;
 
                   return (
                     <div key={token.symbol} className="flex items-center justify-between text-xs">
@@ -503,8 +480,19 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
                         <span className="text-text-muted">({weightPct}%)</span>
                       </div>
                       <div className="text-right">
-                        <span className="font-mono text-foreground font-semibold">${tokenDollarValue.toFixed(2)}</span>
-                        <span className="text-text-muted text-[10px] ml-1">live quote</span>
+                        <span className="font-mono text-foreground font-semibold">
+                          {quotedAmount === undefined ? "—" : `$${quotedAmount.toFixed(2)}`}
+                        </span>
+                        <span className="block text-text-muted text-[10px]">
+                          {quotedAmount === undefined
+                            ? "get quote to preview"
+                            : `~${Number(quotedLeg?.expectedOutTokens).toFixed(4)} ${token.symbol} · min ${Number(quotedLeg?.minOutTokens).toFixed(4)} · impact ${quotedLeg?.priceImpactPct ?? "unavailable"}`}
+                        </span>
+                        {quotedLeg?.priceSource && <span className="block text-text-muted text-[10px]">
+                          {quotedLeg.priceSource}
+                          {quotedLeg.priceSourceRef ? ` · ${quotedLeg.priceSourceRef.slice(0, 10)}` : ""}
+                          {quotedLeg.priceAsOf ? ` · ${new Date(quotedLeg.priceAsOf).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}
+                        </span>}
                       </div>
                     </div>
                   );
@@ -516,7 +504,7 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
             <div className="flex items-center gap-2 text-[11px] text-text-secondary bg-surface-hover/50 p-2.5 rounded-xl border border-border-subtle">
               <ShieldCheck className="size-4 text-emerald-400 shrink-0" />
               <span>
-                Non-custodial. Constituent tokens land directly in your wallet ATAs via Raydium CPMM.
+                Non-custodial. Your wallet signs each leg and receives the basket assets directly.
               </span>
             </div>
 
@@ -536,11 +524,11 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
                 variant="primary"
                 size="lg"
                 onClick={handleInvest}
-                disabled={isInvesting || numAmount < 2}
+                disabled={isInvesting || numAmount < basket.minUsdc}
                 loading={isInvesting}
                 className="w-full font-bold shadow-md"
               >
-                <span>Invest ${numAmount.toFixed(2)} USDC in 2 Tokens</span>
+                <span>Invest ${numAmount.toFixed(2)} USDC in {basket.tokens.length} assets</span>
                 <ArrowRight className="size-4" />
               </Button>
             )}

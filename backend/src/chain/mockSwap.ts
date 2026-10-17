@@ -49,7 +49,7 @@ interface CommonLegOpts {
   assetDecimals: number;
   treasury: Keypair; // partial-signs the treasury-side transfer
   relayer: Keypair; // fee payer
-  /** Extra USDC user→treasury transfer (platform fee); only leg 1 includes it. */
+  /** Extra USDC user→treasury transfer (this leg's platform fee share). */
   includeFeeUsdcBaseUnits?: number;
   /** Real recent blockhash fetched by the caller (see getRecentBlockhash). */
   recentBlockhash: string;
@@ -142,7 +142,7 @@ export async function buildLegSwapTx(opts: BuyLegOpts): Promise<LegBuild> {
     ),
   ];
 
-  // 4) platform fee: extra USDC transfer user → treasury (leg 1 only)
+  // 4) platform fee: this leg's allocated USDC transfer to treasury
   if (includeFeeUsdcBaseUnits > 0) {
     instructions.push(
       createTransferCheckedInstruction(
@@ -208,7 +208,7 @@ export async function buildReverseLegTx(opts: SellLegOpts): Promise<LegBuild> {
     ),
   ];
 
-  // 4) platform fee on sells: extra USDC transfer user → treasury (leg 1 only)
+  // 4) platform fee on sells: this leg's allocated USDC transfer to treasury
   if (includeFeeUsdcBaseUnits > 0) {
     instructions.push(
       createTransferCheckedInstruction(

@@ -3,7 +3,7 @@ import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/arc/button";
 import PromptBar from "@/components/landing/PromptBar";
 import { HorizontalBasketMarquee } from "@/components/basket/HorizontalBasketMarquee";
-import { CURATED_BASKETS, type Basket } from "@/lib/baskets-data";
+import { useBaskets } from "@/lib/baskets-data";
 import {
   Accordion,
   AccordionItem,
@@ -55,6 +55,8 @@ const FAQS = [
 ];
 
 export default function Landing() {
+  const { data: baskets = [] } = useBaskets();
+
   return (
     <PageShell>
       {/* Section 1: Hero Section — Classical Ruins (Visible only in this area) */}
@@ -106,7 +108,7 @@ export default function Landing() {
       <section className="relative overflow-hidden pt-8 pb-14 sm:pb-16 border-b border-border/40 bg-background">
         {/* Infinite Horizontal Moving Basket Cards Track */}
         <div className="w-full overflow-hidden">
-          <HorizontalBasketMarquee baskets={CURATED_BASKETS} speedSeconds={50} />
+          <HorizontalBasketMarquee baskets={baskets} speedSeconds={50} />
         </div>
 
         <div className="container relative z-10 mt-6 sm:mt-8">

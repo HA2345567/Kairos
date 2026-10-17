@@ -41,6 +41,10 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/20">
+      <div className="border-b border-amber-400/20 bg-amber-400/5 px-4 py-1.5 text-center text-[10px] font-mono text-amber-200 sm:text-xs">
+        <strong className="mr-2 tracking-wide">SOLANA DEVNET</strong>
+        <span>Test tokens only · Performance data is hypothetical</span>
+      </div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
         {/* Left: Company Logo + Name — Kairos */}
         <div className="flex items-center gap-8">

@@ -1,6 +1,5 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { useTokenPrices } from "@/hooks/useTokenPrices";
-import { useJupiterQuote } from "@/hooks/useJupiterQuote";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "react-router-dom";
 import {
   ArrowUpRight,
@@ -18,7 +17,7 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { InvestModal } from "@/components/basket/InvestModal";
-import { CURATED_BASKETS, getBasketById, type Basket, type BasketToken } from "@/lib/baskets-data";
+import { fetchBasket, type Basket, type BasketToken } from "@/lib/baskets-data";
 import { kairosApi } from "@/lib/api-client";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
@@ -64,207 +63,58 @@ function PerformanceChart({ basket, mobile = false }: { basket: Basket; mobile?:
 
   return (
     <TechnicalChart
-      basket={basket}
       rawHistory={rawHistory}
       isLoading={isNavLoading}
       mobile={mobile}
+      disclaimer={navSummary?.disclaimer}
     />
   );
 }
 
-function getSparklinePoints(isUp: boolean, seedStr: string) {
-  const seed = seedStr.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const numPoints = 28;
-  const points: number[] = [];
-  
-  for (let i = 0; i < numPoints; i++) {
-    const progress = i / (numPoints - 1);
-    // Base trend: if UP, starts lower and ends higher. If DOWN, starts higher and ends lower.
-    const trend = isUp ? 24 - progress * 16 : 8 + progress * 16;
-    // Organic wave variation
-    const wave = Math.sin((i * 0.9) + (seed % 7)) * 2.8 + Math.cos((i * 1.6) + (seed % 11)) * 1.8;
-    const y = Math.max(3, Math.min(29, trend + wave));
-    points.push(y);
-  }
-
-  const width = 280;
-  const height = 36;
-  const stepX = width / (points.length - 1);
-  const coords = points.map((y, i) => `${(i * stepX).toFixed(1)},${y.toFixed(1)}`);
-  const path = coords.join(" ");
-  const area = `0,${height} ${coords.join(" ")} ${width},${height}`;
-
-  return { path, area };
-}
 
 function Allocation({ tokens }: { tokens: BasketToken[] }) {
   const [copied, setCopied] = useState<string | null>(null);
+  const donutData = useMemo(() => tokens.map((token, index) => ({
+    key: token.symbol,
+    label: token.name,
+    value: token.weightBps / 100,
+    color: donutColors[index % donutColors.length],
+  })), [tokens]);
 
-  // Live prices: use priceMint (mainnet) when available, else mint
-  // This makes devnet tJUP/tJTO show real JUP/JTO market prices
-  const priceLookupMints = useMemo(
-    () => tokens.map((t) => t.priceMint ?? t.mint),
-    [tokens]
-  );
-  const { prices: livePrices, loading: pricesLoading } = useTokenPrices(priceLookupMints);
-  const hasLiveData = Object.keys(livePrices).length > 0;
-
-  function copy(address: string, full: string) {
-    navigator.clipboard?.writeText(full);
-    setCopied(address);
-    toast.success(`Copied mint address: ${address}`);
+  const copy = (mint: string) => {
+    navigator.clipboard?.writeText(mint);
+    setCopied(mint);
+    toast.success("Mint address copied");
     window.setTimeout(() => setCopied(null), 1800);
-  }
-
-  // Real chart data for Arc Donut Chart
-  const donutData = useMemo(() => {
-    return tokens.map((token, i) => ({
-      key: token.symbol,
-      label: token.name || token.symbol,
-      value: token.weightBps / 100,
-      color: donutColors[i % donutColors.length],
-    }));
-  }, [tokens]);
+  };
 
   return (
     <div className="allocation panel">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div>
-          <h2>Allocation</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Target constituent distribution across {tokens.length} verified Solana tokens.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {hasLiveData && (
-            <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-surface-muted border border-border text-foreground">
-              <span className="size-1.5 rounded-full bg-primary animate-pulse" />
-              LIVE
-            </div>
-          )}
-          <div className="flex items-center gap-1.5 text-xs font-mono font-medium px-3 py-1 rounded-full bg-surface-muted border border-border text-foreground w-fit">
-            <TrendingUp className="h-3.5 w-3.5 text-primary" />
-            <span>100% Target Weight</span>
-          </div>
-        </div>
+      <div className="mb-4">
+        <h2>Allocation</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">Published basket composition on Solana devnet.</p>
       </div>
-
-      <div className="allocation-visual py-4 flex items-center justify-center">
-        <DonutChart
-          data={donutData}
-          label="Constituent Token Allocation"
-          unit="%"
-          formatValue={(val) => `${Number.isInteger(val) ? val : val.toFixed(1)}%`}
-          totalLabel="Target"
-          size={240}
-          thickness={28}
-          legend={true}
-          legendAction="toggle"
-          className="w-full max-w-xl mx-auto"
-        />
+      <div className="allocation-visual flex items-center justify-center py-4">
+        <DonutChart data={donutData} label="Constituent Token Allocation" unit="%"
+          formatValue={(value) => String(Number.isInteger(value) ? value : value.toFixed(1)) + "%"}
+          totalLabel="Target" size={240} thickness={28} legend legendAction="toggle"
+          className="mx-auto w-full max-w-xl" />
       </div>
-
-      {/* Constituent Holdings Cards matching reference screenshot */}
       <div className="holdings">
-        {tokens.map((h) => {
-          // Use priceMint (mainnet) key for live price lookup
-          const lookupMint = h.priceMint ?? h.mint;
-          const live = livePrices[lookupMint];
-          const priceUsd = live?.priceUsd ?? h.priceUsd;
-          const change24h = live?.change24h ?? h.change24h;
-          const isLive = !!live;
-
-          const shortAddress = h.mint ? `${h.mint.slice(0, 4)}...${h.mint.slice(-4)}` : "Solana";
-          const isUp = change24h >= 0;
-          const absPct = Math.abs(change24h);
-          const dollarChange = Math.abs((priceUsd * change24h) / 100);
-          const formattedDollarChange = dollarChange < 0.01 
-            ? dollarChange.toFixed(4) 
-            : dollarChange.toFixed(2);
-          const displayPrice = priceUsd < 0.001 
-            ? `$${priceUsd.toFixed(6)}` 
-            : `$${priceUsd.toFixed(2)}`;
-          const weight = ((h.weightBps / 100) % 1 === 0 ? (h.weightBps / 100) : (h.weightBps / 100).toFixed(1)) + "%";
-          const sparkline = getSparklinePoints(isUp, h.symbol);
-
+        {tokens.map((token) => {
+          const shortMint = token.mint.slice(0, 4) + "..." + token.mint.slice(-4);
           return (
-            <article className="holding" key={h.symbol}>
+            <article className="holding" key={token.mint}>
               <div className="holding-top">
-                <img 
-                  src={h.icon} 
-                  alt={h.name} 
-                  className="rounded-full border border-white/20 object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = "none";
-                  }}
-                />
-                <div className="holding-name">
-                  <strong className="flex items-center gap-1.5">
-                    {h.symbol}
-                    {isLive && (
-                      <span className="size-1.5 rounded-full bg-[#c5ff4a] animate-pulse" title="Live price" />
-                    )}
-                  </strong>
-                  <span>{h.name}</span>
-                </div>
-                <button
-                  type="button"
-                  className="address"
-                  title={`Copy ${h.mint}`}
-                  onClick={() => copy(shortAddress, h.mint)}
-                >
-                  <span>{shortAddress}</span>
-                  {copied === shortAddress ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                <img src={token.icon} alt={token.name} className="rounded-full border border-white/20 object-cover" />
+                <div className="holding-name"><strong>{token.symbol}</strong><span>{token.name}</span></div>
+                <button type="button" className="address" title={token.mint} onClick={() => copy(token.mint)}>
+                  <span>{shortMint}</span>
+                  {copied === token.mint ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                 </button>
               </div>
-
-              <div className={`holding-data ${isUp ? "up" : "down"}`}>
-                <div className="holding-price">
-                  {displayPrice} <Info size={13} />
-                </div>
-
-                <div className="holding-change">
-                  <span>{isUp ? "▲" : "▼"}</span> ${formattedDollarChange} ({absPct.toFixed(2)}%) <span>24H</span>
-                </div>
-
-                <div className="holding-bottom">
-                  <span>ALLOCATION</span>
-                  <b>{weight}</b>
-                </div>
-
-                {/* SVG Sparkline with gradient underglow matching reference screenshot */}
-                <svg 
-                  viewBox="0 0 280 36" 
-                  preserveAspectRatio="none" 
-                  className="sparkline"
-                  aria-hidden="true"
-                >
-                  <defs>
-                    <linearGradient id={`sparkGrad-${h.symbol}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop 
-                        offset="0%" 
-                        stopColor={isUp ? "#22c55e" : "#ef4444"} 
-                        stopOpacity={isUp ? "0.38" : "0.32"} 
-                      />
-                      <stop 
-                        offset="100%" 
-                        stopColor={isUp ? "#22c55e" : "#ef4444"} 
-                        stopOpacity="0" 
-                      />
-                    </linearGradient>
-                  </defs>
-                  <polygon 
-                    points={sparkline.area} 
-                    fill={`url(#sparkGrad-${h.symbol})`} 
-                  />
-                  <polyline
-                    points={sparkline.path}
-                    fill="none"
-                    stroke={isUp ? "#22c55e" : "#ef4444"}
-                    strokeWidth="1.8"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                </svg>
+              <div className="holding-data">
+                <div className="holding-bottom"><span>Target allocation</span><b>{token.weightBps / 100}%</b></div>
               </div>
             </article>
           );
@@ -273,99 +123,89 @@ function Allocation({ tokens }: { tokens: BasketToken[] }) {
     </div>
   );
 }
-
 function Rebalances({ basket }: { basket: Basket }) {
   const [open, setOpen] = useState(0);
-  const [mode, setMode] = useState("Rebalances");
-
-  // TODO: replace with real on-chain data
-  const defaultRebalances = [
-    {
-      title: `Final Launch Weights Normalized for ${basket.name}`,
-      version: "v1.0",
-      date: "Sep 27, 2026",
-      changes: basket.tokens.map((t) => [
-        t.symbol,
-        "Target Weight",
-        `${Math.round(t.weightBps / 100)}%`,
-      ] as [string, string, string]),
-      bullets: [
-        `• Verified constituent liquidity depth on Jupiter CPI router.`,
-        `• Direct non-custodial delivery configured for all Associated Token Accounts (ATAs).`,
-      ],
-    },
-  ];
-
-  const rebalanceData = basket.aboutStrategy?.rebalances || defaultRebalances;
+  const [mode, setMode] = useState<"Rebalances" | "Markers">("Rebalances");
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["basket-versions", basket.id],
+    queryFn: () => kairosApi.getBasketRebalances(basket.slug),
+    enabled: Boolean(basket.slug),
+  });
+  const versions = data?.versions ?? [];
 
   return (
     <div className="panel rebalances">
       <div className="section-heading">
         <div>
-          <h2>Rebalances</h2>
-          <p>Every allocation change published for this basket, newest first.</p>
+          <h2>Published versions</h2>
+          <p>Immutable basket versions and their target allocations.</p>
         </div>
         <div className="mini-segments">
-          {["Rebalances", "Markers"].map((m) => (
-            <button
-              key={m}
-              className={mode === m ? "selected" : ""}
-              onClick={() => setMode(m)}
-            >
-              {m}
+          {(["Rebalances", "Markers"] as const).map((item) => (
+            <button key={item} className={mode === item ? "selected" : ""} onClick={() => setMode(item)}>
+              {item}
             </button>
           ))}
         </div>
       </div>
+
+      {isLoading ? <p className="text-sm text-muted-foreground">Loading published versions…</p> : null}
+      {isError ? <p className="text-sm text-muted-foreground">Version history is currently unavailable.</p> : null}
+      {!isLoading && !isError && versions.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No published basket versions yet.</p>
+      ) : null}
+
       {mode === "Markers" ? (
         <div className="marker-list">
-          {[
-            { title: `${basket.name} Launch Catalog Verified`, date: "Sep 27, 2026" },
-            { title: "Non-Custodial Router Integration Finalized", date: "Sep 26, 2026" },
-            { title: "Constituent ATA routing verified on mainnet", date: "Sep 24, 2026" },
-          ].map((item, i) => (
-            <div key={i}>
+          {versions.map((version) => (
+            <div key={version.id}>
               <span className="marker-dot" />
               <div>
-                <strong>{item.title}</strong>
-                <small>{item.date}</small>
+                <strong>{version.changelog}</strong>
+                <small>v{version.version} · {new Date(version.publishedAt).toLocaleDateString()}</small>
               </div>
             </div>
           ))}
         </div>
       ) : (
         <div className="rebalance-list">
-          {rebalanceData.map((item, i) => (
-            <div className="rebalance-item" key={i}>
-              <button
-                type="button"
-                className="rebalance-trigger"
-                onClick={() => setOpen(open === i ? -1 : i)}
-              >
+          {versions.map((version, index) => (
+            <div className="rebalance-item" key={version.id}>
+              <button type="button" className="rebalance-trigger" onClick={() => setOpen(open === index ? -1 : index)}>
                 <span>
-                  <strong>{item.title}</strong>
-                  <small>{item.version}</small>
+                  <strong>{version.changelog}</strong>
+                  <small>v{version.version}</small>
                 </span>
                 <span>
-                  {item.date} <ChevronDown size={15} className={open === i ? "rotate" : ""} />
+                  {new Date(version.publishedAt).toLocaleDateString()}
+                  <ChevronDown size={15} className={open === index ? "rotate" : ""} />
                 </span>
               </button>
-              {open === i && (
+              {open === index ? (
                 <div className="rebalance-detail">
-                  {item.bullets.map((b, bi) => (
-                    <p key={bi}>{b}</p>
-                  ))}
+                  <p>Published by {version.publishedBy}</p>
+                  {version.registryTx ? (
+                    <a
+                      className="inline-flex items-center gap-1 text-xs text-emerald-700 underline"
+                      href={`https://explorer.solana.com/tx/${version.registryTx}?cluster=devnet`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Verified on Solana devnet <ArrowUpRight size={13} />
+                    </a>
+                  ) : <p className="text-xs text-muted-foreground">No on-chain registry proof is recorded for this version.</p>}
                   <div className="rebalance-changes">
-                    {item.changes.map(([name, a, b]) => (
-                      <div key={name}>
-                        <span>{name}</span>
-                        <span>{a} → <b>{b}</b></span>
+                    {version.legs.map((leg) => (
+                      <div key={leg.mint}>
+                        <span>
+                          {basket.tokens.find((token) => token.mint === leg.mint)?.symbol ?? "…"}
+                        </span>
+                        <span>Target weight <b>{(leg.weightBps / 100).toFixed(2)}%</b></span>
                       </div>
                     ))}
                   </div>
-                  <p>› &nbsp; Kairos Solana On-Chain Router Registry</p>
                 </div>
-              )}
+              ) : null}
             </div>
           ))}
         </div>
@@ -373,67 +213,33 @@ function Rebalances({ basket }: { basket: Basket }) {
     </div>
   );
 }
-
 function TextContent({ basket, kind }: { basket: Basket; kind: "Risk" | "Resources" }) {
-  const chars = basket.aboutStrategy?.characteristics || [
-    "Zero Liquidation Risk (Spot-Only) — All constituent positions are spot tokens held directly in your wallet without margin, borrowing, or liquidation thresholds.",
-    "Non-Custodial Delivery — Kairos never holds user funds. Swaps execute via Jupiter aggregator straight into your wallet's Associated Token Accounts.",
-    "Thematic Diversification — Pre-balanced allocation prevents single-token concentration drag.",
-  ];
-
-  const risks = basket.aboutStrategy?.risks || [
-    "Crypto Market Volatility — Digital assets fluctuate in value based on market sentiment, macro liquidity, and network conditions.",
-    "Smart Contract & Execution Risk — Swaps execute via decentralized Jupiter routing, subject to pool depth and slippage.",
-    "Underlying Protocol Risk — Constituent projects operate autonomous on-chain programs and tokenomics.",
-  ];
-
+  const chars = basket.aboutStrategy?.characteristics ?? [];
+  const risks = basket.aboutStrategy?.risks ?? [];
   return (
     <div className="panel text-content">
       {kind === "Risk" ? (
         <>
           <h2>{basket.name}</h2>
           <h3>Key Characteristics</h3>
-          <ul>
-            {chars.map((x) => (
-              <li key={x}>{x}</li>
-            ))}
-          </ul>
+          {chars.length ? <ul>{chars.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No basket-specific characteristics have been published.</p>}
           <h3>Risk Factors</h3>
-          <ul>
-            {risks.map((x) => (
-              <li key={x}>{x}</li>
-            ))}
-          </ul>
+          {risks.length ? <ul>{risks.map((item) => <li key={item}>{item}</li>)}</ul> : <p>No basket-specific risk assessment has been published.</p>}
           <h3>Non-Custodial Delivery</h3>
-          <p>
-            When you invest, USDC is routed via Jupiter swaps directly into constituent tokens in your Associated Token Accounts (ATAs). Kairos holds zero custody of your assets.
-          </p>
-          <p>
-            Not financial advice. Curated for thematic ecosystem exposure based on verified on-chain traction.
-          </p>
+          <p>Kairos prepares unsigned transactions for your connected wallet. Review each transfer and sign it in your wallet; Kairos does not hold your wallet keys.</p>
+          <p>Devnet assets and indicative rates are for testing and may not represent live markets.</p>
         </>
       ) : (
         <>
-          <h2>Thesis & Methodology</h2>
-          <p>
-            {basket.aboutStrategy?.thesis ||
-              `${basket.name} captures the premier leaders within the Solana ecosystem, selecting protocols with verified liquidity and traction.`}
-          </p>
-          <p>
-            Holdings are evaluated continuously and rebalanced to locked weights, allowing users to compound returns across the entire narrative with a single click.
-          </p>
-          <h3>Verified On-Chain Data Sources</h3>
-          <p>
-            Solana Blockchain Explorer & Solscan<br />
-            Jupiter Aggregator Price & Routing API<br />
-            DefiLlama Protocol Revenue & TVL Analytics
-          </p>
+          <h2>Thesis &amp; Methodology</h2>
+          <p>{basket.aboutStrategy?.thesis || "No basket-specific thesis has been published."}</p>
+          <p>Target weights are recorded in the published basket version. Portfolio changes are user-initiated unless a supported automation is enabled.</p>
+          <p>Price and performance data are shown only when a configured provider supplies them; unavailable data stays unavailable.</p>
         </>
       )}
     </div>
   );
 }
-
 import { MarketDetailSkeleton } from "@/components/basket/BasketSkeleton";
 
 function exportCsv(basket: Basket, history: { timestamp: number; navValue: number }[]) {
@@ -441,11 +247,11 @@ function exportCsv(basket: Basket, history: { timestamp: number; navValue: numbe
     toast.error("No historical records available to export.");
     return;
   }
-  const headers = "Date,NAV_USD,Cumulative_Return_Pct\n";
+  const headers = "Date,Hypothetical_Index,Cumulative_Return_Pct\n";
   const startNav = history[0].navValue;
   const rows = history
     .map((pt) => {
-      const dateStr = new Date(pt.timestamp).toISOString().split("T")[0];
+      const dateStr = new Date(pt.timestamp).toISOString();
       const retPct = startNav > 0 ? (((pt.navValue - startNav) / startNav) * 100).toFixed(2) : "0.00";
       return `${dateStr},${pt.navValue.toFixed(4)},${retPct}%`;
     })
@@ -457,7 +263,7 @@ function exportCsv(basket: Basket, history: { timestamp: number; navValue: numbe
   a.download = `${basket.slug || basket.id}-nav-history.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  toast.success("Historical NAV CSV exported!");
+  toast.success("Hypothetical index CSV exported");
 }
 
 function HistoricalTabContent({ basket }: { basket: Basket }) {
@@ -473,6 +279,8 @@ function HistoricalTabContent({ basket }: { basket: Basket }) {
         month: "short",
         day: "numeric",
         year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       });
       const prevVal = arr[i + 1]?.navValue || pt.navValue;
       const dayChangePct = prevVal > 0 ? ((pt.navValue - prevVal) / prevVal) * 100 : 0;
@@ -486,8 +294,6 @@ function HistoricalTabContent({ basket }: { basket: Basket }) {
     });
   }, [history, startNav]);
 
-  const solAlpha = (basket.returns1y - 94.2).toFixed(1);
-
   return (
     <div className="space-y-6">
       {/* 1. Main Technical Chart */}
@@ -497,14 +303,13 @@ function HistoricalTabContent({ basket }: { basket: Basket }) {
       <div className="panel p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-lg font-bold text-foreground">Benchmark Performance Comparison</h2>
+            <h2 className="text-lg font-bold text-foreground">Hypothetical Performance Comparison</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Relative alpha and risk-adjusted returns against Solana (SOL) and Bitcoin (BTC).
+              {navSummary?.benchmarkLabel ?? "Verified benchmark unavailable until source data is connected."}
             </p>
           </div>
-          <span className="flex items-center gap-1.5 text-xs font-mono px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold w-fit">
-            <TrendingUp size={13} />
-            +{parseFloat(solAlpha) > 0 ? solAlpha : "18.5"}% Alpha over SOL
+          <span className="text-[10px] font-mono px-3 py-1 rounded-full bg-surface-muted border border-border text-muted-foreground w-fit">
+            HYPOTHETICAL · NOT REALIZED RETURNS
           </span>
         </div>
 
@@ -512,60 +317,36 @@ function HistoricalTabContent({ basket }: { basket: Basket }) {
           <table className="w-full text-left text-xs font-mono">
             <thead>
               <tr className="border-b border-border text-muted-foreground">
-                <th className="py-2.5 px-3">Asset</th>
-                <th className="py-2.5 px-3">1W Return</th>
-                <th className="py-2.5 px-3">1M Return</th>
-                <th className="py-2.5 px-3">1Y Return</th>
-                <th className="py-2.5 px-3">Max Drawdown</th>
-                <th className="py-2.5 px-3">Sharpe (est.)</th>
+                <th className="py-2.5 px-3">Series</th>
+                <th className="py-2.5 px-3">Available-window return</th>
+                <th className="py-2.5 px-3">Ending index (base 1.0)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
               <tr className="bg-surface/50 font-bold text-foreground">
-                <td className="py-3 px-3 flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-emerald-400" />
-                  {basket.name} (Basket)
+                <td className="py-3 px-3">{basket.name}</td>
+                <td className="py-3 px-3">
+                  {navSummary ? `${navSummary.allTimeReturnPct! >= 0 ? "+" : ""}${navSummary.allTimeReturnPct!.toFixed(2)}%` : "—"}
                 </td>
-                <td className="py-3 px-3 text-emerald-400">+{basket.returns7d.toFixed(1)}%</td>
-                <td className="py-3 px-3 text-emerald-400">+{basket.returns30d.toFixed(1)}%</td>
-                <td className="py-3 px-3 text-emerald-400">+{basket.returns1y.toFixed(1)}%</td>
-                <td className="py-3 px-3 text-rose-400">-16.4%</td>
-                <td className="py-3 px-3 text-foreground font-bold">2.45</td>
+                <td className="py-3 px-3">{navSummary?.currentNav?.toFixed(4) ?? "—"}</td>
               </tr>
               <tr className="text-muted-foreground">
-                <td className="py-3 px-3 flex items-center gap-2">
-                  <img src="/tokens/sol.png" alt="SOL" className="size-4 rounded-full" onError={(e) => { (e.target as HTMLElement).style.display = "none"; }} />
-                  Solana (SOL Benchmark)
-                </td>
-                <td className="py-3 px-3 text-emerald-400">+5.2%</td>
-                <td className="py-3 px-3 text-emerald-400">+18.4%</td>
-                <td className="py-3 px-3 text-emerald-400">+94.2%</td>
-                <td className="py-3 px-3 text-rose-400">-28.1%</td>
-                <td className="py-3 px-3">1.62</td>
-              </tr>
-              <tr className="text-muted-foreground">
-                <td className="py-3 px-3 flex items-center gap-2">
-                  <span className="size-4 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-[9px]">₿</span>
-                  Bitcoin (BTC Reference)
-                </td>
-                <td className="py-3 px-3 text-emerald-400">+2.1%</td>
-                <td className="py-3 px-3 text-emerald-400">+11.6%</td>
-                <td className="py-3 px-3 text-emerald-400">+62.8%</td>
-                <td className="py-3 px-3 text-rose-400">-22.5%</td>
-                <td className="py-3 px-3">1.38</td>
+                <td className="py-3 px-3">SOL benchmark (verified history unavailable)</td>
+                <td className="py-3 px-3">—</td>
+                <td className="py-3 px-3">—</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* 3. Daily NAV Records Table Panel */}
+      {/* 3. Hypothetical index observations */}
       <div className="panel p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-lg font-bold text-foreground">Historical NAV Daily Ledger</h2>
+            <h2 className="text-lg font-bold text-foreground">Hypothetical Index History</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Chronological daily NAV settlements for {basket.name}.
+              Sampled index observations for {basket.name}; these are not user holdings or realized returns.
             </p>
           </div>
           <button
@@ -590,8 +371,8 @@ function HistoricalTabContent({ basket }: { basket: Basket }) {
             <table className="w-full text-left text-xs font-mono">
               <thead>
                 <tr className="border-b border-border text-muted-foreground">
-                  <th className="py-2.5 px-3">Settlement Date</th>
-                  <th className="py-2.5 px-3">NAV Price ($)</th>
+                  <th className="py-2.5 px-3">Observation Time</th>
+                  <th className="py-2.5 px-3">Hypothetical Index</th>
                   <th className="py-2.5 px-3">Daily Change</th>
                   <th className="py-2.5 px-3">Cumulative Return</th>
                 </tr>
@@ -600,7 +381,7 @@ function HistoricalTabContent({ basket }: { basket: Basket }) {
                 {recentRecords.map((r, i) => (
                   <tr key={i} className="hover:bg-surface/40 transition-colors">
                     <td className="py-2.5 px-3 text-foreground/80">{r.dateStr}</td>
-                    <td className="py-2.5 px-3 font-bold text-foreground">${r.navValue.toFixed(4)}</td>
+                    <td className="py-2.5 px-3 font-bold text-foreground">{r.navValue.toFixed(4)}</td>
                     <td className={cn("py-2.5 px-3 font-semibold", r.dayChangePct >= 0 ? "text-emerald-400" : "text-rose-400")}>
                       {r.dayChangePct >= 0 ? "+" : ""}{r.dayChangePct.toFixed(2)}%
                     </td>
@@ -640,12 +421,11 @@ export default function MarketDetailPage() {
   const [help, setHelp] = useState(false);
   const [shared, setShared] = useState(false);
   const [positionTab, setPositionTab] = useState("Positions");
-  const [isPageLoading, setIsPageLoading] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsPageLoading(false), 200);
-    return () => clearTimeout(timer);
-  }, [id]);
+  const { data: basket, isLoading: isPageLoading } = useQuery({
+    queryKey: ["basket-detail", id],
+    queryFn: () => fetchBasket(id!),
+    enabled: Boolean(id),
+  });
 
   const { connected, publicKey } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
@@ -676,12 +456,18 @@ export default function MarketDetailPage() {
   }, [isConnected, refreshUsdcBalance]);
 
   // ── Resolve basket (must come before any hook that depends on it) ──────────
-  const basket = getBasketById(id);
   const { data: navSummary } = useBasketNavHistory(basket?.id);
 
   // ── Live Jupiter quote for sidebar ────────────────────────────────────────
   const numAmount = parseFloat(amount) || 0;
-  const jupQuote = useJupiterQuote(basket?.tokens ?? [], numAmount);
+  const quoteQuery = useQuery({
+    queryKey: ["basket-invest-quote", basket?.slug, amount],
+    queryFn: () => kairosApi.getQuote(basket!.slug, numAmount),
+    enabled: Boolean(basket && numAmount >= basket.minUsdc),
+    staleTime: 0,
+    retry: false,
+  });
+  const quote = quoteQuery.data?.quote;
 
   // ── Real positions from localStorage + backend ────────────────────────────
   const [positions, setPositions] = useState<PositionItem[]>([]);
@@ -689,32 +475,12 @@ export default function MarketDetailPage() {
   useEffect(() => {
     if (!publicKey) { setPositions([]); return; }
     const key = `kairos_invest_${publicKey.toBase58()}`;
-    const local: PositionItem[] = JSON.parse(localStorage.getItem(key) || "[]");
-    setPositions(local);
-
-    kairosApi
-      .getPositions(publicKey.toBase58())
-      .then((data) => {
-        if (!data?.positions?.length) return;
-        const seen = new Set(local.map((p) => p.txSignature));
-        const merged = [...local];
-        for (const pos of data.positions) {
-          if (!seen.has(pos.id)) {
-            merged.push({
-              action: "Invest",
-              basketName: pos.basketSlug || "Curated Basket",
-              basketId: pos.basketSlug,
-              amountUsdc: pos.netInvestedUsdc,
-              tokensDescription: basket?.name || pos.basketSlug,
-              txSignature: pos.id,
-              timestamp: pos.createdAt,
-            });
-          }
-        }
-        setPositions(merged);
-      })
-      .catch(() => {});
-  }, [publicKey, basket]);
+    try {
+      setPositions(JSON.parse(localStorage.getItem(key) || "[]"));
+    } catch {
+      setPositions([]);
+    }
+  }, [publicKey]);
 
 
   if (isPageLoading) {
@@ -747,14 +513,6 @@ export default function MarketDetailPage() {
     window.setTimeout(() => setShared(false), 2000);
   }
 
-  // Estimated receive from live Jupiter quote (fallback to 0.996 haircut)
-  const receiveEst = jupQuote.tokens.length > 0
-    ? jupQuote.totalReceiveUsdc.toFixed(2)
-    : (numAmount * 0.996).toFixed(2);
-  const feePct = jupQuote.tokens.length > 0 && numAmount > 0
-    ? ((jupQuote.totalFeeUsdc / numAmount) * 100).toFixed(2)
-    : "0.38";
-
   return (
     <div className="site-shell">
       <Header />
@@ -785,7 +543,6 @@ export default function MarketDetailPage() {
                 <h1 className="text-3xl sm:text-4xl md:text-[38px] font-extrabold text-foreground tracking-tight leading-none">
                   {basket.name}
                 </h1>
-                <span className="points">{basket.pointsMultiplier || "3x Pts"}</span>
               </div>
               <p className="text-sm text-muted-foreground mt-1.5 mb-2 font-medium">
                 Curated by Kairos · {basket.category}
@@ -904,7 +661,7 @@ export default function MarketDetailPage() {
                 </button>
               ))}
             </div>
-            {/* Real Positions: from localStorage + backend API */}
+            {/* Completed execution history recorded by this browser. */}
             {positionTab === "Positions" ? (
               positions.filter((p) => !basket || p.basketId === basket.id || p.basketName?.includes(basket.name)).length > 0 ? (
                 <div className="space-y-2 px-1 mt-2">
@@ -1045,36 +802,29 @@ export default function MarketDetailPage() {
           </div>
           <div className="text-[11px] text-muted-foreground mt-2 flex justify-between items-center">
             <span className="flex items-center gap-1">
-              You'll receive
-              {jupQuote.loading && <Loader2 size={9} className="animate-spin text-muted-foreground" />}
+              Allocated after fee
+              {quoteQuery.isFetching && <Loader2 size={9} className="animate-spin text-muted-foreground" />}
             </span>
             <span className="text-foreground font-mono">
-              {jupQuote.error
-                ? `≈ $${receiveEst} (est.)`
-                : jupQuote.loading
-                ? <span className="text-muted-foreground">Fetching quote…</span>
-                : `≈ $${receiveEst} (-${feePct}%)`
-              }
+              {quote ? `$${quote.netInvestUsdc.toFixed(2)} USDC` : quoteQuery.isError ? "Quote unavailable" : "—"}
             </span>
           </div>
 
           <div className="investment-metrics">
             <div>
               <span>
-                All Time Return <Info size={13} />
+                Hypothetical Return <Info size={13} />
               </span>
               <strong>
                 {navSummary?.allTimeReturnPct != null
                   ? `${navSummary.allTimeReturnPct >= 0 ? "+" : ""}${navSummary.allTimeReturnPct.toFixed(2)}%`
-                  : basket.displayReturn?.value || "+0.00%"}
+                  : "—"}
               </strong>
             </div>
             <div>
               <span className="fee-label">Router Fee</span>
               <u className="fee-value">
-                {jupQuote.tokens.length > 0 && numAmount > 0
-                  ? `${feePct}%`
-                  : "~0.38%"}
+                {quote ? `$${quote.platformFeeUsdc.toFixed(2)} USDC` : "—"}
               </u>
             </div>
           </div>
@@ -1148,7 +898,7 @@ export default function MarketDetailPage() {
           </button>
           <h3>Need Help?</h3>
           <p>
-            Learn more about how Kairos Solana narrative baskets work, non-custodial Jupiter CPI routing, and on-chain rebalancing.
+            Learn more about devnet basket quotes, wallet signing, and on-chain position management.
           </p>
           <a
             href="https://docs.kairos.fi"
@@ -1160,7 +910,7 @@ export default function MarketDetailPage() {
         </div>
       )}
 
-      {/* Real Non-Custodial Jupiter CPI Invest Modal */}
+      {/* Non-custodial backend-prepared transaction flow */}
       <InvestModal
         basket={basket}
         open={investModalOpen}

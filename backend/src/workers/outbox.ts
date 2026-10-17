@@ -12,18 +12,18 @@ const POLL_INTERVAL_MS = 2_000;
 let timer: ReturnType<typeof setInterval> | null = null;
 
 async function drainOnce(): Promise<number> {
-  const events = repository.claimOutbox(20);
+  const events = (await repository.claimOutbox(20));
   for (const evt of events) {
     console.log(`[outbox] deliver event=${evt.event} payload=${JSON.stringify(evt.payload).slice(0, 300)}`);
-    repository.markOutboxSent(evt.id);
+    (await repository.markOutboxSent(evt.id));
   }
   return events.length;
 }
 
 export function startOutboxWorker(): void {
   if (timer) return;
-  timer = setInterval(() => {
-    drainOnce().catch((err) => console.error("[outbox] drain failed:", err));
+  timer = setInterval(async () => {
+    await drainOnce().catch((err) => console.error("[outbox] drain failed:", err));
   }, POLL_INTERVAL_MS);
   console.log(`[outbox] worker started (interval ${POLL_INTERVAL_MS}ms)`);
 }

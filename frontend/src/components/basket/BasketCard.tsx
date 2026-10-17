@@ -7,8 +7,6 @@ import type { Basket } from "@/lib/baskets-data";
 export interface BasketCardProps {
   /** The human-readable name of the basket (e.g. "Nancy Pelosi Tracker") */
   basketName?: string;
-  /** Points multiplier label (e.g. "3x Pts") */
-  pointsMultiplier?: string;
   /** Plain language summary of the basket thesis */
   description?: string;
   /** URL for the top collage / hero artwork */
@@ -38,7 +36,7 @@ export interface BasketCardProps {
  *
  * Implements the editorial narrative basket card with:
  * 1. Top collage artwork with dark bottom vignette
- * 2. Title row with basket name and purple points multiplier pill
+ * 2. Title row with basket name
  * 3. Muted thesis description
  * 4. Split bottom row: constituent token avatar stack (+N) & accessible return percentage
  *
@@ -48,12 +46,11 @@ import { useBasketNavHistory } from "@/hooks/useBasketNavHistory";
 
 export function BasketCard({
   basketName,
-  pointsMultiplier,
   description,
   heroImageUrl,
   tokenIcons,
   returnPercent,
-  returnPeriodLabel = "All Time Return",
+  returnPeriodLabel = "Hypothetical Return",
   onTradeClick,
   onInvestClick,
   href,
@@ -65,7 +62,6 @@ export function BasketCard({
 
   // Resolve data from direct props or fallback to basket object
   const name = basketName || basket?.name || "Untitled Basket";
-  const points = pointsMultiplier || basket?.pointsMultiplier || "3x Pts";
   const desc = description || basket?.description || "";
   const image = heroImageUrl || basket?.imageUrl || "/baskets/solana-orb.png";
 
@@ -73,11 +69,11 @@ export function BasketCard({
     tokenIcons ||
     (basket?.tokens ? basket.tokens.map((t) => t.icon) : []);
 
-  // Compute real return from backend NAV history
-  const hasRealNav = Boolean(navSummary && navSummary.history && navSummary.history.length > 0);
+  // Only show a return when the backend has an observed snapshot series.
+  const hasHistory = Boolean(navSummary?.history.length);
   const computedReturnPct = returnPercent !== undefined 
     ? (typeof returnPercent === "number" ? returnPercent : parseFloat(String(returnPercent).replace(/[+\-%]/g, "")))
-    : (hasRealNav ? navSummary!.allTimeReturnPct : null);
+    : (hasHistory ? navSummary!.allTimeReturnPct : null);
 
   const hasReturnData = computedReturnPct !== null;
   const isPositive = computedReturnPct !== null ? computedReturnPct >= 0 : true;
@@ -103,7 +99,6 @@ export function BasketCard({
         title={
           <div className="flex items-center justify-between gap-2 w-full">
             <span className="truncate">{name}</span>
-            {points ? <span className="kairos-card-points">{points}</span> : null}
           </div>
         }
         description={desc}
@@ -166,25 +161,3 @@ export function BasketCard({
 }
 
 export default BasketCard;
-
-/* =========================================================================
-   Sample Usage & Preview Data
-   =========================================================================
-   Example 1 (Props driven — e.g. Nancy Pelosi Tracker):
-   ```tsx
-   <BasketCard
-     basketName="Nancy Pelosi Tracker"
-     pointsMultiplier="3x Pts"
-     description="Nancy Pelosi's disclosed stock book on Solana, rebalanced every time a new STOCK Act filing drops."
-     heroImageUrl="/baskets/pelosi.png"
-     tokenIcons={["/tokens/sol.png", "/tokens/ray.png", "/tokens/jup.png", "/tokens/pyth.svg"]}
-     returnPercent="+18.96%"
-     returnPeriodLabel="1 Year Return"
-   />
-   ```
-
-   Example 2 (Catalog object driven):
-   ```tsx
-   <BasketCard basket={CURATED_BASKETS[0]} />
-   ```
-*/

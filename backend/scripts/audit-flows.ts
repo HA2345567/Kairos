@@ -82,7 +82,8 @@ async function main() {
   // 4) publish v2 (weight change) via admin → manual rebalance
   const version = await get(`/v1/baskets/${BASKET}`);
   const legs = version.json.basket?.activeVersion?.legs ?? version.json.activeVersion?.legs ?? [];
-  const adminToken = process.env.ADMIN_TOKEN || "kairos-devnet-admin";
+  const adminToken = process.env.ADMIN_TOKEN;
+  const approverToken = process.env.ADMIN_APPROVER_TOKEN;
   if (legs.length >= 2) {
     const newLegs = legs.map((l: any, i: number) => ({
       mint: l.mint,
@@ -92,8 +93,16 @@ async function main() {
     const last = newLegs[newLegs.length - 1];
     last.weightBps += 500 - Math.floor(500 / (legs.length - 1)) * (legs.length - 1); // exact 10000
     const pub = await post(`/v1/admin/baskets/${BASKET}/publish`,
-      { version: 2, changelog: "audit v2", legs: newLegs }, { "x-admin-token": adminToken });
-    step("publish v2", pub.status === 200, JSON.stringify(pub.json).slice(0, 80));
+      { version: 2, changelog: "audit v2", legs: newLegs }, {
+        "x-admin-token": adminToken ?? "",
+      });
+    const proposalId = pub.json.proposal?.id;
+    step("propose v2", pub.status === 202 && !!proposalId, JSON.stringify(pub.json).slice(0, 80));
+    if (proposalId) {
+      const approval = await post(`/v1/admin/basket-publish-proposals/${proposalId}/approve`,
+        { note: "audit approval" }, { "x-admin-approver-token": approverToken ?? "" });
+      step("approve v2", approval.status === 200, JSON.stringify(approval.json).slice(0, 80));
+    }
     const reb = await post(`/v1/positions/${pos.id}/rebalance/prepare`, { walletAddress: address, idempotencyKey: idem + "-reb" });
     step("rebalance prepare", reb.status === 200,
       reb.status === 200 ? `sells=${reb.json.execution?.preview?.sells?.length ?? "?"} buys=${reb.json.execution?.preview?.buys?.length ?? "?"}` : JSON.stringify(reb.json).slice(0, 100));

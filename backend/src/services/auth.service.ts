@@ -26,7 +26,7 @@ import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { config } from "../config";
 import { repository } from "../db/repository";
-import { db } from "../db/sqlite";
+import { one } from "../db/postgres";
 import type { User, Wallet } from "../db/schema";
 
 // ---------- constants ----------
@@ -149,13 +149,13 @@ function newRefreshToken(): string {
   return randomBytes(24).toString("hex"); // 48 hex chars
 }
 
-function persistRefreshToken(token: string, userId: string): void {
-  repository.saveRefreshToken(
+async function persistRefreshToken(token: string, userId: string): Promise<void> {
+  (await repository.saveRefreshToken(
     "rt-" + randomUUID().slice(0, 12),
     userId,
     sha256Hex(token),
     Date.now() + config.jwtRefreshSec * 1000
-  );
+  ));
 }
 
 /**
@@ -163,11 +163,9 @@ function persistRefreshToken(token: string, userId: string): void {
  * wallet address for a refreshed JWT with a read-only query against the frozen
  * `wallets` schema (user_id is UNIQUE-ish per row order; first wallet wins).
  */
-function walletAddressForUser(userId: string): string {
+async function walletAddressForUser(userId: string): Promise<string> {
   try {
-    const row = db
-      .prepare("SELECT address FROM wallets WHERE user_id = ? ORDER BY rowid ASC LIMIT 1")
-      .get(userId) as { address?: string } | undefined;
+    const row = await one<{ address: string }>("SELECT address FROM wallets WHERE user_id = ? ORDER BY rowid ASC LIMIT 1", userId);
     return row?.address ?? "";
   } catch {
     return "";
@@ -231,7 +229,7 @@ export const authService: AuthServiceApi = {
    */
   async generateNonce(walletAddress: string): Promise<string> {
     const nonce = NONCE_PREFIX + randomBytes(16).toString("hex");
-    repository.createNonce(walletAddress, nonce, Date.now() + NONCE_TTL_MS);
+    (await repository.createNonce(walletAddress, nonce, Date.now() + NONCE_TTL_MS));
     return nonce;
   },
 
@@ -260,7 +258,7 @@ export const authService: AuthServiceApi = {
     //    below is invalid — a burned nonce cannot be replayed.
     const nonce = extractNonce(message);
     if (!nonce) return null;
-    if (!repository.consumeNonce(walletAddress, nonce)) return null;
+    if (!(await repository.consumeNonce(walletAddress, nonce))) return null;
 
     // 2. Ed25519 detached-signature verification.
     try {
@@ -274,25 +272,25 @@ export const authService: AuthServiceApi = {
     }
 
     // 3. Find-or-create user + wallet.
-    let wallet = repository.getWalletByAddress(walletAddress);
+    let wallet = (await repository.getWalletByAddress(walletAddress));
     let user: User | undefined;
     if (wallet) {
-      user = repository.getUser(wallet.userId); // orphans impossible (FK ON)
+      user = (await repository.getUser(wallet.userId)); // orphans impossible (FK ON)
     } else {
-      user = repository.saveUser({
+      user = (await repository.saveUser({
         id: "usr-" + randomUUID().slice(0, 8),
         authProvider: "siws",
         createdAt: new Date().toISOString(),
         status: "active",
         region: "global",
-      });
-      wallet = repository.saveWallet({
+      }));
+      wallet = (await repository.saveWallet({
         id: "wal-" + randomUUID().slice(0, 8),
         userId: user.id,
         address: walletAddress,
         type: "external",
         delegatedSigning: false,
-      });
+      }));
     }
     if (!wallet || !user) return null;
 
@@ -302,7 +300,7 @@ export const authService: AuthServiceApi = {
       config.jwtAccessSec
     );
     const refreshToken = newRefreshToken();
-    persistRefreshToken(refreshToken, user.id);
+    (await persistRefreshToken(refreshToken, user.id));
 
     return {
       token,
@@ -321,16 +319,16 @@ export const authService: AuthServiceApi = {
       return null;
     }
     const hash = sha256Hex(refreshToken);
-    const record = repository.getRefreshToken(hash);
+    const record = (await repository.getRefreshToken(hash));
     if (!record) return null;
-    repository.revokeRefreshToken(hash);
+    (await repository.revokeRefreshToken(hash));
 
     const token = signToken(
-      { sub: record.userId, wallet: walletAddressForUser(record.userId) },
+      { sub: record.userId, wallet: await walletAddressForUser(record.userId) },
       config.jwtAccessSec
     );
     const rotated = newRefreshToken();
-    persistRefreshToken(rotated, record.userId);
+    (await persistRefreshToken(rotated, record.userId));
     return { token, refreshToken: rotated };
   },
 

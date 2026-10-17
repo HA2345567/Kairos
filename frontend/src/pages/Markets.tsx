@@ -8,29 +8,20 @@ import { Link } from "react-router-dom";
 import { LayoutGrid, Rows3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "./cesto.css";
-import { kairosApi } from "@/lib/api-client";
-import { CURATED_BASKETS, fetchBaskets, type Basket } from "@/lib/baskets-data";
+import { fetchBaskets, type Basket } from "@/lib/baskets-data";
 
-import { useTokenPrices } from "@/hooks/useTokenPrices";
 
-const INITIAL_CATEGORIES = ["All", ...Array.from(new Set(CURATED_BASKETS.map((b) => b.category))).sort()];
+const INITIAL_CATEGORIES = ["All"];
 
 export default function Markets() {
-  const [baskets, setBaskets] = useState<Basket[]>(CURATED_BASKETS);
+  const [baskets, setBaskets] = useState<Basket[]>([]);
   const [categories, setCategories] = useState<string[]>(INITIAL_CATEGORIES);
   const [selectedCat, setSelectedCat] = useState<string>("All");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [investBasket, setInvestBasket] = useState<Basket | null>(null);
   const [investModalOpen, setInvestModalOpen] = useState(false);
-
-  // Aggregate all unique token mints for real-time DexScreener/Jupiter price updates
-  const allConstituentMints = useMemo(() => {
-    return Array.from(
-      new Set(baskets.flatMap((b) => (b.tokens || []).map((t) => t.priceMint || t.mint)))
-    );
-  }, [baskets]);
-  const { prices: livePrices } = useTokenPrices(allConstituentMints);
 
   function handleInvestClick(basket: Basket) {
     setInvestBasket(basket);
@@ -43,7 +34,7 @@ export default function Markets() {
     async function loadMarketsData() {
       try {
         const fetchedBaskets = await fetchBaskets();
-        if (active && fetchedBaskets && fetchedBaskets.length > 0) {
+        if (active) {
           setBaskets(fetchedBaskets);
           const uniqueCategories = Array.from(
             new Set(fetchedBaskets.map((basket) => basket.category))
@@ -51,7 +42,8 @@ export default function Markets() {
           setCategories(["All", ...uniqueCategories.sort()]);
         }
       } catch (error) {
-        console.warn("API unavailable, displaying catalog:", error);
+        console.error("Basket catalog failed to load:", error);
+        if (active) setLoadError("The basket catalog is unavailable. Check the backend connection and retry.");
       } finally {
         if (active) setIsLoading(false);
       }
@@ -153,6 +145,8 @@ export default function Markets() {
                 ))}
               </div>
             )
+          ) : loadError ? (
+            <div role="alert" className="py-12 text-center text-sm text-rose-400">{loadError}</div>
           ) : filteredBaskets.length === 0 ? (
             <div className="text-center py-20 space-y-3">
               <p className="text-foreground/70 text-sm">No baskets found under "{selectedCat}".</p>
@@ -190,7 +184,6 @@ export default function Markets() {
                     index={idx + 1}
                     basket={basket}
                     onInvestClick={handleInvestClick}
-                    livePrices={livePrices}
                   />
                 </Link>
               ))}

@@ -1,5 +1,5 @@
-// Use the same origin in production; local development can override this.
-const BASE_URL = import.meta.env.VITE_API_URL || '';
+// Paths stay relative; the API client applies the configured origin once.
+const BASE_URL = '';
 
 export const API_ENDPOINTS = {
   // Health checks
@@ -36,11 +36,14 @@ export const API_ENDPOINTS = {
   POSITION_CLOSE_PREPARE: (id: string) => `${BASE_URL}/v1/positions/${id}/close/prepare`,
   POSITION_AUTO_REBALANCE: (id: string) => `${BASE_URL}/v1/positions/${id}/auto-rebalance`,
 
-  // Admin (requires x-admin-token header)
+  // Proposals use x-admin-token; listing and approval use x-admin-approver-token.
   ADMIN_KILL_SWITCH: `${BASE_URL}/v1/admin/kill-switch`,
   ADMIN_BASKET_STATUS: (slug: string) => `${BASE_URL}/v1/admin/baskets/${slug}/status`,
   ADMIN_TOKEN_STATUS: (mint: string) => `${BASE_URL}/v1/admin/tokens/${mint}/trading-status`,
   ADMIN_BASKET_PUBLISH: (slug: string) => `${BASE_URL}/v1/admin/baskets/${slug}/publish`,
+  ADMIN_PUBLISH_PROPOSALS: `${BASE_URL}/v1/admin/basket-publish-proposals`,
+  ADMIN_PUBLISH_TRANSACTION: (id: string) => `${BASE_URL}/v1/admin/basket-publish-proposals/${id}/transaction`,
+  ADMIN_PUBLISH_APPROVE: (id: string) => `${BASE_URL}/v1/admin/basket-publish-proposals/${id}/approve`,
   ADMIN_EXECUTIONS: `${BASE_URL}/v1/admin/executions`,
   ADMIN_FEES: `${BASE_URL}/v1/admin/fees`,
   ADMIN_RELAYER: `${BASE_URL}/v1/admin/relayer`,

@@ -16,6 +16,8 @@ const { authService } = await import("../src/services/auth.service");
 const { executionService } = await import("../src/services/execution.service");
 const { recomputeExecutionStatus } = await import("../src/workers/landing");
 const { config } = await import("../src/config");
+const { loadDevnetState } = await import("../src/chain/devnetState");
+const devnetAvailable = loadDevnetState() !== null;
 
 // Override for testing
 (config as any).simulateLanding = true;
@@ -56,8 +58,8 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
     // Clear DB (in-memory)
 
     // Seed tokens
-    [USDC_MINT, JUP_MINT, GOLD_MINT].forEach((mint, i) => {
-      repository.saveToken({
+    (await Promise.all([USDC_MINT, JUP_MINT, GOLD_MINT].map(async (mint, i) => {
+      (await repository.saveToken({
         mint,
         symbol: i === 0 ? "USDC" : i === 1 ? "tJUP" : "tGOLD",
         name: i === 0 ? "Test USDC" : i === 1 ? "Test Jupiter" : "Test Gold",
@@ -66,11 +68,11 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
         tradingStatus: "active",
         denylisted: false,
         priceUsd: i === 0 ? 1 : i === 1 ? 0.85 : 2400,
-      });
-    });
+      }));
+    })));
 
     // Seed basket version
-    repository.saveBasketVersion({
+    (await repository.saveBasketVersion({
       id: "bv-test-1",
       basketId: "bkt-test",
       version: 1,
@@ -81,10 +83,10 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
         { id: "leg-jup", versionId: "bv-test-1", mint: JUP_MINT, weightBps: 6000, legType: "spl" },
         { id: "leg-gold", versionId: "bv-test-1", mint: GOLD_MINT, weightBps: 4000, legType: "xstock" },
       ],
-    });
+    }));
 
     // Seed basket
-    repository.saveBasket({
+    (await repository.saveBasket({
       id: "bkt-test",
       slug: BASKET_SLUG,
       name: "Solana Infrastructure Governance",
@@ -93,9 +95,8 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
       status: "active",
       activeVersionId: "bv-test-1",
       minUsdc: 25,
-      performance: { "1W": 0, "1M": 0, "6M": 0, "1Y": 0 } as never,
       protocols: [],
-    });
+    }));
 
     // Create test wallet
     await authService.generateNonce(walletAddress);
@@ -105,7 +106,7 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
     await authService.verify(walletAddress, sig, message);
   });
 
-  test("complete flow executes successfully and updates position", async () => {
+  test("complete flow executes successfully and updates position", { skip: !devnetAvailable && "Run scripts/devnet-setup.ts to enable the devnet E2E flow" }, async () => {
     // STEP 1: Get quote
     const quote = await quoteService.getQuote(BASKET_SLUG, USDC_AMOUNT);
     assert.ok(quote);
@@ -145,7 +146,7 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
       assert.ok(quoteLeg);
       assert.equal(leg.inAmountUsdc, quoteLeg.inUsdcAmount);
 
-      const token = repository.getToken(quoteLeg.mint);
+      const token = (await repository.getToken(quoteLeg.mint));
       const decimals = token?.decimals ?? 6;
       const expectedOutBaseUnits = toBaseUnitsString(quoteLeg.expectedOutTokens, decimals);
       const actualNum = parseInt(String(leg.expectedOut));
@@ -177,7 +178,7 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
     assert.ok(submitted.updatedAt > prepared.createdAt);
 
     // STEP 5: Simulate landing process
-    const executionWithLegs = repository.getExecution(prepared.id);
+    const executionWithLegs = (await repository.getExecution(prepared.id));
     assert.ok(executionWithLegs);
     assert.equal(executionWithLegs.legs.length, prepared.legs.length);
 
@@ -186,54 +187,55 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
       const simulatedSignature = `sim-${leg.id}-${Date.now()}`;
 
       // Update leg status
-      repository.updateExecutionLeg(prepared.id, leg.id, {
+      (await repository.updateExecutionLeg(prepared.id, leg.id, {
         status: "CONFIRMED",
         txSignature: simulatedSignature,
         actualOut: leg.expectedOut,
-      });
+      }));
 
-      // Fee ledger for first leg
-      if (executionWithLegs.legs[0]?.id === leg.id && executionWithLegs.feeUsdc > 0) {
-        repository.addFee(prepared.id, executionWithLegs.feeUsdc, new Date().toISOString());
+      // Ledger fees only for the confirmed leg.
+      if (leg.feeUsdc && leg.feeUsdc > 0) {
+        (await repository.addFee(prepared.id, leg.id, leg.feeUsdc, new Date().toISOString()));
       }
 
       // Position bookkeeping
-      const pos = ensurePosition(executionWithLegs);
-      const token = repository.getToken(leg.mint);
+      const pos = (await ensurePosition(executionWithLegs));
+      const token = (await repository.getToken(leg.mint));
       const decimals = token?.decimals ?? 6;
       if (executionWithLegs.type === "close") {
-        repository.upsertPositionLeg(pos.id, leg.mint, targetBpsFor(executionWithLegs.basketVersionId, leg.mint), 0);
+        (await repository.upsertPositionLeg(pos.id, leg.mint, (await targetBpsFor(executionWithLegs.basketVersionId, leg.mint)), 0));
       } else {
         const uiAmount = Number(leg.actualOut ?? leg.expectedOut) / 10 ** decimals;
-        repository.upsertPositionLeg(
+        (await repository.upsertPositionLeg(
           pos.id,
           leg.mint,
-          targetBpsFor(executionWithLegs.basketVersionId, leg.mint),
+          (await targetBpsFor(executionWithLegs.basketVersionId, leg.mint)),
           uiAmount
-        );
+        ));
       }
 
       // Outbox event
-      repository.enqueueOutbox("execution.leg.confirmed", {
+      (await repository.enqueueOutbox("execution.leg.confirmed", {
         executionId: prepared.id,
         legId: leg.id,
         mint: leg.mint,
         signature: simulatedSignature,
-      });
+      }));
     }
 
     // Update execution status (triggers outbox events)
     const finalStatus = await recomputeExecutionStatus(prepared.id);
 
     // STEP 6: Verify execution state
-    const finalExecution = repository.getExecution(prepared.id);
+    const finalExecution = (await repository.getExecution(prepared.id));
+    assert.ok(finalExecution);
     assert.ok(finalExecution);
     assert.ok(finalExecution.legs.every(l => l.status === "CONFIRMED"));
     assert.equal(finalExecution.status, "COMPLETED");
     assert.equal(finalStatus, "COMPLETED");
 
     // STEP 7: Verify position
-    const positions = repository.getPositionsForWallet(walletAddress);
+    const positions = (await repository.getPositionsForWallet(walletAddress));
     assert.ok(positions.length > 0);
     const position = positions.find(p => p.basketId === "bkt-test");
     assert.ok(position);
@@ -254,7 +256,7 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
     assert.equal(idempotentPrepare.status, "COMPLETED");
 
     // STEP 9: Verify outbox events
-    const outboxClaims = repository.claimOutbox(100);
+    const outboxClaims = (await repository.claimOutbox(100));
     const eventTypes = outboxClaims.map(o => o.event);
     assert.ok(eventTypes.includes("execution.submitted"));
     assert.ok(eventTypes.includes("execution.completed"));
@@ -263,7 +265,7 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
     console.log(`✅ E2E flow: ${quote.legs.length} legs, fee: ${quote.platformFeeUsdc} USDC, position: $${position.currentValueUsd.toFixed(2)}`);
   });
 
-  test("handles partial completion correctly", async () => {
+  test("handles partial completion correctly", { skip: !devnetAvailable && "Run scripts/devnet-setup.ts to enable the devnet E2E flow" }, async () => {
     // Prepare execution
     const prepared = await executionService.prepare({
       basketSlug: BASKET_SLUG,
@@ -286,68 +288,70 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
     });
 
     // Simulate partial landing: first leg CONFIRMED, second leg FAILED
-    const executionWithLegs = repository.getExecution(prepared.id);
+    const executionWithLegs = (await repository.getExecution(prepared.id));
     assert.ok(executionWithLegs);
 
     // Confirm first leg
     const firstLegSig = `sim-${executionWithLegs.legs[0].id}-${Date.now()}`;
-    repository.updateExecutionLeg(prepared.id, executionWithLegs.legs[0].id, {
+    (await repository.updateExecutionLeg(prepared.id, executionWithLegs.legs[0].id, {
       status: "CONFIRMED",
       txSignature: firstLegSig,
       actualOut: executionWithLegs.legs[0].expectedOut,
-    });
-    if (executionWithLegs.feeUsdc > 0) {
-      repository.addFee(prepared.id, executionWithLegs.feeUsdc, new Date().toISOString());
+    }));
+    const landedLeg = executionWithLegs.legs[0];
+    if (landedLeg.feeUsdc && landedLeg.feeUsdc > 0) {
+      (await repository.addFee(prepared.id, landedLeg.id, landedLeg.feeUsdc, new Date().toISOString()));
     }
 
     // Position bookkeeping for confirmed leg
-    const pos = ensurePosition(executionWithLegs);
-    const token = repository.getToken(executionWithLegs.legs[0].mint);
+    const pos = (await ensurePosition(executionWithLegs));
+    const token = (await repository.getToken(executionWithLegs.legs[0].mint));
     const decimals = token?.decimals ?? 6;
     if (executionWithLegs.type === "close") {
-      repository.upsertPositionLeg(pos.id, executionWithLegs.legs[0].mint, targetBpsFor(executionWithLegs.basketVersionId, executionWithLegs.legs[0].mint), 0);
+      (await repository.upsertPositionLeg(pos.id, executionWithLegs.legs[0].mint, (await targetBpsFor(executionWithLegs.basketVersionId, executionWithLegs.legs[0].mint)), 0));
     } else {
       const uiAmount = Number(executionWithLegs.legs[0].actualOut ?? executionWithLegs.legs[0].expectedOut) / 10 ** decimals;
-      repository.upsertPositionLeg(
+      (await repository.upsertPositionLeg(
         pos.id,
         executionWithLegs.legs[0].mint,
-        targetBpsFor(executionWithLegs.basketVersionId, executionWithLegs.legs[0].mint),
+        (await targetBpsFor(executionWithLegs.basketVersionId, executionWithLegs.legs[0].mint)),
         uiAmount
-      );
+      ));
     }
 
     // Outbox event for confirmed leg
-    repository.enqueueOutbox("execution.leg.confirmed", {
+    (await repository.enqueueOutbox("execution.leg.confirmed", {
       executionId: prepared.id,
       legId: executionWithLegs.legs[0].id,
       mint: executionWithLegs.legs[0].mint,
       signature: firstLegSig,
-    });
+    }));
 
     // Fail second leg (if exists)
     if (executionWithLegs.legs.length > 1) {
-      repository.updateExecutionLeg(prepared.id, executionWithLegs.legs[1].id, {
+      (await repository.updateExecutionLeg(prepared.id, executionWithLegs.legs[1].id, {
         status: "FAILED",
         error: "SIMULATED_FAILURE",
-      });
-      repository.enqueueOutbox("execution.leg.failed", {
+      }));
+      (await repository.enqueueOutbox("execution.leg.failed", {
         executionId: prepared.id,
         legId: executionWithLegs.legs[1].id,
         mint: executionWithLegs.legs[1].mint,
         error: "SIMULATED_FAILURE",
-      });
+      }));
     }
 
     // Update execution status
     const finalStatus = await recomputeExecutionStatus(prepared.id);
 
     // Verify state machine
-    const finalExecution = repository.getExecution(prepared.id);
+    const finalExecution = (await repository.getExecution(prepared.id));
+    assert.ok(finalExecution);
     assert.equal(finalExecution.status, "PARTIALLY_COMPLETED");
     assert.equal(finalStatus, "PARTIALLY_COMPLETED");
 
     // Verify position exists
-    const positions = repository.getPositionsForWallet(walletAddress);
+    const positions = (await repository.getPositionsForWallet(walletAddress));
     let position = null;
     for (const p of positions) {
       if (p.basketId === "bkt-test") { position = p; break; }
@@ -356,7 +360,7 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
     assert.equal(position.status, "ACTIVE");
 
     // Verify outbox events
-    const outboxClaims = repository.claimOutbox(100);
+    const outboxClaims = (await repository.claimOutbox(100));
     const eventTypes = outboxClaims.map(o => o.event);
     assert.ok(eventTypes.includes("execution.partially_completed"));
 
@@ -364,9 +368,9 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
   });
 
   // Helper: Ensure position exists (mimics landing worker)
-  function ensurePosition(execution: any): any {
-    const existing = repository
-      .getPositionsForWallet(execution.walletAddress)
+  async function ensurePosition(execution: any): Promise<any> {
+    const existing = (await repository
+      .getPositionsForWallet(execution.walletAddress))
       .find((p) => p.basketId === execution.basketId);
     if (existing) return existing;
 
@@ -377,26 +381,26 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
       basketVersionId: execution.basketVersionId,
       entryUsdc: Number((execution.totalUsdc - execution.feeUsdc).toFixed(4)),
       currentValueUsd: 0,
-      status: "ACTIVE",
+      status: "ACTIVE" as const,
       autoRebalance: false,
       driftPct: 0,
       rebalanceAvailable: false,
-      legs: execution.legs.map((l: any) => ({
+      legs: (await Promise.all(execution.legs.map(async (l: any) => ({
         mint: l.mint,
         symbol: l.symbol,
-        targetBps: targetBpsFor(execution.basketVersionId, l.mint),
+        targetBps: (await targetBpsFor(execution.basketVersionId, l.mint)),
         currentAmount: 0,
         currentValueUsd: 0,
-      })),
+      })))),
       updatedAt: new Date().toISOString(),
     };
-    repository.savePosition(position);
+    (await repository.savePosition(position));
     return position;
   }
 
   // Helper: Get target bps for a mint in a basket version
-  function targetBpsFor(basketVersionId: string, mint: string): number {
-    const version = repository.getBasketVersion(basketVersionId);
+  async function targetBpsFor(basketVersionId: string, mint: string): Promise<number> {
+    const version = (await repository.getBasketVersion(basketVersionId));
     return version?.legs.find((l) => l.mint === mint)?.weightBps ?? 0;
   }
 });

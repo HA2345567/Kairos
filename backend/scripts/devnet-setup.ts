@@ -1,7 +1,7 @@
 /**
  * Kairos devnet bootstrap (plan.md §4, PRD §11).
  *
- * Run from backend/:  npx tsx scripts/devnet-setup.ts
+ * Run from repository root: bun run --cwd backend setup
  *
  * Everything is deterministic (labels -> sha256 seeds), so re-runs are
  * idempotent and survive devnet resets:
@@ -60,6 +60,21 @@ function log(step: string, msg: string): void {
   console.log(`[devnet-setup] ${step.padEnd(22)} ${msg}`);
 }
 
+function safeEndpoint(endpoint: string): string {
+  const url = new URL(endpoint);
+  for (const key of url.searchParams.keys()) {
+    if (/key|token|secret|auth|password/i.test(key)) url.searchParams.set(key, "[redacted]");
+  }
+  return url.toString();
+}
+
+function safeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message
+    .replace(process.env.HELIUS_API_KEY || "\0", "[redacted]")
+    .replace(/([?&][^=]*(?:key|token|secret|auth|password)=)[^&\s]*/gi, "$1[redacted]");
+}
+
 /** Best-effort airdrop with signature confirmation; alternates primary/fallback RPC. */
 async function airdrop(
   connections: Connection[],
@@ -83,7 +98,7 @@ async function airdrop(
     } catch (err) {
       log(
         "airdrop",
-        `attempt ${attempt} on ${conn.rpcEndpoint} failed: ${err instanceof Error ? err.message : String(err)}`
+        `attempt ${attempt} on ${safeEndpoint(conn.rpcEndpoint)} failed: ${safeError(err)}`
       );
     }
     await sleep(3_000);
@@ -98,7 +113,7 @@ async function main(): Promise<void> {
 
   const conn = getConnection();
   const fallbackConn = getFallbackConnection();
-  log("connect", `primary ${conn.rpcEndpoint} / fallback ${fallbackConn.rpcEndpoint}`);
+  log("connect", `primary ${safeEndpoint(conn.rpcEndpoint)} / fallback ${safeEndpoint(fallbackConn.rpcEndpoint)}`);
 
   const relayer = relayerService.getKeypair();
   const treasury = deterministicKeypair(DEVNET_LABELS.treasury);
@@ -119,9 +134,7 @@ async function main(): Promise<void> {
     );
   }
   if (relayerSol <= 0.05) {
-    console.warn(
-      "[devnet-setup] WARNING: relayer is nearly out of SOL — subsequent transactions will fail. Re-run later to top up."
-    );
+    throw new Error("Relayer has insufficient SOL after faucet attempts; no mint setup was attempted.");
   }
 
   // ---- 2. USDC mint ----
@@ -187,7 +200,7 @@ async function main(): Promise<void> {
 
   // ---- summary ----
   console.log("\n=== Kairos devnet summary ===");
-  console.log(`cluster      devnet (rpc ${conn.rpcEndpoint})`);
+  console.log(`cluster      devnet (rpc ${safeEndpoint(conn.rpcEndpoint)})`);
   console.log(`relayer      ${relayer.publicKey.toBase58()}  (${relayerSol.toFixed(4)} SOL)`);
   console.log(`             ${explorer("address", relayer.publicKey.toBase58())}`);
   console.log(`treasury     ${treasury.publicKey.toBase58()}`);
@@ -213,7 +226,7 @@ async function main(): Promise<void> {
   } catch {
     /* evidence only */
   }
-  console.log("\n[devnet-setup] done. Next: npx tsx scripts/seed.ts");
+  console.log("\n[devnet-setup] done. Next: bun run --cwd backend seed");
 }
 
 main().catch((err) => {

@@ -7,13 +7,14 @@ pub mod state;
 use instructions::*;
 use state::*;
 
-declare_id!("ELfFskTFe9keckQ7yN3hgZ2csq7hUHAR7QuPNoErQqPw");
+declare_id!("3jWJZPdDou1h8UrT871Qi573yqQkFYYW8Jqiug9Pne5w");
 
 // Anchor's #[program] codegen expects each `__client_accounts_<ix>` module to
 // be addressable at the crate root, but #[derive(Accounts)] emits it next to
 // the struct (inside instructions::*). Re-export so `crate::__client_accounts_*`
 // resolves.
 pub(crate) use instructions::initialize_global::__client_accounts_initialize_global;
+pub(crate) use instructions::initialize_publish_authorities::__client_accounts_initialize_publish_authorities;
 pub(crate) use instructions::initialize_basket::__client_accounts_initialize_basket;
 pub(crate) use instructions::admin::__client_accounts_set_active;
 pub(crate) use instructions::admin::__client_accounts_set_global_pause;
@@ -36,6 +37,14 @@ pub mod kairos_router {
         instructions::initialize_global::handler(ctx, usdc_mint, treasury, fee_bps)
     }
 
+    /// One-time 2-of-3 publish authority setup, preserving existing global PDA layout.
+    pub fn initialize_publish_authorities(
+        ctx: Context<InitializePublishAuthorities>,
+        additional_approvers: [Pubkey; 2],
+    ) -> Result<()> {
+        instructions::initialize_publish_authorities::handler(ctx, additional_approvers)
+    }
+
     /// Admin-only basket creation (up to 10 legs, weights sum 10,000 bps).
     pub fn initialize_basket(
         ctx: Context<InitializeBasket>,
@@ -52,7 +61,7 @@ pub mod kairos_router {
         instructions::admin::set_active_handler(ctx, is_active)
     }
 
-    /// Global kill switch — halts every swap in one transaction.
+    /// Global kill switch — halts purchases while preserving user exits.
     pub fn set_global_pause(ctx: Context<SetGlobalPause>, paused: bool) -> Result<()> {
         instructions::admin::set_global_pause_handler(ctx, paused)
     }

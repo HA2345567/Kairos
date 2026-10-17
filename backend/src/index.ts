@@ -7,6 +7,7 @@ import { loadDevnetState } from "./chain/devnetState";
 import { registerRoutes } from "./routes/api.routes";
 import { relayerService } from "./services/relayer.service";
 import { startOutboxWorker } from "./workers/outbox";
+import { startPriceSnapshotWorker } from "./workers/price-snapshots";
 
 /**
  * Kairos backend entrypoint (plan.md §6 GLUE). Boot order:
@@ -25,7 +26,9 @@ export function buildApp(): KairosHttpServer {
     service: "kairos-backend",
     cluster: config.cluster,
     simulateLanding: config.simulateLanding,
-    killSwitchActive: repository.getSetting("global_kill_switch") === "true",
+    pythFeedsConfigured: Object.keys(config.pythFeeds).length,
+    pythIngestionEnabled: Boolean(config.pythApiKey && Object.keys(config.pythFeeds).length),
+    killSwitchActive: (await repository.getSetting("global_kill_switch")) === "true",
     devnetInitialized: loadDevnetState() !== null,
     timestamp: new Date().toISOString(),
   }));
@@ -39,13 +42,17 @@ export function buildApp(): KairosHttpServer {
       status: "ok",
       service: "kairos-backend",
       cluster: config.cluster,
-      killSwitchActive: repository.getSetting("global_kill_switch") === "true",
+      killSwitchActive: (await repository.getSetting("global_kill_switch")) === "true",
       devnet: { initialized: loadDevnetState() !== null },
+      prices: {
+        pythEnabled: Boolean(config.pythApiKey && Object.keys(config.pythFeeds).length),
+        pythFeedMints: Object.keys(config.pythFeeds).length,
+      },
       relayer: { pubkey: relayerService.getPublicKey().toBase58(), solBalance: sol, funded },
       counts: {
-        baskets: repository.getAllBaskets().length,
-        tokens: repository.getAllTokens().length,
-        executions: repository.listExecutions(undefined, 1000).length,
+        baskets: (await repository.getAllBaskets()).length,
+        tokens: (await repository.getAllTokens()).length,
+        executions: (await repository.listExecutions(undefined, 1000)).length,
       },
       timestamp: new Date().toISOString(),
     };
@@ -57,12 +64,7 @@ export function buildApp(): KairosHttpServer {
 
 async function startWorkers(): Promise<void> {
   startOutboxWorker();
-  try {
-    const { startSnapshotWorker } = await import("./workers/snapshot");
-    startSnapshotWorker();
-  } catch (err) {
-    console.error("[boot] snapshot worker failed to start:", err);
-  }
+  (await startPriceSnapshotWorker());
   try {
     const { startLandingWorker } = await import("./workers/landing");
     startLandingWorker();
@@ -71,7 +73,7 @@ async function startWorkers(): Promise<void> {
   }
   try {
     const { startReconciler } = await import("./workers/reconciler");
-    startReconciler();
+    (await startReconciler());
   } catch (err) {
     console.error("[boot] reconciler failed to start:", err);
   }
@@ -81,10 +83,10 @@ export async function start(): Promise<void> {
   const state = loadDevnetState();
   if (config.isDevnet() && !state) {
     console.warn(
-      "[boot] backend/data/devnet-state.json missing — run `npm run setup` (scripts/devnet-setup.ts) before investing; reads still work."
+      "[boot] backend/data/devnet-state.json missing — run `bun run setup` from backend/ before investing; reads still work."
     );
   }
-  seedDatabase(); // no-op when devnet-state exists; fallback registry otherwise
+  (await seedDatabase()); // no-op when devnet-state exists; fallback registry otherwise
   await startWorkers();
 
   const app = buildApp();

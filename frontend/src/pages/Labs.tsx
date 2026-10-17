@@ -19,7 +19,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
-import { CURATED_BASKETS } from "@/lib/baskets-data";
+import { useBaskets } from "@/lib/baskets-data";
 import { useAllBasketsNav } from "@/hooks/useAllBasketsNav";
 import {
   DropdownMenu,
@@ -47,145 +47,7 @@ export type LabIdea = {
   date: string;
   tags: string[];
   tokens?: LabIdeaToken[];
-  returnsEst?: string;
-  /** Period label shown above the estimated return (defaults to "1Y") */
-  returnsPeriod?: string;
 };
-
-const INITIAL_IDEAS: LabIdea[] = [
-  {
-    id: "conviction",
-    title: "High Conviction Tech & Industrial Alpha",
-    description: "A high growth basket focused on decentralized compute leaders, industrial IoT grids, and the infrastructure powering next-gen AI.",
-    author: "SolanaFan",
-    votes: 128,
-    date: "2h ago",
-    tags: ["Technology", "Growth"],
-    tokens: [
-      { symbol: "RENDER", icon: "/tokens/render.png" },
-      { symbol: "HNT", icon: "/tokens/hnt.png" },
-      { symbol: "IOT", icon: "/tokens/iot.svg" },
-    ],
-    returnsEst: "+34.2%",
-    returnsPeriod: "1Y",
-  },
-  {
-    id: "ai",
-    title: "Ansem’s Top Public Conviction Portfolio",
-    description: "Curated liquid basket based on public top positions: Solana ecosystem foundation combined with breakout high-beta tokens.",
-    author: "matthew",
-    votes: 96,
-    date: "5h ago",
-    tags: ["Solana", "Community"],
-    tokens: [
-      { symbol: "SOL", icon: "/tokens/sol.png" },
-      { symbol: "BONK", icon: "/tokens/bonk.jpg" },
-      { symbol: "JUP", icon: "/tokens/jup.png" },
-      { symbol: "RAY", icon: "/tokens/ray.png" },
-    ],
-    returnsEst: "+48.9%",
-    returnsPeriod: "1Y",
-  },
-  {
-    id: "china",
-    title: "Autonomous AI & Compute Backplane",
-    description: "Next wave of decentralized AI inference: GPU networks, autonomous agent coordination, and open oracle compute on Solana.",
-    author: "LuckyB",
-    votes: 84,
-    date: "Yesterday",
-    tags: ["AI", "Compute"],
-    tokens: [
-      { symbol: "RENDER", icon: "/tokens/render.png" },
-      { symbol: "GOAT", icon: "/tokens/goat.svg" },
-      { symbol: "PIPPIN", icon: "/tokens/pippin.svg" },
-      { symbol: "FARTCOIN", icon: "/tokens/fartcoin.svg" },
-    ],
-    returnsEst: "+62.1%",
-    returnsPeriod: "1Y",
-  },
-  {
-    id: "depin",
-    title: "Decentralized Physical Wireless (DePIN)",
-    description: "Tokenizing global telecommunications, 5G wireless networks, and IoT sensor networks on Solana.",
-    author: "GFLABS",
-    votes: 72,
-    date: "Yesterday",
-    tags: ["DePIN", "Telecom"],
-    tokens: [
-      { symbol: "HNT", icon: "/tokens/hnt.png" },
-      { symbol: "IOT", icon: "/tokens/iot.svg" },
-      { symbol: "MOBILE", icon: "/tokens/mobile.svg" },
-    ],
-    returnsEst: "+27.5%",
-    returnsPeriod: "1Y",
-  },
-  {
-    id: "liquid-staking",
-    title: "Liquid Staking & MEV Routing Capture",
-    description: "Dominant liquid staking protocols and validator MEV capture on Solana. Direct staking yield combined with governance power.",
-    author: "SolanaFan",
-    votes: 61,
-    date: "2 days ago",
-    tags: ["Staking", "DeFi"],
-    tokens: [
-      { symbol: "JTO", icon: "/tokens/jto.png" },
-      { symbol: "JUP", icon: "/tokens/jup.png" },
-      { symbol: "CLOUD", icon: "/tokens/cloud.png" },
-      { symbol: "SOL", icon: "/tokens/sol.png" },
-    ],
-    returnsEst: "+19.8%",
-    returnsPeriod: "30D",
-  },
-  {
-    id: "culture-alpha",
-    title: "Solana Culture & Cultural Alpha",
-    description: "Top community attention networks capturing consumer mindshare and liquidity across Solana.",
-    author: "matthew",
-    votes: 58,
-    date: "2 days ago",
-    tags: ["Culture", "Memes"],
-    tokens: [
-      { symbol: "BONK", icon: "/tokens/bonk.jpg" },
-      { symbol: "TRUMP", icon: "/tokens/trump.svg" },
-      { symbol: "PENGU", icon: "/tokens/pengu.svg" },
-    ],
-    returnsEst: "+51.3%",
-    returnsPeriod: "1Y",
-  },
-  {
-    id: "defi-core",
-    title: "Solana Core DeFi Money Legos",
-    description: "Liquidity routers, lending markets, and automated market makers powering trading volumes on Solana.",
-    author: "GFLABS",
-    votes: 43,
-    date: "3 days ago",
-    tags: ["DeFi", "Yield"],
-    tokens: [
-      { symbol: "JUP", icon: "/tokens/jup.png" },
-      { symbol: "KMNO", icon: "/tokens/kmno.png" },
-      { symbol: "RAY", icon: "/tokens/ray.png" },
-      { symbol: "ORCA", icon: "/tokens/orca.png" },
-    ],
-    returnsEst: "+31.0%",
-    returnsPeriod: "1Y",
-  },
-  {
-    id: "oracle-data",
-    title: "Decentralized Oracle & Data Feeds",
-    description: "Low-latency financial oracle feeds and infrastructure securing billions in multi-asset on-chain TVL.",
-    author: "LuckyB",
-    votes: 39,
-    date: "3 days ago",
-    tags: ["Oracle", "Infrastructure"],
-    tokens: [
-      { symbol: "PYTH", icon: "/tokens/pyth.svg" },
-      { symbol: "SOL", icon: "/tokens/sol.png" },
-      { symbol: "JTO", icon: "/tokens/jto.png" },
-    ],
-    returnsEst: "+22.4%",
-    returnsPeriod: "1Y",
-  },
-];
 
 const KEY = "cesto-labs-ideas-v1";
 const COMMUNITY_KEY = "kairos_community_lab_ideas";
@@ -194,9 +56,9 @@ function loadIdeas(): LabIdea[] {
   try {
     const rawCommunity = JSON.parse(localStorage.getItem(COMMUNITY_KEY) || "[]");
     const rawSaved = JSON.parse(localStorage.getItem(KEY) || "[]");
-    return [...rawCommunity, ...rawSaved, ...INITIAL_IDEAS];
+    return [rawCommunity, rawSaved].flatMap((value) => Array.isArray(value) ? value : []);
   } catch {
-    return INITIAL_IDEAS;
+    return [];
   }
 }
 
@@ -235,6 +97,7 @@ export default function Labs() {
   });
   const [sort, setSort] = useState<SortKey>("Trending");
   const [query, setQuery] = useState("");
+  const { data: catalogBaskets = [] } = useBaskets();
 
   // Live NAV map from the Kairos backend (polled every 60s) — powers the hero
   // status line. Degrades gracefully when the backend is offline.
@@ -244,11 +107,8 @@ export default function Labs() {
     return Object.values(navMap).filter(Boolean).length;
   }, [navMap]);
 
-  // Top Baskets: catalog baskets ranked by 7-day return
-  const topBaskets = useMemo(
-    () => [...CURATED_BASKETS].sort((a, b) => b.returns7d - a.returns7d).slice(0, 5),
-    []
-  );
+  // No verified performance ranking is available yet; keep the catalog order.
+  const topBaskets = useMemo(() => catalogBaskets.slice(0, 5), [catalogBaskets]);
 
   // Top Contributors: aggregated net votes per author, derived live from the
   // ideas state so the board updates as soon as any vote changes.
@@ -305,6 +165,10 @@ export default function Labs() {
           <p className="max-w-[672px] text-base leading-relaxed text-foreground/70">
             Community-driven basket ideas. Share your alpha, upvote the best baskets, and build
             community around it.
+          </p>
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Info className="size-3.5" aria-hidden="true" />
+            Ideas and votes are stored in this browser; community publishing is not connected yet.
           </p>
 
           {/* Live backend status — Kairos NAV feed, polled every 60s */}
@@ -422,10 +286,6 @@ export default function Labs() {
                     { symbol: "JUP", icon: "/tokens/jup.png" },
                   ];
                   const hasVoted = voted.includes(idea.id);
-                  const returnPositive = idea.returnsEst ? !idea.returnsEst.trim().startsWith("-") : true;
-                  const yieldBadge = idea.tags.some((tag) => /yield|staking/i.test(tag))
-                    ? "Earns yield"
-                    : null;
 
                   return (
                     <article
@@ -454,38 +314,16 @@ export default function Labs() {
                       </div>
 
                       <div className="flex min-w-0 flex-1 flex-col">
-                        {/* Title (16px/600) + period/return block top-right */}
+                        {/* Idea title */}
                         <div className="flex items-start justify-between gap-3">
                           <h3 className="font-display text-base font-semibold leading-snug text-foreground">
                             {idea.title}
                           </h3>
-                          {idea.returnsEst && (
-                            <div className="flex shrink-0 flex-col items-end">
-                              <span className="flex items-center gap-0.5 font-mono text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
-                                <Info className="size-3" aria-hidden="true" />
-                                {idea.returnsPeriod ?? "1Y"}
-                              </span>
-                              <strong
-                                className={cn(
-                                  "font-mono text-base font-semibold leading-tight",
-                                  returnPositive ? "text-emerald-400" : "text-rose-400"
-                                )}
-                              >
-                                {idea.returnsEst}
-                              </strong>
-                            </div>
-                          )}
                         </div>
 
                         <p className="mt-0.5 line-clamp-2 text-xs leading-[1.6] text-foreground/60">
                           {idea.description}
                         </p>
-
-                        {yieldBadge && (
-                          <span className="mt-1.5 inline-flex w-fit items-center rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                            {yieldBadge}
-                          </span>
-                        )}
 
                         {/* Footer: author + bare ghost vote controls */}
                         <div className="mt-auto flex items-center justify-between gap-2 pt-2.5">
@@ -550,6 +388,12 @@ export default function Labs() {
                     </article>
                   );
                 })}
+                {visible.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-border p-8 text-center">
+                    <p className="font-medium text-foreground">No basket ideas yet</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Create an idea to save it in this browser.</p>
+                  </div>
+                )}
 
                 {visible.length === 0 && (
                   <div className="rounded-xl border border-border bg-surface px-6 py-14 text-center">
@@ -668,13 +512,9 @@ export default function Labs() {
                           {basket.name}
                         </span>
                         <span
-                          className={cn(
-                            "shrink-0 font-mono text-[11px] font-bold",
-                            basket.returns7d >= 0 ? "text-emerald-400" : "text-rose-400"
-                          )}
+                          className="shrink-0 font-mono text-[11px] text-muted-foreground"
                         >
-                          {basket.returns7d >= 0 ? "+" : ""}
-                          {basket.returns7d.toFixed(1)}%
+                          No history
                         </span>
                       </Link>
                     </li>

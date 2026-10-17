@@ -37,10 +37,12 @@ pub struct SwapAndDistributeLeg<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
 
-    #[account(constraint = !global_config.paused @ KairosError::ProgramPaused)]
-    pub global_config: Account<'info, GlobalConfig>,
+    #[account(seeds = [b"global"], bump = global_config.bump,
+        constraint = !global_config.paused @ KairosError::ProgramPaused)]
+    pub global_config: Box<Account<'info, GlobalConfig>>,
 
     #[account(
+        mut,
         constraint = user_usdc_ata.owner == user.key() @ KairosError::InvalidUserAta,
         constraint = user_usdc_ata.mint == global_config.usdc_mint @ KairosError::UsdcMintMismatch
     )]
@@ -66,7 +68,7 @@ pub struct SwapAndDistributeLeg<'info> {
         bump = basket_config.bump,
         constraint = basket_config.is_active @ KairosError::BasketNotActive
     )]
-    pub basket_config: Account<'info, BasketConfig>,
+    pub basket_config: Box<Account<'info, BasketConfig>>,
 
     /// CHECK: Validated against Raydium CPMM devnet/mainnet program ID
     #[account(
@@ -110,6 +112,10 @@ pub struct SwapAndDistributeLeg<'info> {
 
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
+
+    /// CHECK: The pinned executable SPL Memo program is invoked below.
+    #[account(address = MEMO_V2_PROGRAM_ID, executable)]
+    pub memo_program: UncheckedAccount<'info>,
 }
 
 pub fn handler<'a, 'b, 'c, 'info>(
@@ -197,6 +203,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
     };
 
     let account_infos = [
+        ctx.accounts.cpmm_program.to_account_info(),
         ctx.accounts.user.to_account_info(),
         ctx.accounts.authority.to_account_info(),
         ctx.accounts.amm_config.to_account_info(),
@@ -229,7 +236,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
             accounts: vec![],
             data: memo.as_bytes().to_vec(),
         };
-        invoke(&memo_ix, &[])?;
+        invoke(&memo_ix, &[ctx.accounts.memo_program.to_account_info()])?;
     }
 
     emit!(InvestLegExecuted {

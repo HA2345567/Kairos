@@ -6,6 +6,7 @@ import { portfolioService } from "../services/portfolio.service";
 import { rebalanceService } from "../services/rebalance.service";
 import { rateLimit } from "../middleware";
 import { AppError } from "../errors";
+import { authService } from "../services/auth.service";
 
 /**
  * /v1/quotes, /v1/positions*, /v1/executions* — the money path
@@ -68,9 +69,16 @@ export function registerTradeRoutes(app: KairosHttpServer): void {
   app.get("/v1/executions/:id", async (req, reply) => {
     if (!readGuard(req, reply)) return;
     const { id } = req.params;
-    const execution = repository.getExecution(id);
+    const execution = (await repository.getExecution(id));
     if (!execution) return reply.status(404).send({ error: "EXECUTION_NOT_FOUND" });
     return { execution };
+  });
+
+  app.get("/v1/executions", async (req, reply) => {
+    if (!readGuard(req, reply)) return;
+    const walletAddress = req.query.walletAddress;
+    if (!walletAddress) return reply.status(400).send({ error: "WALLET_ADDRESS_REQUIRED" });
+    return { executions: await repository.getExecutionsForWallet(walletAddress) };
   });
 
   app.post("/v1/executions/:id/retry", async (req, reply) => {
@@ -150,6 +158,12 @@ export function registerTradeRoutes(app: KairosHttpServer): void {
 
   app.put("/v1/positions/:id/auto-rebalance", async (req, reply) => {
     if (!moneyGuard(req, reply)) return;
+    const auth = authService.requireAuth(req);
+    if (!auth) return reply.status(401).send({ error: "UNAUTHORIZED" });
+    const owned = await repository.getPosition(req.params.id);
+    if (!owned || owned.walletAddress !== auth.walletAddress) {
+      return reply.status(403).send({ error: "POSITION_NOT_OWNED_BY_WALLET" });
+    }
     const { id } = req.params;
     const { enabled, policy } = (req.body || {}) as { enabled?: boolean; policy?: unknown };
     if (typeof enabled !== "boolean") {

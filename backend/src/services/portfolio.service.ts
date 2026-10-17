@@ -40,9 +40,9 @@ const REPO = repository as typeof repository & RepoExtras;
 /** Contract §2 config field (landed). */
 export const DUST_THRESHOLD_USDC = config.dustThresholdUsdc;
 
-function enqueueOutboxSafe(event: string, payload: unknown): void {
+async function enqueueOutboxSafe(event: string, payload: unknown): Promise<void> {
   try {
-    repository.enqueueOutbox(event, payload);
+    (await repository.enqueueOutbox(event, payload));
   } catch (err) {
     console.warn(`[portfolio] outbox enqueue failed for ${event}: ${errMsg(err)}`);
   }
@@ -65,15 +65,15 @@ function round2(n: number): number {
  * Order: devnet-state.json (authoritative, CHAIN lane) → token registry →
  * devnet fallback seed mint. USDC always has 6 decimals on our devnet.
  */
-export function resolveUsdcAsset(): { mint: string; decimals: number } {
+export async function resolveUsdcAsset(): Promise<{ mint: string; decimals: number }> {
   try {
     const state = loadDevnetState();
     if (state?.usdc?.mint) return { mint: state.usdc.mint, decimals: state.usdc.decimals ?? 6 };
   } catch {
     /* fall through to registry */
   }
-  const token = repository
-    .getAllTokens()
+  const token = (await repository
+    .getAllTokens())
     .find((t) => t.symbol?.toUpperCase() === "USDC" || (t.type === "stablecoin" && /usdc/i.test(t.symbol)));
   if (token) return { mint: token.mint, decimals: token.decimals };
   // Same fallback mint as db/seed.ts (devnet test USDC).
@@ -81,10 +81,10 @@ export function resolveUsdcAsset(): { mint: string; decimals: number } {
 }
 
 /** Latest known price for a mint: price snapshot first, registry second. */
-export function priceOf(mint: string): number {
-  const snap = repository.latestPrice(mint);
+export async function priceOf(mint: string): Promise<number> {
+  const snap = (await repository.latestPrice(mint));
   if (snap && Number.isFinite(snap.priceUsd) && snap.priceUsd > 0) return snap.priceUsd;
-  const token = repository.getToken(mint);
+  const token = (await repository.getToken(mint));
   return token?.priceUsd && token.priceUsd > 0 ? token.priceUsd : 0;
 }
 
@@ -96,7 +96,7 @@ export function priceOf(mint: string): number {
  *  3. distinct wallets from listExecutions() → getPositionsForWallet()
  *     (positions only ever originate from executions, so this is complete)
  */
-export function getAllKnownPositions(): Position[] {
+export async function getAllKnownPositions(): Promise<Position[]> {
   if (typeof REPO.getAllPositions === "function") {
     return REPO.getAllPositions() ?? [];
   }
@@ -109,17 +109,17 @@ export function getAllKnownPositions(): Position[] {
     }
   };
   if (typeof REPO.getPositionsForBasket === "function") {
-    for (const basket of repository.getAllBaskets()) {
+    for (const basket of (await repository.getAllBaskets())) {
       for (const p of REPO.getPositionsForBasket(basket.id) ?? []) push(p);
     }
     return out;
   }
   const wallets = new Set<string>();
-  for (const exec of repository.listExecutions(undefined, 10_000)) {
+  for (const exec of (await repository.listExecutions(undefined, 10_000))) {
     if (exec?.walletAddress) wallets.add(exec.walletAddress);
   }
   for (const walletAddress of wallets) {
-    for (const p of repository.getPositionsForWallet(walletAddress)) push(p);
+    for (const p of (await repository.getPositionsForWallet(walletAddress))) push(p);
   }
   return out;
 }
@@ -131,7 +131,7 @@ export class PortfolioService {
    * degrade to the last stored amounts (drift/value still recomputed).
    */
   private async refreshPosition(pos: Position): Promise<Position> {
-    const basket = repository.getBasket(pos.basketId);
+    const basket = (await repository.getBasket(pos.basketId));
     pos.rebalanceAvailable = !!basket && basket.activeVersionId !== pos.basketVersionId;
 
     const activeLegs = pos.status === "ACTIVE" || pos.status === "MODIFIED";
@@ -147,7 +147,7 @@ export class PortfolioService {
       onChain = null;
     } else {
       try {
-        const usdc = resolveUsdcAsset();
+        const usdc = (await resolveUsdcAsset());
         const mints = [...new Set([...pos.legs.map((l) => l.mint), usdc.mint])].filter(
           (m) => m.length > 0
         );
@@ -167,12 +167,12 @@ export class PortfolioService {
     let totalValue = 0;
     let maxDeviationBps = 0;
     for (const leg of pos.legs) {
-      const token = repository.getToken(leg.mint);
+      const token = (await repository.getToken(leg.mint));
       const decimals = token?.decimals ?? 6;
       if (onChain && onChain[leg.mint] !== undefined) {
         leg.currentAmount = toUiAmount(onChain[leg.mint], decimals);
       }
-      const price = priceOf(leg.mint);
+      const price = (await priceOf(leg.mint));
       leg.currentValueUsd = round2(leg.currentAmount * price);
       totalValue += leg.currentValueUsd;
     }
@@ -186,7 +186,7 @@ export class PortfolioService {
       pos.driftPct = Number((maxDeviationBps / 100).toFixed(2));
     }
 
-    this.persistRefresh(pos);
+    (await this.persistRefresh(pos));
     return pos;
   }
 
@@ -195,12 +195,12 @@ export class PortfolioService {
    * Exported so the reconciler can absorb sub-tolerance drift without
    * re-fetching balances.
    */
-  persistRefresh(pos: Position): void {
+  async persistRefresh(pos: Position): Promise<void> {
     pos.updatedAt = new Date().toISOString();
     try {
-      repository.savePosition(pos);
+      (await repository.savePosition(pos));
       for (const leg of pos.legs) {
-        repository.upsertPositionLeg(pos.id, leg.mint, leg.targetBps, leg.currentAmount);
+        (await repository.upsertPositionLeg(pos.id, leg.mint, leg.targetBps, leg.currentAmount));
       }
     } catch (err) {
       console.warn(`[portfolio] persist refresh failed for ${pos.id}: ${errMsg(err)}`);
@@ -209,7 +209,7 @@ export class PortfolioService {
 
   /** Live portfolio for a wallet (async; refreshes every ACTIVE/MODIFIED position). */
   async getPositions(walletAddress: string): Promise<Position[]> {
-    const positions = repository.getPositionsForWallet(walletAddress);
+    const positions = (await repository.getPositionsForWallet(walletAddress));
     for (const pos of positions) {
       await this.refreshPosition(pos);
     }
@@ -218,7 +218,7 @@ export class PortfolioService {
 
   /** Single position with the same live refresh; null when not found. */
   async getPosition(id: string): Promise<Position | null> {
-    const pos = repository.getPosition(id);
+    const pos = (await repository.getPosition(id));
     if (!pos) return null;
     await this.refreshPosition(pos);
     return pos;
@@ -229,8 +229,8 @@ export class PortfolioService {
    * the reconciler detected an external change): excluded from auto-rebalance,
    * audited with before/after and announced on the outbox.
    */
-  markPositionModified(id: string, reason: string, detail?: { before?: unknown; after?: unknown }): Position {
-    const pos = repository.getPosition(id);
+  async markPositionModified(id: string, reason: string, detail?: { before?: unknown; after?: unknown }): Promise<Position> {
+    const pos = (await repository.getPosition(id));
     if (!pos) throw new AppError("POSITION_NOT_FOUND", `Position ${id} not found`);
 
     const before = detail?.before ?? {
@@ -247,16 +247,16 @@ export class PortfolioService {
       reason,
     };
 
-    repository.savePosition(pos);
-    repository.logAudit({
+    (await repository.savePosition(pos));
+    (await repository.logAudit({
       actor: pos.walletAddress,
       action: "POSITION_MODIFIED_EXTERNALLY",
       entity: "position",
       entityId: pos.id,
       before,
       after,
-    });
-    enqueueOutboxSafe("position.modified", {
+    }));
+    (await enqueueOutboxSafe("position.modified", {
       positionId: pos.id,
       walletAddress: pos.walletAddress,
       basketId: pos.basketId,
@@ -264,7 +264,7 @@ export class PortfolioService {
       before,
       after,
       ts: pos.updatedAt,
-    });
+    }));
     return pos;
   }
 
@@ -297,10 +297,10 @@ export class PortfolioService {
    * the wallet and re-read at every run, so revocation is immediate.
    */
   async setAutoRebalance(positionId: string, enabled: boolean, policy?: Partial<PolicyShape>): Promise<Position> {
-    const pos = repository.getPosition(positionId);
+    const pos = (await repository.getPosition(positionId));
     if (!pos) throw new AppError("POSITION_NOT_FOUND", `Position ${positionId} not found`);
 
-    const wallet = repository.getWalletByAddress(pos.walletAddress);
+    const wallet = (await repository.getWalletByAddress(pos.walletAddress));
     if (!wallet) {
       throw new AppError("UNAUTHORIZED", `Wallet ${pos.walletAddress} is not registered`);
     }
@@ -317,49 +317,49 @@ export class PortfolioService {
       );
     }
 
-    const merged = this.mergePolicy(pos, wallet.policyJson, policy, enabled);
+    const merged = (await this.mergePolicy(pos, wallet.policyJson, policy, enabled));
 
     pos.autoRebalance = enabled;
     pos.updatedAt = new Date().toISOString();
-    repository.savePosition(pos);
+    (await repository.savePosition(pos));
 
     // Persist policy on the wallet when enabling (keeps delegatedSigning on).
     // Disabling never flips the wallet-level flag: other positions may rely on
     // it, and position-level revocation is enough (policy is read at run time).
     if (enabled) {
       try {
-        repository.setDelegatedSigning(wallet.id, true, merged);
+        (await repository.setDelegatedSigning(wallet.id, true, merged));
       } catch (err) {
         console.warn(`[portfolio] setDelegatedSigning failed for ${wallet.id}: ${errMsg(err)}`);
       }
     }
 
-    repository.logAudit({
+    (await repository.logAudit({
       actor: pos.walletAddress,
       action: enabled ? "AUTO_REBALANCE_ENABLED" : "AUTO_REBALANCE_DISABLED",
       entity: "position",
       entityId: pos.id,
       before: { autoRebalance: !enabled },
       after: { autoRebalance: enabled, policy: merged },
-    });
-    enqueueOutboxSafe(`autorebalance.${enabled}`, {
+    }));
+    (await enqueueOutboxSafe(`autorebalance.${enabled}`, {
       positionId: pos.id,
       basketId: pos.basketId,
       walletAddress: pos.walletAddress,
       policy: merged,
       ts: pos.updatedAt,
-    });
+    }));
 
     return pos;
   }
 
   /** Merge/validate the effective policy for a position's wallet. */
-  private mergePolicy(
+  private async mergePolicy(
     pos: Position,
     existing: PolicyShape | undefined,
     patch: Partial<PolicyShape> | undefined,
     enabled: boolean
-  ): PolicyShape {
+  ): Promise<PolicyShape> {
     if (!enabled) {
       return (
         existing ?? {
@@ -376,8 +376,8 @@ export class PortfolioService {
     // spend cap covers a full single rebalance of this position.
     let base = existing;
     if (!base) {
-      const basket = repository.getBasket(pos.basketId);
-      const version = basket ? repository.getBasketVersion(basket.activeVersionId) : undefined;
+      const basket = (await repository.getBasket(pos.basketId));
+      const version = basket ? (await repository.getBasketVersion(basket.activeVersionId)) : undefined;
       const allowlist = new Set<string>(pos.legs.map((l) => l.mint));
       for (const leg of version?.legs ?? []) allowlist.add(leg.mint);
       base = {

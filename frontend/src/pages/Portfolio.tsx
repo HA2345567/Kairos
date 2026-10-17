@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { PageShell } from "@/components/layout/PageShell";
-import { CURATED_BASKETS, Basket } from "@/lib/baskets-data";
-import { kairosApi } from "@/lib/api-client";
+import { useBaskets, type Basket } from "@/lib/baskets-data";
 import { InvestModal } from "@/components/basket/InvestModal";
+import { PositionActions } from "@/components/portfolio/PositionActions";
 import { Link } from "react-router-dom";
 import { BasketCardSkeleton, PortfolioSkeleton } from "@/components/basket/BasketSkeleton";
 import { BasketCard } from "@/components/basket/BasketCard";
@@ -21,6 +21,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DEVNET_USDC_MINT } from "@/lib/usdc";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { ArrowRight, Compass, History } from "lucide-react";
 import "./cesto.css";
@@ -30,8 +31,8 @@ interface TokenBalance {
   name: string;
   mint: string;
   amount: number;
-  priceUsd: number;
-  usdValue: number;
+  priceUsd: number | null;
+  usdValue: number | null;
   icon: string;
 }
 
@@ -47,11 +48,10 @@ interface ActivityItem {
 // Mainnet mints used for real price lookups (devnet tokens use mainnet counterpart prices)
 const PRICE_MINTS = {
   SOL: "So11111111111111111111111111111111111111112",
-  JUP: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
-  JTO: "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
 };
 
 export default function Portfolio() {
+  const { data: catalogBaskets = [] } = useBaskets();
   const { connected, publicKey } = useWallet();
   const { connection } = useConnection();
 
@@ -94,14 +94,10 @@ export default function Portfolio() {
         foundBalances[mint] = (foundBalances[mint] || 0) + uiAmount;
       }
 
-      const usdcAmt = foundBalances["An9DFuHeSDYgVBiybraa7Svn1RHjrDb7Ed8YJZCZ4D1Y"] || 0;
-      const jupAmt = foundBalances["atvmDFJj7iGLBqJywzbs1Xo9SBpfp3eYjm268g9pwen"] || 0;
-      const jtoAmt = foundBalances["8YNCULLBG3u4Si2RQpfAidrv84GVifcf5U1wiEXi95Jg"] || 0;
+      const usdcAmt = foundBalances[DEVNET_USDC_MINT] || 0;
+      const solPrice = livePrices[PRICE_MINTS.SOL]?.priceUsd ?? null;
 
-      const solPrice = livePrices[PRICE_MINTS.SOL]?.priceUsd ?? 148.5;
-      const jupPrice = livePrices[PRICE_MINTS.JUP]?.priceUsd ?? 0.85;
-      const jtoPrice = livePrices[PRICE_MINTS.JTO]?.priceUsd ?? 2.30;
-
+      const knownTokens = new Map(catalogBaskets.flatMap((basket) => basket.tokens).map((token) => [token.mint, token]));
       const realTokens: TokenBalance[] = [
         {
           symbol: "SOL",
@@ -109,36 +105,27 @@ export default function Portfolio() {
           mint: "So11111111111111111111111111111111111111112",
           amount: Number(sol.toFixed(4)),
           priceUsd: solPrice,
-          usdValue: sol * solPrice,
+          usdValue: solPrice === null ? null : sol * solPrice,
           icon: "/tokens/sol.png",
         },
         {
           symbol: "USDC",
           name: "USD Coin (Devnet)",
-          mint: "An9DFuHeSDYgVBiybraa7Svn1RHjrDb7Ed8YJZCZ4D1Y",
+          mint: DEVNET_USDC_MINT,
           amount: Number(usdcAmt.toFixed(4)),
-          priceUsd: 1.0,
-          usdValue: usdcAmt * 1.0,
+          priceUsd: null,
+          usdValue: null,
           icon: "/tokens/usdc.png",
         },
-        {
-          symbol: "tJUP",
-          name: "Jupiter (Devnet)",
-          mint: "atvmDFJj7iGLBqJywzbs1Xo9SBpfp3eYjm268g9pwen",
-          amount: Number(jupAmt.toFixed(4)),
-          priceUsd: jupPrice,
-          usdValue: jupAmt * jupPrice,
-          icon: "/tokens/jup.png",
-        },
-        {
-          symbol: "tJTO",
-          name: "Jito (Devnet)",
-          mint: "8YNCULLBG3u4Si2RQpfAidrv84GVifcf5U1wiEXi95Jg",
-          amount: Number(jtoAmt.toFixed(4)),
-          priceUsd: jtoPrice,
-          usdValue: jtoAmt * jtoPrice,
-          icon: "/tokens/jto.png",
-        },
+        ...Array.from(knownTokens.values()).map((token) => ({
+          symbol: token.symbol,
+          name: token.name,
+          mint: token.mint,
+          amount: foundBalances[token.mint] ?? 0,
+          priceUsd: null,
+          usdValue: null,
+          icon: token.icon,
+        })),
       ];
 
       setTokenBalances(realTokens);
@@ -148,30 +135,6 @@ export default function Portfolio() {
       const localRecords: ActivityItem[] = JSON.parse(localStorage.getItem(storageKey) || "[]");
       setRecentActivity(localRecords);
 
-      kairosApi
-        .getPositions(activePublicKey.toBase58())
-        .then((data) => {
-          if (data?.positions && data.positions.length > 0) {
-            const apiItems: ActivityItem[] = data.positions.map((pos: any) => ({
-              action: "Invest",
-              basketName: pos.basketSlug || "Curated Basket",
-              amountUsdc: pos.netInvestedUsdc,
-              tokensDescription: `${pos.basketSlug} basket`,
-              txSignature: pos.id,
-              timestamp: pos.createdAt,
-            }));
-            const seen = new Set(localRecords.map((r: any) => r.txSignature));
-            const merged = [...localRecords];
-            for (const item of apiItems) {
-              if (!seen.has(item.txSignature)) {
-                merged.push(item);
-                seen.add(item.txSignature);
-              }
-            }
-            setRecentActivity(merged);
-          }
-        })
-        .catch(() => {});
     } catch (err) {
       console.error("Error fetching wallet balances:", err);
     } finally {
@@ -186,7 +149,7 @@ export default function Portfolio() {
       setSolBalance(0);
       setTokenBalances([]);
     }
-  }, [isConnected, activePublicKey, livePrices]);
+  }, [isConnected, activePublicKey, livePrices, catalogBaskets]);
 
   if (!isConnected) {
     return (
@@ -232,7 +195,7 @@ export default function Portfolio() {
               Here are some baskets you can invest into
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-              {CURATED_BASKETS.slice(0, 3).map((basket) => (
+              {catalogBaskets.slice(0, 3).map((basket) => (
                 <Link key={basket.id} to={`/markets/${basket.id}`} className="block h-full no-underline">
                   <BasketCard basket={basket} disableLink />
                 </Link>
@@ -252,19 +215,20 @@ export default function Portfolio() {
     );
   }
 
-  const totalPortfolioUsd = tokenBalances.reduce((acc, t) => acc + t.usdValue, 0);
-  const hasConstituents = tokenBalances.some(
-    (t) => (t.symbol === "tJUP" || t.symbol === "tJTO") && t.amount > 0
-  );
-  const activeBaskets = hasConstituents
-    ? CURATED_BASKETS.filter((basket) => basket.id === "solana-infra-governance")
-    : [];
-  const basketTokensUsd = tokenBalances
-    .filter((t) => t.symbol === "tJUP" || t.symbol === "tJTO")
-    .reduce((acc, t) => acc + t.usdValue, 0);
+  const totalPortfolioUsd = tokenBalances.every((token) => token.usdValue !== null)
+    ? tokenBalances.reduce((sum, token) => sum + (token.usdValue ?? 0), 0)
+    : null;
+  const heldMints = new Set(tokenBalances.filter((token) => token.amount > 0).map((token) => token.mint));
+  const activeBaskets = catalogBaskets.filter((basket) => basket.tokens.some((token) => heldMints.has(token.mint)));
+  const basketMints = new Set(activeBaskets.flatMap((basket) => basket.tokens.map((token) => token.mint)));
+  const basketTokens = tokenBalances.filter((token) => basketMints.has(token.mint));
+  const basketTokensUsd = basketTokens.every((token) => token.usdValue !== null)
+    ? basketTokens.reduce((sum, token) => sum + (token.usdValue ?? 0), 0)
+    : null;
 
   return (
     <PageShell>
+      <PositionActions key={activeAddress} address={activeAddress!} />
       {/* Header Section */}
       <section className="border-b border-border/60">
         <div className="container py-10">
@@ -308,14 +272,14 @@ export default function Portfolio() {
           <div className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border md:grid-cols-4">
             <BigStat
               label="Total Basket Value"
-              value={`$${basketTokensUsd.toFixed(2)}`}
+              value={basketTokensUsd === null ? "—" : `$${basketTokensUsd.toFixed(2)}`}
               sub="held tJUP + tJTO ATAs"
               loading={loading}
             />
             <BigStat
               label="Total Devnet Assets"
-              value={`$${totalPortfolioUsd.toFixed(2)}`}
-              sub="SOL, USDC, tJUP, tJTO"
+              value={totalPortfolioUsd === null ? "—" : `$${totalPortfolioUsd.toFixed(2)}`}
+              sub="Available devnet token price data"
               accent="success"
               loading={loading}
             />
@@ -328,7 +292,9 @@ export default function Portfolio() {
             <BigStat
               label="Native SOL Balance"
               value={`${solBalance.toFixed(4)} SOL`}
-              sub={`≈ $${(solBalance * 148.5).toFixed(2)} USD`}
+              sub={livePrices[PRICE_MINTS.SOL]?.priceUsd == null
+                ? "SOL price unavailable"
+                : `Estimated $${(solBalance * livePrices[PRICE_MINTS.SOL].priceUsd).toFixed(2)} USD`}
               loading={loading}
             />
           </div>
@@ -388,7 +354,7 @@ export default function Portfolio() {
                       <ArrowUpRight className="size-4 text-muted-foreground" />
                     </Link>
                     <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-md border border-emerald-600/30 text-emerald-800 bg-emerald-600/10">
-                      +{basket.returns7d}% 7d
+                      Historical performance unavailable
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground line-clamp-1">
@@ -482,10 +448,10 @@ export default function Portfolio() {
                   {token.amount.toLocaleString()} {token.symbol}
                 </div>
                 <div className="col-span-2 text-right text-muted-foreground">
-                  ${token.priceUsd.toFixed(2)}
+                  {token.priceUsd === null ? "—" : `$${token.priceUsd.toFixed(2)}`}
                 </div>
                 <div className="col-span-2 text-right text-foreground font-bold">
-                  ${token.usdValue.toFixed(2)}
+                  {token.usdValue === null ? "—" : `$${token.usdValue.toFixed(2)}`}
                 </div>
                 <div className="col-span-2 text-right">
                   <a
@@ -522,7 +488,7 @@ export default function Portfolio() {
           <div className="divide-y divide-border/50 text-xs">
             {recentActivity.length === 0 ? (
               <div className="p-8 text-center text-xs text-muted-foreground">
-                No recent router executions found for this wallet. Invest in the{" "}
+                No recent completed execution is recorded on this browser. Invest in the{" "}
                 <Link to="/markets/solana-infra-governance" className="text-foreground underline font-semibold">
                   Solana Infra Governance basket
                 </Link>{" "}
@@ -544,7 +510,7 @@ export default function Portfolio() {
                     ${Number(item.amountUsdc).toFixed(2)} USDC
                   </div>
                   <div className="col-span-2 font-mono text-muted-foreground text-[11px]">
-                    {item.tokensDescription || "50% tJUP + 50% tJTO"}
+                    {item.tokensDescription || "Basket holdings"}
                   </div>
                   <div className="col-span-2 text-right">
                     <a

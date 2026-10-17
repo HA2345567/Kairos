@@ -1,51 +1,62 @@
-# Kairos — Backend & Core System: Delivery Notes (Oct 7, 2026)
+# Kairos Delivery Status
 
-**Deliverable:** non-custodial narrative-basket investing backend, devnet-first, per `Kairos — Backend & Core System PRD.md` (v2). Speckit feature: `specs/backend-core-system/` (spec / plan / contracts / tasks). **No frontend files touched.**
+**PRD:** Kairos v4.0 · **Updated:** 2026-10-17
 
-## Status: ✅ Built, compiling, tested; E2E accepted 11/11
+## Stack
 
-| Layer | What ships |
-|---|---|
-| Store | `node:sqlite` durable DB (`backend/data/kairos.db`, WAL) — all PRD §5 tables + nonces/refresh/settings/jobs/outbox/fee_ledger/price_snapshots/rebalance_events; unique `(wallet_id, idempotency_key)`; weight CHECKs |
-| Auth | SIWS nonce (single-use, persisted) → Ed25519 verify → HMAC JWT (15 min) + rotating refresh (7 d); rate limits; `REGION_BLOCKED` geo gate |
-| Chain | RPC failover, deterministic devnet identities (mints/treasury/relayer re-derive identically every run), idempotent mint/ATA provisioning, **authority-controlled treasury mock swap** (PRD §11.1) with relayer fee-payer + treasury partial-sign + user-signs-last, real blockhashes |
-| Execution | prepare (fee ix in leg 1 only, sha256 message hashes, 60 s expiry, idempotency, simulation gate) → submit (**byte-for-byte tamper rejection**, signature check, job enqueue) → async landing workers (confirm, per-leg statuses, `PARTIALLY_COMPLETED`, retry + unwind, fee ledger, outbox) |
-| Portfolio | derived positions (on-chain balances × price), drift, 5-min reconciler → `MODIFIED` on external tampering; manual rebalance + close via the same pipeline; policy-gated auto-rebalance on version publish |
-| Pricing | minute snapshot worker, quote guards (`QUOTE_STALE`, `PRICE_IMPACT_EXCEEDED`, `MARKET_CLOSED`), backtests 1W/1M/6M/1Y/3Y vs 8%/yr benchmark from 262,810 seeded snapshots |
-| Ops | persisted global kill switch (<1 request to halt), admin publish (weight validation + 2-person approval record), token market-hours toggle, relayer/fund endpoints, typed error codes everywhere |
-| On-chain program | `programs/kairos-router` (Anchor 0.30): `initialize_basket`, `swap_and_distribute_leg` (Raydium CPMM CPI + slippage check + event), `toggle_basket_status` (on-chain kill switch) — **compiles clean** (fixed an anchor-codegen path bug); `.so` build via `cargo-build-sbf` |
-| Tests | `npm test` — 12 pass / 1 devnet-gated; `scripts/e2e-invest.ts` full acceptance driver |
+- TypeScript with Bun for the web app, backend, scripts, builds, and tests.
+- PostgreSQL through the async repository; Neon is the configured hosted database.
+- Solana devnet through Anchor Rust/JS 0.31.1; the React/Vite client uses wallet-signed transactions.
 
-## Verified live (evidence)
-- Server `:3001`: health/auth/quotes/catalog/kill-switch/backtests all smoke-tested over HTTP.
-- Quote math exact: $50 → 0.10 fee (20 bps) → 49.90 net → correct per-leg expected-out and min-out.
-- **E2E acceptance: 11/11 PASS** (faucet → quote → prepare → idempotent replay → submit → duplicate-submit safe → landing `COMPLETED` → position derived $49.90 → close prepare → close submit → close landing).
-- Chaos switches: forced leg failure, slow confirm, stale prices, market close — all wired.
+## Verified locally
 
-## Environment constraint & the honest caveat
-This machine's CPU (Pentium 4415U) **lacks AVX**, so no official validator build runs on it, and the devnet faucet was IP-limited (2 drips / 8 h) for the entire session; the faucet also asks AI agents not to automate it. Therefore the final send/confirm leg ran in **clearly-labelled simulation mode** (`KAIROS_SIMULATE_LANDING=1`, shown in `/health` and faucet responses, PRD §11.2 "test data" rule): transactions are *built, signed, and byte-verified for real*; only the RPC send/confirm is stubbed. Everything else — state machine, byte verification, idempotency, positions, fees, outbox, kill switch, reconciler — is the production code path.
+- Backend typecheck, bundle, PostgreSQL-backed startup, and `/health` smoke check pass.
+- Backend tests: 51 pass, 3 devnet-dependent tests skipped.
+- Frontend typecheck, production build, and tests pass: 20 pass, 1 live-simulation test skipped.
+- Anchor 0.31 Rust `cargo check`, optimized SBF build, and IDL generation pass with macro configuration warnings.
+- Submission and settlement use atomic PostgreSQL transactions with execution row locks. Failure-injection tests verify rollback/retry and concurrent submission deduplication. Landing retries retain signed bytes and query signature history; live devnet recovery remains unverified.
+- Confirmed receipt deltas supply actual output and observed holdings; missing receipts retry without quote substitution. Direction and sell inputs persist for recovery. Unwind fees are deducted once, partial sells preserve remaining holdings, and the UI displays exact received amounts. Tests cover controlled RPC receipts; live chain acceptance remains outstanding.
+- Rebalance buys wait for confirmed sells and sufficient actual net proceeds. Retry ancestry records earlier proceeds and spending. Queue reordering and funding checks pass locally; the updated migrations also pass against Neon.
+- Retry/unwind reservations reuse an existing recovery across distinct request keys. Audit failures roll back reservation creation. Refresh waits for chain expiry and checks signature history; a concurrent submit prevents replacement. The UI exposes recovery refresh. Local regressions and Neon migration checks pass.
+- Route-level splitting reduced the initial JavaScript chunk from 1.55 MB to 972 kB (301 kB gzip). Market charts and other pages load as separate chunks.
 
-**Flip to real devnet (one env var, no code changes):** fund the relayer `9rkNQS82BJefFGBX2FhM3zgv4AKQd7KmKEnfDaakwtKM` with ~2 devnet SOL (faucet.solana.com in a browser, or any wallet), then:
-```bash
-cd backend
-npm run setup && npm run seed          # provisions the deterministic mints + treasury on devnet
-KAIROS_E2E_WALLET=data/e2e-wallet.json npx tsx scripts/e2e-invest.ts
+## Devnet status
+
+- The supplied wallet address has 5 SOL, confirmed through the fallback RPC.
+- The configured relayer has 0 SOL. The configured router program has no executable account on devnet.
+- Helius balance/account requests currently return HTTP 500; the public fallback returned the wallet balance successfully.
+- A wallet address cannot sign deployment or investment transactions. The AV38 signer is not available in this workspace, so deployment, initialization, and real transaction acceptance remain unverified.
+- Pyth feeds are not configured. Registry liquidity evidence, separate identity-backed admin approvals, and browser/mobile acceptance remain incomplete.
+- Program-backed rebalance preparation remains incomplete. Recovery reservations and sell-before-buy dependencies need multi-process/live devnet acceptance.
+
+## Bun commands
+
+From the repository root:
+
+```powershell
+bun install --frozen-lockfile
+bun run --cwd backend typecheck
+bun run --cwd backend test
+bun run build:backend
+bun backend/scripts/check-database.ts
+bun run --cwd frontend build
+bun run --cwd frontend test
+bun run check:contracts
 ```
-Deterministic identities mean the same addresses already registered in the DB and `devnet-state.json`.
 
-## Runbook
-```bash
-cd backend
-npm install
-npm run setup     # devnet provisioning (idempotent, needs relayer SOL)
-npm run seed      # registry + 6 baskets + 3y snapshots
-npm start         # API on :3001
-npm test          # unit + gated devnet E2E
-npx tsx scripts/e2e-invest.ts   # full acceptance driver
-```
+Devnet provisioning requires funded relayer SOL. From `backend/`, run `bun run setup` and then `bun run seed` after the signer and RPC prerequisites are ready.
 
-## Known gaps (explicit)
-1. Real-chain landing unproven until the relayer is funded (above) — everything up to the RPC send is verified.
-2. Labs/UGC (PRD Phase 2) not built (schema stub only).
-3. `programs/kairos-router` compiles; deployment + integration into the swap path is a next step (the devnet deliverable uses the treasury pattern per PRD §11.1).
-4. Notification transport is the outbox + console (pluggable).
+## Rebalance and program builder follow-up (2026-10-17)
+
+- Corrected PRD fees: rebalance defaults to 10 bps on each side; close uses 20 bps. Per-leg fees and buy allocations use integer USDC base units. Buy funding includes the fee debit.
+- Split rebalance planning (160 lines) and transaction assembly (199 lines) out of the service (381 lines). Program builder is 90 lines.
+- Program builder fixes: directional pool vaults, relayer-funded idempotent ATAs, writable USDC, and explicit Memo program CPI account. Rust exits remain available during pauses.
+- Full app test run: backend 51 pass/3 skip, frontend 20 pass/1 skip; subsequent focused fee/plan/recovery suite: 8 pass, including the added program-mode guard. Backend/frontend builds and typechecks passed; git diff --check passed.
+- Program close/rebalance fails explicitly instead of falling back to treasury trades. On-chain fee policy and dependent simulation remain unfinished.
+- Resolved the Anchor IDL compatibility failure by upgrading Rust and all JS workspaces to 0.31.1. IDL generation passed using the installed 0.30.1 CLI; both swap instructions have 20 accounts, writable USDC, and Memo program accounts. SBF recompilation with the new dependencies is running; the previous SBF result applies only to the prior dependency version.
+- Anchor test runner now uses Bun. Aligning all JS workspaces to 0.31.1 repaired the missing discriminator.js import. The contract test bundle passes, and tests construct Program from generated IDL instead of the unavailable ESM workspace export. Live contract execution still requires a validator and signing wallet.
+
+
+- Latest root `bun run test`: backend 51 passed/3 devnet skips; frontend 20 passed/1 live simulation skip. Latest `bun run build` passed both workspaces; `bun run check:contracts` passed. `git diff --check` is clean.
+- Anchor 0.31 IDL generation, both 20-account swap layouts, Bun contract test bundling, and optimized SBF build passed. Live validator contract execution and devnet deployment remain unverified.
+- Program-mode rebalance and close remain explicitly gated while on-chain fee policy and dependent simulation are unfinished.

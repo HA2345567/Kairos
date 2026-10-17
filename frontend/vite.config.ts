@@ -1,15 +1,7 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
-import mdx from "@mdx-js/rollup";
-import remarkGfm from "remark-gfm";
-import remarkFrontmatter from "remark-frontmatter";
-import remarkMdxFrontmatter from "remark-mdx-frontmatter";
-import rehypeHighlight from "rehype-highlight";
-import rehypeSlug from "rehype-slug";
-import rehypeAutolinkHeadings from "rehype-autolink-headings";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -24,27 +16,12 @@ export default defineConfig(({ mode }) => {
       ),
     },
     plugins: [
-      mdx({
-        remarkPlugins: [remarkGfm, remarkFrontmatter, remarkMdxFrontmatter],
-        rehypePlugins: [
-          rehypeHighlight,
-          rehypeSlug,
-          [rehypeAutolinkHeadings, { behavior: "append" }],
-        ],
-      }),
       react(),
-
-
       nodePolyfills({
         include: ["buffer", "crypto", "stream", "util"],
-        globals: {
-          Buffer: true,
-          global: true,
-          process: true,
-        },
+        globals: { Buffer: true, global: true, process: true },
       }),
-      mode === "development" && componentTagger(),
-    ].filter(Boolean),
+    ],
 
     server: {
       host: "::",
@@ -54,6 +31,14 @@ export default defineConfig(({ mode }) => {
         overlay: false,
       },
       proxy: {
+        "/v1": {
+          target: "http://localhost:3001",
+          changeOrigin: true,
+        },
+        "/health": {
+          target: "http://localhost:3001",
+          changeOrigin: true,
+        },
         "/api": {
           target: "http://localhost:3001",
           changeOrigin: true,
@@ -80,6 +65,7 @@ export default defineConfig(({ mode }) => {
         "react/jsx-dev-runtime",
         "@tanstack/react-query",
         "@tanstack/query-core",
+        "@radix-ui/react-slot",
       ],
     },
   };

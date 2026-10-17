@@ -34,6 +34,17 @@ impl GlobalConfig {
         16; // buffer
 }
 
+/// Three distinct keys authorized to publish versions (admin + two approvers).
+#[account]
+pub struct PublishAuthorities {
+    pub approvers: [Pubkey; 3],
+    pub bump: u8,
+}
+
+impl PublishAuthorities {
+    pub const LEN: usize = 8 + (32 * 3) + 1;
+}
+
 /// A curated basket. Immutable composition; new compositions are published as
 /// BasketVersion entries. Up to 10 legs; the weights of the first `leg_count`
 /// legs must sum to exactly 10,000 bps.
@@ -64,9 +75,8 @@ impl BasketConfig {
 }
 
 /// Published version registry entry (PDA ["version", basket_id, version_le]).
-/// `legs_hash` is the admin-computed SHA-256 over the canonical legs encoding,
-/// so off-chain consumers can verify the composition they see matches what the
-/// admin signed. Publishing NEVER moves user funds.
+/// `legs_hash` is the SHA-256 of active mint/weight pairs sorted by mint bytes. The
+/// program recomputes it before storing the append-only version entry.
 #[account]
 pub struct BasketVersion {
     pub admin: Pubkey,

@@ -2,26 +2,27 @@ import crypto from "node:crypto";
 import { repository } from "../db/repository";
 import { config } from "../config";
 import { AppError } from "../errors";
-import { getLivePrice, priceImpactPct } from "./pricing.service";
+import { getQuotePrice } from "./pricing.service";
 import { Quote, QuoteLeg } from "../db/schema";
 
 /**
- * Quote service (PRD §4.3). Happy-path math is unchanged: platform fee on
- * input, integer-cent splitting by weight_bps with the remainder pushed to
- * the largest leg. Hardened with live prices, staleness + price-impact
- * guards, and market-hours handling for tokenized-equity legs.
+ * Quote service for fixed-rate devnet execution. Impact remains unavailable
+ * until the execution route supplies a real pool quote.
  */
 
 export class QuoteService {
-  getQuote(basketSlug: string, usdcAmount: number): Quote {
-    const basket = repository.getBasketBySlug(basketSlug);
+  async getQuote(basketSlug: string, usdcAmount: number): Promise<Quote> {
+    if (!Number.isFinite(usdcAmount) || usdcAmount <= 0 || usdcAmount > Number.MAX_SAFE_INTEGER / 1_000_000) {
+      throw new AppError("MIN_INVESTMENT", "Enter a valid positive USDC amount", 400);
+    }
+    const basket = (await repository.getBasketBySlug(basketSlug));
     if (!basket) throw new AppError("BASKET_NOT_FOUND", `Basket ${basketSlug} not found`, 404);
     if (basket.status !== "active") throw new AppError("BASKET_NOT_ACTIVE", undefined, 422);
     if (usdcAmount < basket.minUsdc) {
       throw new AppError("MIN_INVESTMENT", `Minimum investment is ${basket.minUsdc} USDC`, 422);
     }
 
-    const version = repository.getBasketVersion(basket.activeVersionId);
+    const version = (await repository.getBasketVersion(basket.activeVersionId));
     if (!version) throw new AppError("BASKET_NOT_FOUND", "Active version not found", 404);
     const weightSum = version.legs.reduce((s, l) => s + l.weightBps, 0);
     if (version.legs.length === 0 || weightSum !== 10_000) {
@@ -46,11 +47,11 @@ export class QuoteService {
     });
     rawLegCents[largestIdx] += netCents - allocated;
 
-    // 3. Per-leg live prices + guards (PRD §4.3).
+    // 3. Per-leg price source and token eligibility (PRD §4.3).
     const legs: QuoteLeg[] = [];
     for (let idx = 0; idx < version.legs.length; idx++) {
       const leg = version.legs[idx];
-      const token = repository.getToken(leg.mint);
+      const token = (await repository.getToken(leg.mint));
       if (!token || token.denylisted) {
         throw new AppError("TOKEN_HALTED", `Leg ${leg.mint} is not tradable`, 422);
       }
@@ -70,21 +71,15 @@ export class QuoteService {
         );
       }
 
-      const live = getLivePrice(leg.mint);
+      const live = (await getQuotePrice(leg.mint));
       if (live.stale) {
-        throw new AppError("QUOTE_STALE", `${token.symbol} price feed is stale (${live.ageSec}s old)`, 409);
+        const reason = live.ageSec === null
+          ? "verified price feed is unavailable"
+          : `price feed is stale (${live.ageSec}s old)`;
+        throw new AppError("QUOTE_STALE", `${token.symbol} ${reason}`, 409);
       }
 
       const legUsdc = rawLegCents[idx] / 100;
-      const impactPct = priceImpactPct(legUsdc);
-      if (impactPct > config.maxPriceImpactPct) {
-        throw new AppError(
-          "PRICE_IMPACT_EXCEEDED",
-          `${token.symbol} leg impact ${impactPct.toFixed(2)}% exceeds cap ${config.maxPriceImpactPct}%`,
-          422
-        );
-      }
-
       const decimals = Math.min(token.decimals, 6);
       const expectedTokens = (legUsdc / live.priceUsd).toFixed(decimals);
       const slippageBps = leg.slippageBps || 50;
@@ -97,7 +92,11 @@ export class QuoteService {
         inUsdcAmount: legUsdc,
         expectedOutTokens: expectedTokens,
         minOutTokens: minTokens,
-        priceImpactPct: `${impactPct.toFixed(3)}%`,
+        priceImpactPct: null,
+        priceSource: live.source,
+        priceSourceRef: live.sourceRef ?? undefined,
+        priceAsOf: live.ts,
+        priceConfidenceUsd: live.confidenceUsd,
         routeHint: leg.venueHint || "Kairos Router",
       });
     }
@@ -114,7 +113,7 @@ export class QuoteService {
       expiresAt: new Date(now.getTime() + config.quoteValiditySec * 1000).toISOString(),
       createdAt: now.toISOString(),
     };
-    return repository.saveQuote(quote);
+    return (await repository.saveQuote(quote));
   }
 }
 

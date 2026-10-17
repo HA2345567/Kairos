@@ -1,4 +1,4 @@
-import React, { useRef, useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUp } from "lucide-react";
 import "./prompt-bar.css";

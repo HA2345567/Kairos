@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { PublicKey, Keypair } from "@solana/web3.js";
 

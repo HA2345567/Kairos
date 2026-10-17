@@ -7,20 +7,26 @@
     "frontend"
   ],
   "scripts": {
-    "test": "bun test",
-    "test:backend": "bun test backend/tests",
-    "test:contracts": "bun test tests",
+    "test": "bun run test:backend && bun run test:frontend",
+    "test:backend": "bun run --cwd backend test",
+    "test:frontend": "bun run --cwd frontend test",
+    "test:contracts": "bun test ./tests/kairos-router.ts --timeout 200000",
     "dev:backend": "bun --watch backend/src/index.ts",
     "dev:frontend": "bun --cwd frontend dev",
     "build:backend": "bun build backend/src/index.ts --outdir backend/dist --target node",
+    "build": "bun run build:backend && bun run build:frontend",
     "build:frontend": "bun --cwd frontend build",
     "check:contracts": "cargo check"
   },
   "devDependencies": {
-    "@coral-xyz/anchor": "^0.30.1",
+    "@coral-xyz/anchor": "0.31.1",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.0",
     "@types/node": "^22.13.0",
     "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "@solana/buffer-layout-utils": "^0.2.0",
+    "@solana/codecs": "2.0.0"
   }
 }
