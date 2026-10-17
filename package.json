@@ -2,6 +2,7 @@
   "name": "kairos-monorepo",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "bun@1.4.2",
   "workspaces": [
     "backend",
     "frontend"
@@ -13,6 +14,9 @@
     "test:contracts": "bun test ./tests/kairos-router.ts --timeout 200000",
     "dev:backend": "bun --watch backend/src/index.ts",
     "dev:frontend": "bun --cwd frontend dev",
+    "start": "bun run start:backend",
+    "start:backend": "bun run --cwd backend start",
+    "start:frontend": "bun run --cwd frontend start",
     "build:backend": "bun build backend/src/index.ts --outdir backend/dist --target node",
     "build": "bun run build:backend && bun run build:frontend",
     "build:frontend": "bun --cwd frontend build",
