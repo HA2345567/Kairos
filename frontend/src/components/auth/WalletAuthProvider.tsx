@@ -43,6 +43,10 @@ export function WalletAuthProvider({ children }: { children: ReactNode }) {
       setAuthenticated(true);
       return;
     }
+    if (await kairosApi.refreshAuth() && kairosApi.isAuthenticatedFor(address)) {
+      setAuthenticated(true);
+      return;
+    }
     if (!signMessage) throw new Error("This wallet does not support message signing.");
     if (pendingLogin.current) return pendingLogin.current;
 

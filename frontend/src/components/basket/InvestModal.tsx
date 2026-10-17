@@ -110,6 +110,7 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
     }
     setIsMintingFaucet(true);
     try {
+      await ensureAuthenticated();
       const res = await kairosApi.post<{ success: boolean; message?: string; amount?: number }>(
         API_ENDPOINTS.FAUCET_AIRDROP,
         { walletAddress: activeAddressStr }

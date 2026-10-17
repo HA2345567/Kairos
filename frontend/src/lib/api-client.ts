@@ -75,7 +75,26 @@ class KairosApiClient {
   }
 
   isAuthenticatedFor(walletAddress: string): boolean {
-    return Boolean(this.authToken && this.authWallet === walletAddress);
+    if (!this.authToken || this.authWallet !== walletAddress) return false;
+    try {
+      const encoded = (this.authToken.split(".")[1] || "").replace(/-/g, "+").replace(/_/g, "/");
+      const payload = JSON.parse(atob(encoded + "=".repeat((4 - (encoded.length % 4)) % 4))) as { exp?: number };
+      return Number.isFinite(payload.exp) && Number(payload.exp) > Math.floor(Date.now() / 1000) + 15;
+    } catch {
+      return false;
+    }
+  }
+
+  async refreshAuth(): Promise<boolean> {
+    if (!this.refreshToken) return false;
+    try {
+      const result = await this.refresh(this.refreshToken);
+      this.setAuth(result.token, result.refreshToken, this.authWallet ?? undefined);
+      return true;
+    } catch {
+      this.clearAuth();
+      return false;
+    }
   }
 
   private getHeaders(additional: Record<string, string> = {}): HeadersInit {

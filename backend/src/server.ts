@@ -38,6 +38,15 @@ interface RouteEntry {
 export class KairosHttpServer {
   private routes: RouteEntry[] = [];
 
+  private readonly responseHeaders = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  };
+
   private register(method: string, path: string, handler: RouteHandler) {
     const paramNames: string[] = [];
     const regexPath = path.replace(/:([a-zA-Z0-9_]+)/g, (_, name) => {
@@ -95,7 +104,7 @@ export class KairosHttpServer {
       return {
         statusCode: 404,
         data: { error: "NOT_FOUND", path: pathname },
-        headers: { "Content-Type": "application/json" },
+        headers: this.responseHeaders,
       };
     }
 
@@ -132,16 +141,13 @@ export class KairosHttpServer {
       return {
         statusCode,
         data: responseData,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
+        headers: this.responseHeaders,
       };
     } catch (err: any) {
       return {
         statusCode: statusCode === 200 ? 500 : statusCode,
         data: { error: err.message || "INTERNAL_SERVER_ERROR" },
-        headers: { "Content-Type": "application/json" },
+        headers: this.responseHeaders,
       };
     }
   }
@@ -169,6 +175,10 @@ export class KairosHttpServer {
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
         res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Admin-Token, X-Admin-Approver-Token");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.setHeader("X-Frame-Options", "DENY");
+        res.setHeader("Referrer-Policy", "no-referrer");
+        res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
 
         if (req.method === "OPTIONS") {
           res.writeHead(204);

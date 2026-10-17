@@ -13,6 +13,7 @@ import { PublicKey } from "@solana/web3.js";
 import { config } from "../config";
 import { rateLimit } from "../middleware";
 import { AppError } from "../errors";
+import { authService } from "../services/auth.service";
 
 /**
  * /v1/admin/* + /v1/faucet/* (contracts §12; PRD §4.10, §11).
@@ -263,10 +264,15 @@ export function registerAdminRoutes(app: KairosHttpServer): void {
     if (!config.isDevnet()) {
       return reply.status(403).send({ error: "FAUCET_DEVNET_ONLY" });
     }
+    const auth = authService.requireAuth(req);
+    if (!auth?.walletAddress) return reply.status(401).send({ error: "UNAUTHORIZED" });
+    const requestedWallet = (req.body || {}) as { walletAddress?: string };
+    if (requestedWallet.walletAddress && requestedWallet.walletAddress !== auth.walletAddress) {
+      return reply.status(403).send({ error: "WALLET_SESSION_MISMATCH" });
+    }
     // Simulation mode: no chain write — record the virtual drip (PRD §11.2).
     if (config.simulateLanding) {
-      const { walletAddress: simWallet } = (req.body || {}) as { walletAddress?: string };
-      if (!simWallet) return reply.status(400).send({ error: "WALLET_ADDRESS_REQUIRED" });
+      const simWallet = requestedWallet.walletAddress || auth.walletAddress;
       (await repository.logAudit({
         actor: simWallet,
         action: "FAUCET_AIRDROP_SIMULATED",
@@ -283,8 +289,7 @@ export function registerAdminRoutes(app: KairosHttpServer): void {
         message: "SIMULATED faucet drip (KAIROS_SIMULATE_LANDING=1) — no on-chain mint.",
       };
     }
-    const { walletAddress } = (req.body || {}) as { walletAddress?: string };
-    if (!walletAddress) return reply.status(400).send({ error: "WALLET_ADDRESS_REQUIRED" });
+    const walletAddress = requestedWallet.walletAddress || auth.walletAddress;
     const state = loadDevnetState();
     if (!state) {
       return reply.status(503).send({ error: "DEVNET_NOT_INITIALIZED", message: "Run scripts/devnet-setup.ts first" });

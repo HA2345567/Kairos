@@ -182,6 +182,14 @@ describe("money-path session binding (PRD §4.1, §4.4)", () => {
     });
     assert.equal(execution.statusCode, 401);
     assert.equal(execution.json().error, "UNAUTHORIZED");
+
+    const faucet = await app.inject({
+      method: "POST",
+      url: "/v1/faucet/airdrop",
+      payload: { walletAddress: "11111111111111111111111111111111" },
+    });
+    assert.equal(faucet.statusCode, 401);
+    assert.equal(faucet.json().error, "UNAUTHORIZED");
   });
 
   test("binds protected reads to the wallet in the verified JWT", async () => {
@@ -496,6 +504,8 @@ describe("HTTP surface (inject)", () => {
     const health = await app.inject({ method: "GET", url: "/health" });
     assert.equal(health.statusCode, 200);
     assert.equal(health.json().status, "ok");
+    assert.equal(health.headers["X-Content-Type-Options"], "nosniff");
+    assert.equal(health.headers["X-Frame-Options"], "DENY");
 
     const baskets = await app.inject({ method: "GET", url: "/v1/baskets" });
     assert.equal(baskets.statusCode, 200);
