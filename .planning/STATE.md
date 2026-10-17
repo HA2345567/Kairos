@@ -3,8 +3,8 @@ gsd_state_version: "1.0"
 milestone: v1.0
 milestone_name: Devnet product aligned to PRD v4.0
 status: in_progress
-stopped_at: Base-unit persistence checkpoint
-last_updated: "2026-10-17T13:14:28Z"
+stopped_at: Live devnet bootstrap blocked by unfunded relayer
+last_updated: "2026-10-17T13:22:06Z"
 state_head: c8f55a0b07d3dddb741fab24d12904d675b3bace
 progress:
   total_phases: 6
@@ -69,10 +69,10 @@ Rebalance funding now gates each buy broadcast on all current sells settling suc
 
 Recovery reservations now serialize each source/action under a PostgreSQL row lock. Repeated requests with different keys return the same prepared/submitted/terminal recovery. Reservation, execution, and audit commit together; audit faults roll back. An expired preview can be replaced only after finalized block-height expiry and empty signature history; a concurrent submit prevents replacement. RPC failover does not override a known chain outcome. The UI exposes Refresh recovery, and reused recovery keys cannot masquerade as ordinary invest/close/rebalance requests. Six regression cases pass locally; Neon migrations and nine recovery columns passed the database check. Live concurrency/recovery acceptance is still outstanding.
 
-Immediate follow-up: obtain the missing operator access for live devnet acceptance, while continuing any remaining offline oracle/database-contract work. Root `bun run test` invokes the backend and frontend test runners explicitly; `bun run build` builds both workspaces. The reproducibility contract is now pinned by `.bun-version`, `Dockerfile`, `Makefile`, `bun.lock`, and the updated `README.md`.
+Immediate follow-up: fund the configured relayer and make the Anchor deployment signer available for live devnet acceptance. Root `bun run test` invokes the backend and frontend test runners explicitly; `bun run build` builds both workspaces. The reproducibility contract is now pinned by `.bun-version`, `Dockerfile`, `Makefile`, `bun.lock`, and the updated `README.md`.
 
-1. Configure the Pyth API key/feed IDs and verified SOL benchmark, then validate freshness and historical snapshots.
-2. Provide a funded devnet deployment/relayer wallet and working RPC/faucet access; deploy and initialize the updated router, then exercise two-wallet publication and a real investment.
+1. Fund the configured relayer (`76ERXGuZsC2V8jzxGyuohW75UYfDLvPKyXGYSUEsn6UJ` currently has 0 SOL) and provide a working devnet faucet/RPC path; deploy and initialize the updated router, then exercise two-wallet publication and a real investment.
+2. Configure the Pyth API key/feed IDs and verified SOL benchmark, then validate freshness and historical snapshots.
 3. Finish any remaining catalog/registry acceptance gaps and verify the base-unit columns against live deployment data.
 4. Continue through execution, landing/recovery, portfolio, governance, and devnet release phases; do not mark the milestone complete until PRD acceptance evidence exists.
 
@@ -88,6 +88,6 @@ Immediate follow-up: obtain the missing operator access for live devnet acceptan
 
 ## Session
 
-**Last session:** 2026-10-17T13:14:28Z
-**Stopped at:** Base-unit persistence checkpoint
+**Last session:** 2026-10-17T13:22:06Z
+**Stopped at:** Live devnet bootstrap blocked by unfunded relayer
 **Resume file:** .planning/phases/01-catalog-truth-and-foundation/01-VERIFICATION.md
