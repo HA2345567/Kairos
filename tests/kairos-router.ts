@@ -1,10 +1,9 @@
 /**
- * Kairos router program tests (Anchor 0.30, ts-mocha) — replaces the old
+ * Kairos router program tests (Anchor 0.31, Bun) — replaces the old
  * bun:test placeholder suite.
  *
  * Run where a validator is available (AVX-capable machine or devnet):
- *   anchor test                      # localnet
- *   anchor test --provider.cluster devnet --skip-local-validator
+ *   bun run test:contracts           # requires a configured validator
  *
  * Coverage: global/basket init, admin gating, kill switches, version registry,
  * and the pre-CPI failure paths of both swap legs (paused program, paused
@@ -15,7 +14,8 @@
 
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { KairosRouter } from "../target/types/kairos_router";
+import type { KairosRouter } from "../target/types/kairos_router";
+import idl from "../target/idl/kairos_router.json";
 import {
   Keypair,
   LAMPORTS_PER_SOL,
@@ -28,15 +28,17 @@ import {
   mintTo,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { expect } from "chai";
+import { beforeAll, describe, expect, it } from "bun:test";
 import crypto from "crypto";
 
 describe("kairos-router", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-  const program = anchor.workspace.KairosRouter as Program<KairosRouter>;
+  const program = new Program<KairosRouter>(idl as unknown as KairosRouter, provider);
 
   const admin = Keypair.generate();
+  const publishApprover = Keypair.generate();
+  const backupApprover = Keypair.generate();
   const treasury = Keypair.generate();
   const stranger = Keypair.generate();
   const user = Keypair.generate();
@@ -45,6 +47,7 @@ describe("kairos-router", () => {
   let usdcMint: PublicKey;
   let assetMint: PublicKey;
   let globalConfig: PublicKey;
+  let publishAuthorities: PublicKey;
   let treasuryUsdcAta: PublicKey;
   let userUsdcAta: PublicKey;
   let userAssetAta: PublicKey;
@@ -74,14 +77,19 @@ describe("kairos-router", () => {
         ? { mint: mints[i], weightBps: weights[i] ?? 0 }
         : { mint: PublicKey.default, weightBps: 0 }
     );
+  const hashLegs = (mints: PublicKey[], weight = 5000) => crypto.createHash("sha256").update(
+    Buffer.concat([...mints].sort((a, b) => Buffer.compare(a.toBuffer(), b.toBuffer()))
+      .map(mint => Buffer.concat([mint.toBuffer(), Buffer.from([weight & 255, weight >> 8])]))),
+  ).digest();
 
-  const swapAccounts = (userDestAta: PublicKey, outputMint: PublicKey) => ({
+  const swapAccounts = (userDestAta: PublicKey, outputMint: PublicKey, version = 1) => ({
     user: user.publicKey,
     globalConfig,
     userUsdcAta,
     userDestAta,
     treasuryUsdcAta,
     basketConfig,
+    basketVersion: versionPda(version),
     cpmmProgram: pool.cpmmProgram,
     authority: pool.authority,
     ammConfig: pool.ammConfig,
@@ -95,20 +103,25 @@ describe("kairos-router", () => {
     observationState: pool.observation,
     tokenProgram: TOKEN_PROGRAM_ID,
     systemProgram: SystemProgram.programId,
+    memoProgram: new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
   });
 
-  before(async () => {
+  beforeAll(async () => {
     const sig = async (kp: Keypair) =>
       provider.connection
         .requestAirdrop(kp.publicKey, 20 * LAMPORTS_PER_SOL)
         .then((s) => provider.connection.confirmTransaction(s, "confirmed"));
-    await Promise.all([sig(admin), sig(stranger), sig(user), sig(treasury)]);
+    await Promise.all([sig(admin), sig(publishApprover), sig(backupApprover), sig(stranger), sig(user), sig(treasury)]);
 
     usdcMint = await createMint(provider.connection, admin, admin.publicKey, null, 6);
     assetMint = await createMint(provider.connection, admin, admin.publicKey, null, 6);
 
     globalConfig = PublicKey.findProgramAddressSync(
       [Buffer.from("global")],
+      program.programId
+    )[0];
+    publishAuthorities = PublicKey.findProgramAddressSync(
+      [Buffer.from("publish_authorities")],
       program.programId
     )[0];
     basketConfig = PublicKey.findProgramAddressSync(
@@ -138,17 +151,37 @@ describe("kairos-router", () => {
   });
 
   it("initializes global config (admin, USDC pin, treasury, fee)", async () => {
+    try {
+      await program.methods
+        .initializeGlobal(usdcMint, treasury.publicKey, 76)
+        .accounts({ payer: admin.publicKey, globalConfig })
+        .signers([admin])
+        .rpc();
+      throw new Error("fee above the PRD cap should fail");
+    } catch (err) {
+      expect(String(err)).toContain("InvalidFeeBps");
+    }
     await program.methods
       .initializeGlobal(usdcMint, treasury.publicKey, 20)
       .accounts({ payer: admin.publicKey, globalConfig })
       .signers([admin])
       .rpc();
+    await program.methods
+      .initializePublishAuthorities([publishApprover.publicKey, backupApprover.publicKey])
+      .accounts({
+        admin: admin.publicKey,
+        globalConfig,
+        publishAuthorities,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([admin])
+      .rpc();
     const cfg = await program.account.globalConfig.fetch(globalConfig);
-    expect(cfg.admin.equals(admin.publicKey)).true;
-    expect(cfg.usdcMint.equals(usdcMint)).true;
-    expect(cfg.treasury.equals(treasury.publicKey)).true;
-    expect(cfg.feeBps).eq(20);
-    expect(cfg.paused).false;
+    expect(cfg.admin.equals(admin.publicKey)).toBe(true);
+    expect(cfg.usdcMint.equals(usdcMint)).toBe(true);
+    expect(cfg.treasury.equals(treasury.publicKey)).toBe(true);
+    expect(cfg.feeBps).toBe(20);
+    expect(cfg.paused).toBe(false);
   });
 
   it("initializes a 2-leg basket", async () => {
@@ -158,8 +191,17 @@ describe("kairos-router", () => {
       .signers([admin])
       .rpc();
     const b = await program.account.basketConfig.fetch(basketConfig);
-    expect(b.legCount).eq(2);
-    expect(b.isActive).true;
+    expect(b.legCount).toBe(2);
+    expect(b.isActive).toBe(true);
+  });
+
+  it("publishes the immutable version used by swap legs", async () => {
+    const legsHash = hashLegs([assetMint, usdcMint]);
+    await program.methods
+      .publishVersion(basketId, 1, legs([assetMint, usdcMint], [5000, 5000]), 2, [...legsHash])
+      .accounts({ admin: admin.publicKey, approval: publishApprover.publicKey, globalConfig, publishAuthorities, basketConfig, basketVersion: versionPda(1) })
+      .signers([admin, publishApprover])
+      .rpc();
   });
 
   it("rejects non-admin basket creation", async () => {
@@ -169,9 +211,9 @@ describe("kairos-router", () => {
         .accounts({ admin: stranger.publicKey, globalConfig })
         .signers([stranger])
         .rpc();
-      expect.fail("should have failed");
+      throw new Error("should have failed");
     } catch (err) {
-      expect(String(err)).to.include("UnauthorizedAdmin");
+      expect(String(err)).toContain("UnauthorizedAdmin");
     }
   });
 
@@ -182,9 +224,9 @@ describe("kairos-router", () => {
         .accounts({ admin: admin.publicKey, globalConfig, basketConfig: PublicKey.findProgramAddressSync([Buffer.from("basket"), Buffer.from("bad-weights")], program.programId)[0] })
         .signers([admin])
         .rpc();
-      expect.fail("should have failed");
+      throw new Error("should have failed");
     } catch (err) {
-      expect(String(err)).to.include("InvalidBasketWeights");
+      expect(String(err)).toContain("InvalidBasketWeights");
     }
   });
 
@@ -201,9 +243,9 @@ describe("kairos-router", () => {
           })
           .signers([admin])
           .rpc();
-        expect.fail(`leg_count ${lc} should have failed`);
+        throw new Error(`leg_count ${lc} should have failed`);
       } catch (err) {
-        expect(String(err)).to.include("InvalidLegCount");
+        expect(String(err)).toContain("InvalidLegCount");
       }
     }
   });
@@ -220,9 +262,9 @@ describe("kairos-router", () => {
         })
         .signers([admin])
         .rpc();
-      expect.fail("should have failed");
+      throw new Error("should have failed");
     } catch (err) {
-      expect(String(err)).to.include("DuplicateMint");
+      expect(String(err)).toContain("DuplicateMint");
     }
   });
 
@@ -233,9 +275,9 @@ describe("kairos-router", () => {
         .accounts({ admin: stranger.publicKey, globalConfig, basketConfig })
         .signers([stranger])
         .rpc();
-      expect.fail("should have failed");
+      throw new Error("should have failed");
     } catch (err) {
-      expect(String(err)).to.include("UnauthorizedAdmin");
+      expect(String(err)).toContain("UnauthorizedAdmin");
     }
   });
 
@@ -247,16 +289,16 @@ describe("kairos-router", () => {
       .rpc();
     try {
       await program.methods
-        .swapAndDistributeLeg(new anchor.BN(1_000_000), new anchor.BN(1), "audit-memo")
+        .swapAndDistributeLeg(1, 20, new anchor.BN(1_000_000), new anchor.BN(1), "audit-memo")
         .accounts(swapAccounts(userAssetAta, assetMint))
         .signers([user])
         .rpc();
-      expect.fail("should have failed");
+      throw new Error("should have failed");
     } catch (err) {
-      expect(String(err)).to.include("BasketNotActive");
+      expect(String(err)).toContain("BasketNotActive");
     }
     const feeBal = (await provider.connection.getTokenAccountBalance(treasuryUsdcAta)).value.amount;
-    expect(feeBal).eq("0"); // no fee for a failed leg
+    expect(feeBal).toBe("0"); // no fee for a failed leg
     await program.methods
       .setActive(true)
       .accounts({ admin: admin.publicKey, globalConfig, basketConfig })
@@ -272,13 +314,13 @@ describe("kairos-router", () => {
       .rpc();
     try {
       await program.methods
-        .swapAndDistributeLeg(new anchor.BN(1_000_000), new anchor.BN(1), "audit-memo")
+        .swapAndDistributeLeg(1, 20, new anchor.BN(1_000_000), new anchor.BN(1), "audit-memo")
         .accounts(swapAccounts(userAssetAta, assetMint))
         .signers([user])
         .rpc();
-      expect.fail("should have failed");
+      throw new Error("should have failed");
     } catch (err) {
-      expect(String(err)).to.include("ProgramPaused");
+      expect(String(err)).toContain("ProgramPaused");
     }
     await program.methods
       .setGlobalPause(false)
@@ -288,26 +330,38 @@ describe("kairos-router", () => {
   });
 
   it("publishes a version with legs_hash; rejects bad weights", async () => {
-    const legsHash = crypto.createHash("sha256").update("v1-legs").digest();
-    await program.methods
-      .publishVersion(basketId, 1, legs([assetMint, usdcMint], [5000, 5000]), 2, [...legsHash])
-      .accounts({ admin: admin.publicKey, globalConfig, basketConfig, basketVersion: versionPda(1) })
-      .signers([admin])
-      .rpc();
     const v = await program.account.basketVersion.fetch(versionPda(1));
-    expect(v.version).eq(1);
-    expect(Buffer.from(v.legsHash).equals(Buffer.from(legsHash))).true;
-    expect(v.legCount).eq(2);
+    expect(v.version).toBe(1);
+    expect(Buffer.from(v.legsHash).equals(Buffer.from(hashLegs([assetMint, usdcMint])))).toBe(true);
+    expect(v.legCount).toBe(2);
+
+    const versionMint = await createMint(provider.connection, admin, admin.publicKey, null, 6);
+    const nextHash = hashLegs([assetMint, versionMint]);
+    await program.methods
+      .publishVersion(basketId, 2, legs([assetMint, versionMint], [5000, 5000]), 2, [...nextHash])
+      .accounts({ admin: admin.publicKey, approval: publishApprover.publicKey, globalConfig, publishAuthorities, basketConfig, basketVersion: versionPda(2) })
+      .signers([admin, publishApprover])
+      .rpc();
+    try {
+      await program.methods
+        .swapAndDistributeLeg(2, 20, new anchor.BN(1_000_000), new anchor.BN(1), "version-mismatch")
+        .accounts(swapAccounts(userUsdcAta, usdcMint, 2))
+        .signers([user])
+        .rpc();
+      throw new Error("a mint outside the selected version should fail");
+    } catch (err) {
+      expect(String(err)).toContain("InvalidUserAta");
+    }
 
     try {
       await program.methods
-        .publishVersion(basketId, 2, legs([assetMint, usdcMint], [9000, 9000]), 2, [...legsHash])
-        .accounts({ admin: admin.publicKey, globalConfig, basketConfig, basketVersion: versionPda(2) })
-        .signers([admin])
+        .publishVersion(basketId, 3, legs([assetMint, usdcMint], [9000, 9000]), 2, [...hashLegs([assetMint, usdcMint])])
+        .accounts({ admin: admin.publicKey, approval: publishApprover.publicKey, globalConfig, publishAuthorities, basketConfig, basketVersion: versionPda(3) })
+        .signers([admin, publishApprover])
         .rpc();
-      expect.fail("should have failed");
+      throw new Error("should have failed");
     } catch (err) {
-      expect(String(err)).to.include("InvalidBasketWeights");
+      expect(String(err)).toContain("InvalidBasketWeights");
     }
   });
 
@@ -321,13 +375,13 @@ describe("kairos-router", () => {
     );
     try {
       await program.methods
-        .swapAndDistributeLeg(new anchor.BN(1_000_000), new anchor.BN(1), "audit-memo")
+        .swapAndDistributeLeg(1, 20, new anchor.BN(1_000_000), new anchor.BN(1), "audit-memo")
         .accounts(swapAccounts(foreignAta, foreign))
         .signers([user])
         .rpc();
-      expect.fail("should have failed");
+      throw new Error("should have failed");
     } catch (err) {
-      expect(String(err)).to.include("InvalidUserAta");
+      expect(String(err)).toContain("InvalidUserAta");
     }
   });
 

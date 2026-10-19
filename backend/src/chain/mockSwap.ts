@@ -4,6 +4,7 @@ import {
   Connection,
   Keypair,
   PublicKey,
+  SystemProgram,
   TransactionInstruction,
   TransactionMessage,
   VersionedTransaction,
@@ -21,7 +22,7 @@ import { getLatestBlockhash, withFailover } from "./connection";
  *
  * Devnet has no Jupiter liquidity / tokenized-stock venues, so swaps run
  * against an authority-controlled treasury (PRD §11.1):
- *   buy  leg: user USDC → treasury USDC, treasury asset → user asset
+ *   buy  leg: user USDC (or native SOL) → treasury, treasury asset → user asset
  *   sell leg: user asset → treasury asset, treasury USDC → user USDC
  *
  * Transactions are compiled to V0 messages with the relayer as fee payer and
@@ -49,8 +50,11 @@ interface CommonLegOpts {
   assetDecimals: number;
   treasury: Keypair; // partial-signs the treasury-side transfer
   relayer: Keypair; // fee payer
-  /** Extra USDC user→treasury transfer (platform fee); only leg 1 includes it. */
+  /** Extra USDC user→treasury transfer for USDC-funded buys. */
   includeFeeUsdcBaseUnits?: number;
+  /** Native SOL principal and platform-fee shares for SOL-funded Devnet buys. */
+  inputSolLamports?: number;
+  includeFeeSolLamports?: number;
   /** Real recent blockhash fetched by the caller (see getRecentBlockhash). */
   recentBlockhash: string;
 }
@@ -122,15 +126,20 @@ export async function buildLegSwapTx(opts: BuyLegOpts): Promise<LegBuild> {
       user,
       assetMint
     ),
-    // 2) user USDC → treasury USDC (user signs)
-    createTransferCheckedInstruction(
-      userUsdcAta,
-      usdcMint,
-      treasuryUsdcAta,
-      user,
-      BigInt(Math.trunc(inUsdcBaseUnits)),
-      USDC_DECIMALS
-    ),
+    ...(opts.inputSolLamports !== undefined
+      ? [SystemProgram.transfer({
+          fromPubkey: user,
+          toPubkey: treasury.publicKey,
+          lamports: BigInt(Math.trunc(opts.inputSolLamports)),
+        })]
+      : [createTransferCheckedInstruction(
+          userUsdcAta,
+          usdcMint,
+          treasuryUsdcAta,
+          user,
+          BigInt(Math.trunc(inUsdcBaseUnits)),
+          USDC_DECIMALS
+        )]),
     // 3) treasury asset → user asset (treasury pre-signs)
     createTransferCheckedInstruction(
       treasuryAssetAta,
@@ -142,7 +151,7 @@ export async function buildLegSwapTx(opts: BuyLegOpts): Promise<LegBuild> {
     ),
   ];
 
-  // 4) platform fee: extra USDC transfer user → treasury (leg 1 only)
+  // 4) platform fee: this leg's allocated USDC transfer to treasury
   if (includeFeeUsdcBaseUnits > 0) {
     instructions.push(
       createTransferCheckedInstruction(
@@ -154,6 +163,13 @@ export async function buildLegSwapTx(opts: BuyLegOpts): Promise<LegBuild> {
         USDC_DECIMALS
       )
     );
+  }
+  if ((opts.includeFeeSolLamports ?? 0) > 0) {
+    instructions.push(SystemProgram.transfer({
+      fromPubkey: user,
+      toPubkey: treasury.publicKey,
+      lamports: BigInt(Math.trunc(opts.includeFeeSolLamports!)),
+    }));
   }
 
   return compileAndSign(relayer, treasury, recentBlockhash, instructions);
@@ -208,7 +224,7 @@ export async function buildReverseLegTx(opts: SellLegOpts): Promise<LegBuild> {
     ),
   ];
 
-  // 4) platform fee on sells: extra USDC transfer user → treasury (leg 1 only)
+  // 4) platform fee on sells: this leg's allocated USDC transfer to treasury
   if (includeFeeUsdcBaseUnits > 0) {
     instructions.push(
       createTransferCheckedInstruction(

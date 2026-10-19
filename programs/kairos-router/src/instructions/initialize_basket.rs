@@ -49,6 +49,7 @@ pub fn handler(
     let mut seen: Vec<Pubkey> = Vec::with_capacity(leg_count as usize);
     for i in 0..leg_count as usize {
         let item = items[i];
+        require!(item.weight_bps > 0 && item.mint != Pubkey::default(), KairosError::InvalidBasketWeights);
         total = total
             .checked_add(item.weight_bps as u32)
             .ok_or(KairosError::MathOverflow)?;

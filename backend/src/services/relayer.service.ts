@@ -1,36 +1,24 @@
 import { Keypair, PublicKey, VersionedTransaction } from "@solana/web3.js";
 import { config } from "../config";
 import { getBalance } from "../chain/connection";
-import { DEVNET_LABELS, deterministicKeypair } from "../chain/devnetState";
 
 /**
  * Gas relayer (contracts.md §7).
  *
- * The relayer is the fee payer of every leg transaction. On devnet it uses the
- * deterministic `kairos-devnet-relayer-v1` identity (same label scheme as the
- * mints/treasury), funded by scripts/devnet-setup.ts.
- *
- * DEVIATION (documented): contracts §7 does not mandate a keypair source, but
- * the task brief suggested config.relayerKeypair (seed-42). That address
- * (2iXtA8oeZqUU5pofxK971TCEvFGfems2AcDRaZHKD2pQ) already exists on devnet
- * owned by the SPL Token program, so the runtime rejects it as fee payer
- * ("This account may not be used to pay transaction fees") — permanently, and
- * it cannot be closed without its token-account owner's signature. config's
- * keypair is therefore still used for mainnet-beta.
+ * The relayer is the fee payer of every leg transaction. It always uses a
+ * secret key supplied through environment configuration; public label-derived
+ * keys are never used to authorize transactions.
  */
 
-const RELAYER_FUNDED_MIN_SOL = 0.01;
+/** Operating floor for the relayer float (PRD §8.1: pause when low). */
+export const RELAYER_FUNDED_MIN_SOL = 0.01;
 
 let cached: Keypair | null = null;
 
 function keypair(): Keypair {
   if (!cached) {
-    cached = config.isDevnet()
-      ? deterministicKeypair(DEVNET_LABELS.relayer)
-      : config.relayerKeypair;
-    console.log(
-      `[relayer] identity ${cached.publicKey.toBase58()} (${config.isDevnet() ? "devnet-deterministic" : "config"})`
-    );
+    cached = config.relayerKeypair;
+    console.log(`[relayer] identity ${cached.publicKey.toBase58()} (configured)`);
   }
   return cached;
 }

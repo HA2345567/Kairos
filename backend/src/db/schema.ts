@@ -16,6 +16,10 @@ export interface User {
   createdAt: string;
   status: "active" | "suspended";
   region: string;
+  /** §13.1 age gate: recorded once the user accepts the 18+ attestation. */
+  ageVerified: boolean;
+  /** §13.1 region/eligibility plumbing, activatable for mainnet (§5 FR-04). */
+  eligibilityStatus: "eligible" | "requires_action" | "restricted";
 }
 
 export interface Wallet {
@@ -43,6 +47,84 @@ export interface Token {
   isMarketHoursRestricted?: boolean;
   denylisted: boolean;
   priceUsd: number;
+  /** FR-03: a leg without verified liquidity evidence cannot be published.
+   *  Optional on write paths (defaults apply); always present on reads. */
+  backtestable?: boolean;
+  liquidityUsd?: number | null;
+  liquiditySource?: string | null;
+  liquidityCheckedAt?: string | null;
+}
+
+export interface NotificationPreferences {
+  walletAddress: string;
+  inApp: boolean;
+  email: boolean;
+  push: boolean;
+  executionUpdates: boolean;
+  rebalanceUpdates: boolean;
+  versionPublish: boolean;
+  updatedAt: string;
+}
+
+/** FR-27 annotation layer + glossary checkpoints / incentives / liquidation info. */
+export type AnnotationKind = "news" | "event" | "checkpoint" | "incentive" | "liquidation";
+
+export interface Annotation {
+  id: string;
+  basketId: string;
+  versionId: string | null;
+  kind: AnnotationKind;
+  title: string;
+  body: string;
+  sourceUrl: string | null;
+  source: string | null;
+  impact: "positive" | "negative" | "neutral" | null;
+  publishedAt: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+/** FR-25 Labs / UGC basket creation, voting and moderation. */
+export interface LabsBasket {
+  id: string;
+  slug: string;
+  name: string;
+  thesis: string;
+  category: string;
+  coverImageDataUrl?: string | null;
+  allocations: Array<{ mint: string; weightBps: number }>;
+  createdBy: string;
+  status: "draft" | "submitted" | "approved" | "rejected" | "promoted";
+  moderationNote: string | null;
+  basketId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  votes: number;
+}
+
+export interface LabsComment {
+  id: string;
+  labsBasketId: string;
+  walletAddress: string;
+  body: string;
+  hidden: boolean;
+  createdAt: string;
+}
+
+export interface AnalyticsEventRow {
+  id: number;
+  name: string;
+  path: string;
+  region: string | null;
+  sessionHash: string;
+  ts: string;
+}
+
+export interface ProgramAllowlistRow {
+  programId: string;
+  name: string;
+  version?: string;
+  addedAt: string;
 }
 
 export interface BasketLeg {
@@ -62,7 +144,28 @@ export interface BasketVersion {
   changelog: string;
   publishedBy: string;
   publishedAt: string;
+  legsHash?: string;
+  registryTx?: string;
   legs: BasketLeg[];
+}
+
+export type BasketVersionDraft = Pick<BasketVersion, "version" | "changelog" | "publishedBy"> & {
+  legs: Array<
+    Pick<BasketLeg, "mint" | "weightBps" | "legType"> &
+    Partial<Pick<BasketLeg, "id" | "venueHint" | "slippageBps">>
+  >;
+};
+
+export interface BasketPublishProposal {
+  id: string;
+  basketSlug: string;
+  proposedBy: string;
+  createdAt: string;
+  versionData: BasketVersionDraft;
+  status: "pending" | "approved";
+  approvedBy?: string;
+  approvedAt?: string;
+  approvalNote?: string;
 }
 
 export interface Basket {
@@ -74,12 +177,6 @@ export interface Basket {
   status: "active" | "paused" | "deprecated";
   activeVersionId: string;
   minUsdc: number;
-  performance: {
-    "1W": number;
-    "1M": number;
-    "6M": number;
-    "1Y": number;
-  };
   protocols: string[];
 }
 
@@ -90,7 +187,11 @@ export interface QuoteLeg {
   inUsdcAmount: number;
   expectedOutTokens: string;
   minOutTokens: string;
-  priceImpactPct: string;
+  priceImpactPct: string | null;
+  priceSource: "pyth" | "chainlink" | "devnet-registry";
+  priceSourceRef?: string;
+  priceAsOf: string | null;
+  priceConfidenceUsd: number | null;
   routeHint?: string;
 }
 
@@ -99,11 +200,26 @@ export interface Quote {
   basketId: string;
   basketVersionId: string;
   usdcAmount: number;
+  usdcBaseUnits?: string;
   legs: QuoteLeg[];
   platformFeeUsdc: number;
+  platformFeeBaseUnits?: string;
   netInvestUsdc: number;
+  netInvestBaseUnits?: string;
   expiresAt: string;
   createdAt: string;
+}
+
+export interface ExecutionLegReceipt {
+  side: "buy" | "sell";
+  inputMint: string;
+  outputMint: string;
+  actualIn: string;
+  actualOut: string;
+  assetBalanceAfter: string;
+  assetDecimals: number;
+  slot: number;
+  commitment: "confirmed" | "finalized";
 }
 
 export interface ExecutionLeg {
@@ -112,6 +228,12 @@ export interface ExecutionLeg {
   mint: string;
   symbol: string;
   inAmountUsdc: number;
+  inUsdcBaseUnits?: string;
+  feeUsdc?: number;
+  feeBaseUnits?: string;
+  side?: "buy" | "sell";
+  inputBaseUnits?: string;
+  receipt?: ExecutionLegReceipt;
   expectedOut: string;
   actualOut?: string;
   txSignature?: string;
@@ -122,15 +244,23 @@ export interface ExecutionLeg {
 
 export interface Execution {
   id: string;
+  baseExecutionId?: string;
+  recoveryAction?: "retry" | "unwind";
   walletId: string;
   walletAddress: string;
   basketId: string;
   basketVersionId: string;
   type: ExecutionType;
+  fundingAsset?: "USDC" | "SOL";
+  solInputAmount?: number;
+  solPriceUsd?: number;
   status: ExecutionStatus;
   idempotencyKey: string;
+  requestHash?: string;
   totalUsdc: number;
+  totalUsdcBaseUnits?: string;
   feeUsdc: number;
+  feeUsdcBaseUnits?: string;
   preparedTxs: string[]; // base64 serialized transactions
   messageHashes: string[]; // SHA256 hashes of prepared messages for byte-verification
   blockhash?: string; // recent blockhash captured at prepare time
@@ -147,6 +277,9 @@ export interface PositionLeg {
   targetBps: number;
   currentAmount: number;
   currentValueUsd: number;
+  lastKnownAt?: string;
+  lastKnownCommitment?: "confirmed" | "finalized";
+  lastObservationSource?: "landing" | "portfolio-refresh" | "reconciler";
 }
 
 export interface Position {
@@ -157,6 +290,7 @@ export interface Position {
   entryUsdc: number;
   currentValueUsd: number;
   status: "ACTIVE" | "MODIFIED" | "CLOSED";
+  rebalanceState?: "NONE" | "REBALANCE_PARTIAL";
   autoRebalance: boolean;
   driftPct: number;
   rebalanceAvailable: boolean;
@@ -211,15 +345,21 @@ export interface JobRow {
 export interface OutboxRow {
   id: string;
   event: string;
+  eventType?: string;
+  executionId?: string | null;
   payload: string | null;
   createdAt: string;
   sentAt: string | null;
+  attempts: number;
+  leaseUntilMs: number;
+  leaseToken?: string | null;
 }
 
 export interface FeeRow {
   id: string;
   executionId: string;
   amountUsdc: number;
+  amountBaseUnits?: string;
   token: string;
   ts: string;
 }
@@ -230,6 +370,8 @@ export interface SnapshotRow {
   ts: string;
   priceUsd: number;
   source: string;
+  sourceRef?: string;
+  confidence?: number;
 }
 
 export interface RebalanceEventRow {

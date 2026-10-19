@@ -1,201 +1,123 @@
 import { createHash } from "node:crypto";
 import {
-  ComputeBudgetProgram,
-  Keypair,
-  PublicKey,
-  TransactionInstruction,
-  TransactionMessage,
-  VersionedTransaction,
+  ComputeBudgetProgram, Keypair, PublicKey, SystemProgram, TransactionInstruction,
+  TransactionMessage, VersionedTransaction,
 } from "@solana/web3.js";
-import {
-  getAssociatedTokenAddress,
-  TOKEN_PROGRAM_ID,
-} from "@solana/spl-token";
-import { SystemProgram } from "@solana/web3.js";
-import { config } from "../config";
-
-/**
- * Program-backed swap builder (user's build order: program → backend).
- *
- * Builds real `kairos_router` swap_and_distribute_leg / swap_and_collect_leg
- * transactions (Raydium CPMM CPI, input/output-side fee, memo, pause checks)
- * WITHOUT needing the generated IDL at runtime: Anchor instruction
- * discriminators are sha256("global:<name>")[..8] and args are borsh-encoded.
- *
- * Selected with SWAP_BUILDER=program (config.swapBuilder). The treasury mock
- * (chain/mockSwap.ts) stays the devnet default until the program is deployed.
- */
+import { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 export const KAIROS_ROUTER_PROGRAM_ID = new PublicKey(
-  process.env.KAIROS_ROUTER_PROGRAM_ID || "ELfFskTFe9keckQ7yN3hgZ2csq7hUHAR7QuPNoErQqPw"
+  process.env.KAIROS_ROUTER_PROGRAM_ID || "3jWJZPdDou1h8UrT871Qi573yqQkFYYW8Jqiug9Pne5w"
 );
-
-const RAYDIUM_CPMM_PROGRAM_ID = new PublicKey("DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb");
-const MEMO_V2_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-
-const DISC_BUY = createHash("sha256").update("global:swap_and_distribute_leg").digest().subarray(0, 8);
-const DISC_SELL = createHash("sha256").update("global:swap_and_collect_leg").digest().subarray(0, 8);
-
-/** Anchor string borsh encoding: u32 len + utf8. */
-function borshString(s: string): Buffer {
-  const bytes = Buffer.from(s, "utf8");
-  const len = Buffer.alloc(4);
-  len.writeUInt32LE(bytes.length, 0);
-  return Buffer.concat([len, bytes]);
-}
+export const RAYDIUM_CPMM_PROGRAM_ID = new PublicKey("DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb");
+export const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 
 export interface ProgramBuildOpts {
   user: PublicKey;
   usdcMint: PublicKey;
   assetMint: PublicKey;
-  /** sell legs: the user's asset ATA; buy legs: the destination asset ATA */
   userAssetAta: PublicKey;
   userUsdcAta: PublicKey;
   treasuryUsdcAta: PublicKey;
   globalConfigPda: PublicKey;
+  basketId: string;
   basketConfigPda: PublicKey;
+  basketVersion: number;
+  basketVersionPda: PublicKey;
+  basketLegCount: number;
+  feeBps: number;
   pool: {
-    authority: PublicKey;
-    ammConfig: PublicKey;
-    poolState: PublicKey;
-    inputVault: PublicKey;
-    outputVault: PublicKey;
-    observation: PublicKey;
+    authority: PublicKey; ammConfig: PublicKey; poolState: PublicKey;
+    inputVault: PublicKey; outputVault: PublicKey; observation: PublicKey;
   };
   relayer: Keypair;
   recentBlockhash: string;
 }
+export interface ProgramLegBuild { transaction: VersionedTransaction; messageHash: string }
 
-export interface ProgramLegBuild {
-  transaction: VersionedTransaction;
-  messageHash: string;
+function uint64(value: number): Buffer {
+  if (!Number.isSafeInteger(value) || value <= 0) throw new RangeError("Swap amounts must be positive safe integers");
+  const bytes = Buffer.alloc(8);
+  bytes.writeBigUInt64LE(BigInt(value));
+  return bytes;
 }
 
-function compile(relayer: Keypair, recentBlockhash: string, ixs: TransactionInstruction[]): ProgramLegBuild {
+async function build(opts: ProgramBuildOpts, side: "buy" | "sell", amount: number, minOut: number, memo: string): Promise<ProgramLegBuild> {
+  if (!Number.isInteger(opts.basketVersion) || opts.basketVersion < 1 || opts.basketVersion > 0xffff_ffff) {
+    throw new RangeError("Basket version must be a positive u32");
+  }
+  const memoBytes = Buffer.from(memo, "utf8");
+  if (memoBytes.length > 256) throw new RangeError("Swap memo exceeds 256 bytes");
+  if (!Number.isInteger(opts.feeBps) || opts.feeBps < 0 || opts.feeBps > 75) {
+    throw new RangeError("Fee bps must be an integer between 0 and 75");
+  }
+  const length = Buffer.alloc(4);
+  length.writeUInt32LE(memoBytes.length);
+  const version = Buffer.alloc(4);
+  version.writeUInt32LE(opts.basketVersion);
+  const fee = Buffer.alloc(2);
+  fee.writeUInt16LE(opts.feeBps);
+  const name = side === "buy" ? "swap_and_distribute_leg" : "swap_and_collect_leg";
+  const data = Buffer.concat([
+    createHash("sha256").update(`global:${name}`).digest().subarray(0, 8),
+    version, fee, uint64(amount), uint64(minOut), length, memoBytes,
+  ]);
+  const readonly = (pubkey: PublicKey) => ({ pubkey, isSigner: false, isWritable: false });
+  const writable = (pubkey: PublicKey) => ({ pubkey, isSigner: false, isWritable: true });
+  const instructions = [
+    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1_000 }),
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }),
+  ];
+  // Both trade directions work for a wallet whose destination ATA is absent.
+  for (const [mint, ata] of [[opts.usdcMint, opts.userUsdcAta], [opts.assetMint, opts.userAssetAta]]) {
+    if (!(await getAssociatedTokenAddress(mint, opts.user)).equals(ata)) throw new Error("INVALID_USER_ATA");
+    instructions.push(createAssociatedTokenAccountIdempotentInstruction(opts.relayer.publicKey, ata, opts.user, mint));
+  }
+  instructions.push(new TransactionInstruction({
+    programId: KAIROS_ROUTER_PROGRAM_ID, data,
+    keys: [
+      { pubkey: opts.user, isSigner: true, isWritable: true }, readonly(opts.globalConfigPda),
+      writable(opts.userUsdcAta), writable(opts.userAssetAta), writable(opts.treasuryUsdcAta),
+      readonly(opts.basketConfigPda), readonly(opts.basketVersionPda), readonly(RAYDIUM_CPMM_PROGRAM_ID), readonly(opts.pool.authority), readonly(opts.pool.ammConfig),
+      writable(opts.pool.poolState), writable(opts.pool.inputVault), writable(opts.pool.outputVault),
+      readonly(TOKEN_PROGRAM_ID), readonly(TOKEN_PROGRAM_ID),
+      readonly(side === "buy" ? opts.usdcMint : opts.assetMint),
+      readonly(side === "buy" ? opts.assetMint : opts.usdcMint), writable(opts.pool.observation),
+      readonly(TOKEN_PROGRAM_ID), readonly(SystemProgram.programId), readonly(MEMO_PROGRAM_ID),
+      readonly(opts.basketLegCount > 10
+        ? basketVersionExtensionPda(opts.basketId, opts.basketVersion)
+        : KAIROS_ROUTER_PROGRAM_ID),
+    ],
+  }));
   const message = new TransactionMessage({
-    payerKey: relayer.publicKey,
-    recentBlockhash,
-    instructions: ixs,
+    payerKey: opts.relayer.publicKey, recentBlockhash: opts.recentBlockhash, instructions,
   }).compileToV0Message();
-  const tx = new VersionedTransaction(message);
-  tx.sign([relayer]);
-  const messageHash = createHash("sha256").update(message.serialize()).digest("hex");
-  return { transaction: tx, messageHash };
+  const transaction = new VersionedTransaction(message);
+  transaction.sign([opts.relayer]);
+  return { transaction, messageHash: createHash("sha256").update(message.serialize()).digest("hex") };
 }
 
-/** BUY: swap_and_distribute_leg(amount_in_usdc, min_amount_out, memo). */
-export async function buildProgramBuyLeg(opts: ProgramBuildOpts & {
-  amountInUsdcBase: number;
-  minAmountOutBase: number;
-  memo: string;
-}): Promise<ProgramLegBuild> {
-  const data = Buffer.concat([
-    Buffer.from(DISC_BUY),
-    (() => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(opts.amountInUsdcBase)); return b; })(),
-    (() => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(opts.minAmountOutBase)); return b; })(),
-    borshString(opts.memo),
-  ]);
+export const buildProgramBuyLeg = (opts: ProgramBuildOpts & { amountInUsdcBase: number; minAmountOutBase: number; memo: string }) =>
+  build(opts, "buy", opts.amountInUsdcBase, opts.minAmountOutBase, opts.memo);
+export const buildProgramSellLeg = (opts: ProgramBuildOpts & { amountInAssetBase: number; minUsdcOutBase: number; memo: string }) =>
+  build(opts, "sell", opts.amountInAssetBase, opts.minUsdcOutBase, opts.memo);
 
-  const ixs: TransactionInstruction[] = [
-    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1_000 }),
-    ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }),
-    new TransactionInstruction({
-      programId: KAIROS_ROUTER_PROGRAM_ID,
-      keys: [
-        { pubkey: opts.user, isSigner: true, isWritable: true },          // user
-        { pubkey: opts.globalConfigPda, isSigner: false, isWritable: false }, // global_config
-        { pubkey: opts.userUsdcAta, isSigner: false, isWritable: true },  // user_usdc_ata
-        { pubkey: opts.userAssetAta, isSigner: false, isWritable: true }, // user_dest_ata
-        { pubkey: opts.treasuryUsdcAta, isSigner: false, isWritable: true }, // treasury_usdc_ata
-        { pubkey: opts.basketConfigPda, isSigner: false, isWritable: false }, // basket_config
-        { pubkey: RAYDIUM_CPMM_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: opts.pool.authority, isSigner: false, isWritable: false },
-        { pubkey: opts.pool.ammConfig, isSigner: false, isWritable: false },
-        { pubkey: opts.pool.poolState, isSigner: false, isWritable: true },
-        { pubkey: opts.pool.inputVault, isSigner: false, isWritable: true },
-        { pubkey: opts.pool.outputVault, isSigner: false, isWritable: true },
-        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: opts.usdcMint, isSigner: false, isWritable: false },
-        { pubkey: opts.assetMint, isSigner: false, isWritable: false },
-        { pubkey: opts.pool.observation, isSigner: false, isWritable: true },
-        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }, // token_program
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system_program
-      ],
-      data,
-    }),
-  ];
-
-  // Memo instruction rides along in the same transaction (client-side memo,
-  // mirrored by the in-program memo when the CPI path runs).
-  ixs.push(
-    new TransactionInstruction({
-      programId: MEMO_V2_PROGRAM_ID,
-      keys: [{ pubkey: opts.user, isSigner: true, isWritable: false }],
-      data: Buffer.from(opts.memo, "utf8"),
-    })
-  );
-
-  return compile(opts.relayer, opts.recentBlockhash, ixs);
-}
-
-/** SELL: swap_and_collect_leg(amount_in_asset, min_usdc_out, memo). */
-export async function buildProgramSellLeg(opts: ProgramBuildOpts & {
-  amountInAssetBase: number;
-  minUsdcOutBase: number;
-  memo: string;
-}): Promise<ProgramLegBuild> {
-  const data = Buffer.concat([
-    Buffer.from(DISC_SELL),
-    (() => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(opts.amountInAssetBase)); return b; })(),
-    (() => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(opts.minUsdcOutBase)); return b; })(),
-    borshString(opts.memo),
-  ]);
-
-  const ixs: TransactionInstruction[] = [
-    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1_000 }),
-    ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }),
-    new TransactionInstruction({
-      programId: KAIROS_ROUTER_PROGRAM_ID,
-      keys: [
-        { pubkey: opts.user, isSigner: true, isWritable: true },          // user
-        { pubkey: opts.globalConfigPda, isSigner: false, isWritable: false },
-        { pubkey: opts.userUsdcAta, isSigner: false, isWritable: true },  // user_usdc_ata
-        { pubkey: opts.userAssetAta, isSigner: false, isWritable: true }, // user_src_ata
-        { pubkey: opts.treasuryUsdcAta, isSigner: false, isWritable: true },
-        { pubkey: opts.basketConfigPda, isSigner: false, isWritable: false },
-        { pubkey: RAYDIUM_CPMM_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: opts.pool.authority, isSigner: false, isWritable: false },
-        { pubkey: opts.pool.ammConfig, isSigner: false, isWritable: false },
-        { pubkey: opts.pool.poolState, isSigner: false, isWritable: true },
-        // SELL: pool roles swapped vs the buy (asset vault in, USDC vault out).
-        { pubkey: opts.pool.inputVault, isSigner: false, isWritable: true },
-        { pubkey: opts.pool.outputVault, isSigner: false, isWritable: true },
-        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: opts.assetMint, isSigner: false, isWritable: false },
-        { pubkey: opts.usdcMint, isSigner: false, isWritable: false },
-        { pubkey: opts.pool.observation, isSigner: false, isWritable: true },
-        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      ],
-      data,
-    }),
-    new TransactionInstruction({
-      programId: MEMO_V2_PROGRAM_ID,
-      keys: [{ pubkey: opts.user, isSigner: true, isWritable: false }],
-      data: Buffer.from(opts.memo, "utf8"),
-    }),
-  ];
-
-  return compile(opts.relayer, opts.recentBlockhash, ixs);
-}
-
-/** PDA helpers shared with the seeder. */
-export const globalConfigPda = () =>
-  PublicKey.findProgramAddressSync([Buffer.from("global")], KAIROS_ROUTER_PROGRAM_ID)[0];
+export const globalConfigPda = () => PublicKey.findProgramAddressSync([Buffer.from("global")], KAIROS_ROUTER_PROGRAM_ID)[0];
 export const basketConfigPda = (basketId: string) =>
   PublicKey.findProgramAddressSync([Buffer.from("basket"), Buffer.from(basketId)], KAIROS_ROUTER_PROGRAM_ID)[0];
-
-/** ATA helper (classic token program) for callers. */
+export const basketVersionPda = (basketId: string, version: number) => {
+  const value = Buffer.alloc(4);
+  value.writeUInt32LE(version);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("version"), Buffer.from(basketId), value],
+    KAIROS_ROUTER_PROGRAM_ID
+  )[0];
+};
+export const basketVersionExtensionPda = (basketId: string, version: number) => {
+  const value = Buffer.alloc(4);
+  value.writeUInt32LE(version);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("version_extra"), Buffer.from(basketId), value],
+    KAIROS_ROUTER_PROGRAM_ID
+  )[0];
+};
 export const ataFor = (mint: PublicKey, owner: PublicKey) => getAssociatedTokenAddress(mint, owner);

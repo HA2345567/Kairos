@@ -2,25 +2,44 @@
   "name": "kairos-monorepo",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "bun@1.4.2",
   "workspaces": [
     "backend",
     "frontend"
   ],
   "scripts": {
-    "test": "bun test",
-    "test:backend": "bun test backend/tests",
-    "test:contracts": "bun test tests",
+    "test": "bun run test:backend && bun run test:frontend",
+    "verify": "bun run check:retention && bun run test",
+    "test:backend": "bun run --cwd backend test",
+    "test:frontend": "bun run --cwd frontend test",
+    "test:contracts": "bun test ./tests/kairos-router.ts --timeout 200000",
     "dev:backend": "bun --watch backend/src/index.ts",
     "dev:frontend": "bun --cwd frontend dev",
+    "start": "bun run start:backend",
+    "start:backend": "bun run --cwd backend start",
+    "start:frontend": "bun run --cwd frontend start",
+    "preview:frontend": "bun run --cwd frontend preview --host 127.0.0.1 --port 8080 --strictPort",
+    "demo": "bun run seed:catalog && bun run build:frontend && bun run --parallel start:backend preview:frontend",
+    "check:retention": "bun backend/scripts/check-retention-policy.ts",
+    "check:devnet": "bun backend/scripts/check-devnet.ts",
+    "check:demo": "bun scripts/check-demo.ts",
+    "check:program-interface": "bun scripts/check-program-interface.ts",
+    "seed:catalog": "bun backend/scripts/seed.ts --catalog-only",
     "build:backend": "bun build backend/src/index.ts --outdir backend/dist --target node",
+    "build": "bun run build:backend && bun run build:frontend",
     "build:frontend": "bun --cwd frontend build",
     "check:contracts": "cargo check"
   },
   "devDependencies": {
-    "@coral-xyz/anchor": "^0.30.1",
+    "@coral-xyz/anchor": "0.31.1",
+    "@playwright/test": "^1.64.1",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.0",
     "@types/node": "^22.13.0",
     "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "@solana/buffer-layout-utils": "^0.2.0",
+    "@solana/codecs": "2.0.0"
   }
 }

@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import type { CSSProperties, FC } from 'react';
 import { Renderer, Program, Mesh, Triangle, RenderTarget, Texture } from 'ogl';
 
 import './MicroSlats.css';
@@ -31,7 +32,7 @@ export interface MicroSlatsProps {
   introDuration?: number;
   paused?: boolean;
   className?: string;
-  style?: React.CSSProperties;
+  style?: CSSProperties;
 }
 
 const SWELL_PRESETS = {
@@ -378,7 +379,7 @@ void main() {
 }
 `;
 
-export const MicroSlats: React.FC<MicroSlatsProps> = ({
+export const MicroSlats: FC<MicroSlatsProps> = ({
   preset = 'swell',
   color = '#A855F7',
   glintColor = '#ffffff',
@@ -608,7 +609,7 @@ export const MicroSlats: React.FC<MicroSlatsProps> = ({
         width: w,
         height: h,
         depth: false,
-        type: gl.HALF_FLOAT,
+        type: (gl as any).HALF_FLOAT,
         format: gl.RGBA,
         internalFormat: (gl as any).RGBA16F || gl.RGBA,
         minFilter: gl.LINEAR,

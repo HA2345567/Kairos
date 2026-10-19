@@ -12,7 +12,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 export interface TokenPrice {
   mint: string;
   priceUsd: number;
-  change24h: number; // percent, e.g. 3.4 means +3.4%
+  change24h: number | null; // percent, e.g. 3.4 means +3.4%; null when provider has no value
 }
 
 type PriceMap = Record<string, TokenPrice>;
@@ -63,7 +63,7 @@ async function fetchLiveTokenPrices(mints: string[]): Promise<PriceMap> {
           const pair = bestPairByMint[mint];
           if (pair && pair.priceUsd) {
             const priceUsd = parseFloat(pair.priceUsd) || 0;
-            const change24h = typeof pair.priceChange?.h24 === "number" ? pair.priceChange.h24 : 0;
+            const change24h = typeof pair.priceChange?.h24 === "number" ? pair.priceChange.h24 : null;
             out[mint] = { mint, priceUsd, change24h };
           }
         }

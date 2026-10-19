@@ -1,8 +1,8 @@
 /**
  * Kairos devnet acceptance driver (PRD §11.4 / §14).
  *
- * Run from backend/ AFTER `npm run setup` has provisioned the mints and the
- * relayer has SOL:   KAIROS_E2E_WALLET=<path-to-keypair.json> npx tsx scripts/e2e-invest.ts
+ * Run from backend/ AFTER `bun run setup` has provisioned the mints and the
+ * relayer has SOL:   KAIROS_E2E_WALLET=<path-to-keypair.json> bun scripts/e2e-invest.ts
  * (omitting KAIROS_E2E_WALLET generates a throwaway wallet and prints its
  * secret so balances can be inspected on the explorer).
  *

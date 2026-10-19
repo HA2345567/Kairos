@@ -11,11 +11,12 @@ import {
   priceOf,
   resolveUsdcAsset,
 } from "../services/portfolio.service";
+import { positionResource, publishEvent } from "../services/event-stream";
 
 /**
  * Reconciler worker (PFOLIO lane, contracts.md §10; PRD §4.5).
  *
- * Every RECONCILE_INTERVAL_MS (default 5 min): for every ACTIVE/MODIFIED
+ * Every RECONCILE_INTERVAL_MS (default 30 s): for every ACTIVE/MODIFIED
  * position, compare REAL on-chain token balances against the stored
  * last_known_amount:
  *   - a leg differing by > 0.5% (and >= dust in USD) → position MODIFIED
@@ -34,7 +35,7 @@ import {
 /** Relative drift above which a leg counts as externally changed. */
 const DRIFT_TOLERANCE = 0.005; // 0.5%
 
-const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
+export const DEFAULT_RECONCILE_INTERVAL_MS = 30 * 1000;
 
 export interface ReconcileLegDiff {
   mint: string;
@@ -47,10 +48,22 @@ export interface ReconcileLegDiff {
 
 export interface ReconcileSummary {
   ranAt: string;
+  observationCommitment: "finalized";
+  observationSource: "reconciler";
+  /** True when the §14.3 chaos switch has the reconciler paused. */
+  paused?: boolean;
+  pausedUntil?: string;
   checked: number;
   modified: Array<{ positionId: string; walletAddress: string; reason: string; diffs: ReconcileLegDiff[] }>;
   absorbed: number;
   errors: Array<{ positionId: string; error: string }>;
+}
+
+export function reconcilerIntervalMs(raw = process.env.RECONCILE_INTERVAL_MS): number {
+  const configured = Number(raw);
+  if (!Number.isFinite(configured) || configured <= 0) return DEFAULT_RECONCILE_INTERVAL_MS;
+  // Keep the fallback bounded to the PRD's 30-second reconciliation target.
+  return Math.min(DEFAULT_RECONCILE_INTERVAL_MS, Math.max(1_000, Math.floor(configured)));
 }
 
 function errMsg(err: unknown): string {
@@ -65,14 +78,61 @@ function toUiAmount(rawBaseUnits: number, decimals: number): number {
  * One reconciliation pass over every ACTIVE/MODIFIED position. Never throws:
  * per-position failures are captured in the summary.
  */
+/**
+ * §14.3 chaos switch: `KAIROS_CHAOS_PAUSE_RECONCILER_MS` pauses reconciliation
+ * for the requested duration starting at process start (a 5-minute drill). The
+ * pause is reported in the summary so a drill has evidence, and it never masks
+ * an error — it is an explicit, time-boxed state.
+ */
+const chaosPauseStartMs = Date.now();
+
+function chaosPauseMs(): number {
+  if (config.chaos.pauseReconcilerMs !== undefined) return config.chaos.pauseReconcilerMs;
+  // Also read the environment at call time so a drill can be armed without
+  // depending on which module loaded config first (tests rely on this).
+  const raw = Number(process.env.KAIROS_CHAOS_PAUSE_RECONCILER_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 0;
+}
+
+export function reconcilerChaosPaused(now = Date.now()): number {
+  const pauseMs = chaosPauseMs();
+  if (pauseMs <= 0) return 0;
+  const until = chaosPauseStartMs + pauseMs;
+  return until > now ? until : 0;
+}
+
 export async function runReconcilerOnce(): Promise<ReconcileSummary> {
+  const pausedUntil = reconcilerChaosPaused();
+  if (pausedUntil > 0) {
+    return {
+      ranAt: new Date().toISOString(),
+      observationCommitment: "finalized",
+      observationSource: "reconciler",
+      paused: true,
+      pausedUntil: new Date(pausedUntil).toISOString(),
+      checked: 0,
+      modified: [],
+      absorbed: 0,
+      errors: [],
+    };
+  }
   // Simulation mode has no on-chain truth source — comparing stored ledger
   // amounts against a real chain would falsely flag every position MODIFIED.
   if (config.simulateLanding) {
-    return { ranAt: new Date().toISOString(), checked: 0, modified: [], absorbed: 0, errors: [] };
+    return {
+      ranAt: new Date().toISOString(),
+      observationCommitment: "finalized",
+      observationSource: "reconciler",
+      checked: 0,
+      modified: [],
+      absorbed: 0,
+      errors: [],
+    };
   }
   const summary: ReconcileSummary = {
     ranAt: new Date().toISOString(),
+    observationCommitment: "finalized",
+    observationSource: "reconciler",
     checked: 0,
     modified: [],
     absorbed: 0,
@@ -81,14 +141,14 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
 
   let positions: Position[];
   try {
-    positions = getAllKnownPositions().filter((p) => p.status === "ACTIVE" || p.status === "MODIFIED");
+    positions = (await getAllKnownPositions()).filter((p) => p.status === "ACTIVE" || p.status === "MODIFIED");
   } catch (err) {
     console.error(`[reconciler] failed to list positions: ${errMsg(err)}`);
     summary.errors.push({ positionId: "*", error: errMsg(err) });
     return summary;
   }
 
-  const usdc = resolveUsdcAsset();
+  const usdc = (await resolveUsdcAsset());
 
   for (const pos of positions) {
     if (pos.legs.length === 0) continue;
@@ -99,16 +159,22 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
       const onChain = await getTokenBalances(
         getConnection(),
         owner,
-        mints.map((m) => new PublicKey(m))
+        mints.map((m) => new PublicKey(m)),
+        "finalized"
       );
 
       const diffs: ReconcileLegDiff[] = [];
+      const observedAt = new Date().toISOString();
       for (const leg of pos.legs) {
-        const decimals = repository.getToken(leg.mint)?.decimals ?? 6;
+        const decimals = (await repository.getToken(leg.mint))?.decimals ?? 6;
         const raw = onChain[leg.mint] ?? 0;
         const onChainAmount = toUiAmount(raw, decimals);
         const lastKnown = leg.currentAmount;
-        const price = priceOf(leg.mint);
+        leg.currentAmount = onChainAmount;
+        leg.lastKnownAt = observedAt;
+        leg.lastKnownCommitment = "finalized";
+        leg.lastObservationSource = "reconciler";
+        const price = (await priceOf(leg.mint));
 
         const valueDeltaUsdc = Number((Math.abs(onChainAmount - lastKnown) * price).toFixed(4));
         const relative =
@@ -150,17 +216,13 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
           });
         }
 
-        // Absorb sub-tolerance drift so it never accumulates.
-        if (diffs.find((d) => d.mint === leg.mint) === undefined) {
-          leg.currentAmount = onChainAmount;
-        }
       }
 
       if (diffs.length > 0) {
         const reason = `RECONCILER: ${diffs.length} leg(s) changed externally (${diffs
           .map((d) => `${d.mint}${d.wentToZero ? " went to zero" : ` ${d.deltaPct}%`}`)
           .join(", ")})`;
-        portfolioService.markPositionModified(pos.id, reason, {
+        (await portfolioService.markPositionModified(pos.id, reason, {
           before: {
             legs: diffs.map((d) => ({ mint: d.mint, lastKnownAmount: d.lastKnownAmount })),
           },
@@ -169,6 +231,25 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
             status: "MODIFIED",
             autoRebalance: false,
           },
+        }));
+        for (const leg of pos.legs) {
+          await repository.recordPositionObservation(pos.id, leg.mint, leg.currentAmount, {
+            observedAt,
+            commitment: "finalized",
+            source: "reconciler",
+          });
+        }
+        // PRD §10: position.{id} stream, so a client learns about an external
+        // change without polling the whole portfolio.
+        publishEvent(positionResource(pos.id), "position.modified", {
+          positionId: pos.id,
+          status: "MODIFIED",
+          reason,
+          legs: diffs.map((d) => ({
+            mint: d.mint,
+            onChainAmount: d.onChainAmount,
+            wentToZero: d.wentToZero,
+          })),
         });
         summary.modified.push({
           positionId: pos.id,
@@ -181,11 +262,11 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
         // Re-price + persist absorbed amounts (values may still move with price).
         let total = 0;
         for (const leg of pos.legs) {
-          leg.currentValueUsd = Number((leg.currentAmount * priceOf(leg.mint)).toFixed(2));
+          leg.currentValueUsd = Number((leg.currentAmount * (await priceOf(leg.mint))).toFixed(2));
           total += leg.currentValueUsd;
         }
         pos.currentValueUsd = Number(total.toFixed(2));
-        portfolioService.persistRefresh(pos);
+        (await portfolioService.persistRefresh(pos));
         summary.absorbed += 1;
       }
     } catch (err) {
@@ -201,13 +282,13 @@ let timer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Start the reconciler loop: one guarded run immediately, then every
- * RECONCILE_INTERVAL_MS (default 5 min). Returns the interval handle so the
+ * RECONCILE_INTERVAL_MS (default 30 s). Returns the interval handle so the
  * boot path can clear it on shutdown.
  */
-export function startReconciler(): ReturnType<typeof setInterval> {
-  const intervalMs = Number(process.env.RECONCILE_INTERVAL_MS) || DEFAULT_INTERVAL_MS;
+export async function startReconciler(): Promise<ReturnType<typeof setInterval>> {
+  const intervalMs = reconcilerIntervalMs();
 
-  const tick = () => {
+  const tick = async () => {
     try {
       runReconcilerOnce()
         .then((summary) => {
@@ -223,7 +304,7 @@ export function startReconciler(): ReturnType<typeof setInterval> {
     }
   };
 
-  tick(); // initial run (guarded, non-blocking)
+  (await tick()); // initial run (guarded, non-blocking)
   timer = setInterval(tick, intervalMs);
   timer.unref?.(); // never keep the process alive just for the reconciler
   return timer;

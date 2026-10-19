@@ -1,4 +1,3 @@
-import React from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function BasketCardSkeleton() {
@@ -306,42 +305,6 @@ export function AdminSkeleton() {
               <Skeleton className="h-6 w-20 rounded-full bg-white/[0.05]" />
             </div>
           ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Pixel-perfect skeleton matching CreateBasket.tsx layout
- */
-export function CreateBasketSkeleton() {
-  return (
-    <div className="container py-8 lg:py-12 space-y-8 animate-pulse">
-      <Skeleton className="h-4 w-32 bg-white/[0.05] rounded" />
-      <div className="space-y-2 pb-2 border-b border-border/40">
-        <Skeleton className="h-5 w-48 rounded-full bg-white/[0.05]" />
-        <Skeleton className="h-9 w-64 bg-white/[0.09] rounded-lg" />
-        <Skeleton className="h-4 w-96 max-w-full bg-white/[0.04] rounded" />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <div className="lg:col-span-7 space-y-6">
-          <div className="rounded-2xl border border-border bg-surface p-6 space-y-4">
-            <Skeleton className="h-6 w-36 bg-white/[0.08] rounded" />
-            <Skeleton className="w-full h-11 rounded-xl bg-white/[0.04]" />
-            <Skeleton className="w-full h-24 rounded-xl bg-white/[0.04]" />
-          </div>
-          <div className="rounded-2xl border border-border bg-surface p-6 space-y-4">
-            <Skeleton className="h-6 w-44 bg-white/[0.08] rounded" />
-            <div className="space-y-3">
-              <Skeleton className="w-full h-16 rounded-xl bg-white/[0.04]" />
-              <Skeleton className="w-full h-16 rounded-xl bg-white/[0.04]" />
-            </div>
-          </div>
-        </div>
-        <div className="lg:col-span-5 space-y-4">
-          <Skeleton className="h-5 w-32 bg-white/[0.06] rounded" />
-          <Skeleton className="w-full h-[380px] rounded-2xl bg-white/[0.04]" />
         </div>
       </div>
     </div>

@@ -1,94 +1,82 @@
+<p align="center">
+  <img src="docs/assets/kairos-readme-hero.png" alt="Kairos — Your Taste. Your Investment." width="100%" />
+</p>
+
 <div align="center">
 
-# 🏛️ KAIROS — Non-Custodial Thematic Investment Router on Solana
+# Kairos — Thematic investing on Solana
 
-[![Solana](https://img.shields.io/badge/Solana-Mainnet_%26_Devnet-9945FF?style=for-the-badge&logo=solana&logoColor=white)](https://solana.com)
-[![Jupiter](https://img.shields.io/badge/Powered_by-Jupiter_CPI-00D182?style=for-the-badge)](https://jup.ag)
+**Your taste. Your investment.** Build a theme, choose its token allocation, and review a wallet-signed execution on Solana devnet.
+
+[![Solana](https://img.shields.io/badge/Solana-Devnet-9945FF?style=for-the-badge&logo=solana&logoColor=white)](https://solana.com)
+[![React](https://img.shields.io/badge/React-18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React_18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 
 <br />
 
+[Architecture](#architecture) · [Product capabilities](#product-capabilities) · [Baskets](#curated-thematic-baskets) · [Tech stack](#tech-stack) · [Quickstart](#quickstart) · [Security](#security-and-wallet-control)
+
+</div>
+
+## Architecture
+
+Kairos is a React web client backed by a TypeScript API, PostgreSQL, background workers, and a Solana Anchor router. Wallets retain signing authority; execution and recovery state are tracked by the backend.
+
 <p align="center">
-  <img src="docs/assets/kairos-hero.png" alt="Kairos Platform Hero" width="100%" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" />
+  <img src="docs/assets/kairos-architecture-diagram.png" alt="Kairos system architecture: web client, API, domain services, workers, PostgreSQL, providers, and Solana devnet" width="100%" />
 </p>
 
-### *"Your Taste. Your Investment."*
-
-**Curated high-conviction token baskets executed via Jupiter CPI.**  
-**Constituent tokens land directly in your own wallet — zero vaults, zero custody, zero lockups.**
+<p align="center"><em>Current delivery target: Solana devnet. Live routing depends on configured providers, pools, and router deployment.</em></p>
 
 ---
 
-</div>
+## Specification
+
+The normative product contract for this milestone is
+**[docs/PRD_V4.md](docs/PRD_V4.md)** (Kairos PRD v4.0, devnet only). Code, tests,
+UI copy, and audits are measured against it. Current status against that contract
+is tracked in [docs/PRD_V4_COVERAGE_AUDIT.md](docs/PRD_V4_COVERAGE_AUDIT.md).
+The earlier product contract has been superseded by this devnet-scoped PRD v4.
+
+## Current delivery contract
+
+Kairos is a **devnet-first, non-custodial** Solana application. The local test and
+build paths are reproducible without RPC access, a database account, or private
+keys. Live devnet execution, router deployment, and oracle history require the
+operator credentials described in `backend/.env.example` and are intentionally
+not claimed by the offline checks.
+
+- Runtime: Bun `1.4.2` (pinned by `.bun-version`, `package.json`, and `Dockerfile`).
+- Persistence: PostgreSQL in deployment; PGlite-backed in-memory tests.
+- Network: Solana devnet by default; mainnet is not a supported delivery target.
+- Test command: `make test` (equivalent to `bun run test`).
+- Secrets: never commit `.env`; use the tracked example templates.
 
 ## 📖 Executive Summary
 
 Navigating decentralized finance and crypto markets requires managing dozens of volatile assets across isolated protocols. Traditional index products force users into synthetic vault contracts, introducing liquidation risk, manager lockups, and smart contract counterparty exposure.
 
 **Kairos** pioneers non-custodial thematic investing on Solana:
-- **Zero Custody**: You never deposit assets into an opaque custodial pool. In a single atomic transaction, SOL or USDC is routed through Jupiter CPI and split according to target basket allocations.
+- **Zero Custody**: The quote/prepare/submit flow targets the user's wallet. Program-backed atomic routing is enabled only after the configured devnet router is deployed and initialized.
 - **Direct Wallet Ownership**: Every underlying token lands straight into your self-custodial wallet (Phantom, Solflare, Backpack).
-- **Instant Liquidity**: Exit or rebalance any token anytime on any DEX without redemption queues or platform dependencies.
-- **Institutional-Grade Analytics**: Real-time NAV computation, candlestick charting with technical indicators (SMA/EMA), alpha tracking against BTC and SOL benchmarks, and downloadable audit ledgers.
+- **Recovery-aware execution**: Landing, receipt checks, retries, close, and recovery state are persisted in PostgreSQL.
+- **Explicit data status**: Provider snapshots and registry fallback data are labelled; unavailable history is not fabricated.
 
 ---
 
-## ⚡ Key Architectural Features
+## Product capabilities
 
-```
-                      ┌───────────────────────────────────────┐
-                      │             KAIROS CLIENT             │
-                      │   (React + Solana Wallet Adapter)     │
-                      └──────────────────┬────────────────────┘
-                                         │ 1. Select Basket & Allocation
-                                         ▼
-                      ┌───────────────────────────────────────┐
-                      │          FASTIFY BACKEND API          │
-                      │    (Real-Time Feeds & Quoting Engine) │
-                      └───────┬───────────────────────┬───────┘
-                              │                       │
-           2. DexScreener Live│                       │ 3. Optimal Multi-Route
-              Pricing & NAV   │                       │    Quote Construction
-                              ▼                       ▼
-                      ┌──────────────┐        ┌───────────────┐
-                      │  DexScreener │        │  Jupiter API  │
-                      └──────────────┘        └───────┬───────┘
-                                                      │
-                               4. Atomic Transaction Payload
-                                                      ▼
-                      ┌───────────────────────────────────────┐
-                      │         SOLANA ANCHOR PROGRAM         │
-                      │      (kairos-router / Jupiter CPI)    │
-                      └──────────────────┬────────────────────┘
-                                         │ 5. Atomic Execution & Token Distribution
-                                         ▼
-                      ┌───────────────────────────────────────┐
-                      │          USER SOLANA WALLET           │
-                      │  Tokens Received Directly & Instantly │
-                      └───────────────────────────────────────┘
-```
+- **Wallet-controlled execution** — investors approve and sign transactions with their connected wallet; Kairos does not store wallet private keys.
+- **Quote-bound trading** — the API builds signed transaction payloads and records execution state for landing, confirmation, and recovery.
+- **Portfolio and market views** — browse baskets, inspect token allocations, and review available price and performance data with its source status.
+- **Kairos Labs** — create and curate thematic baskets, subject to the app's current publishing and moderation controls.
 
-### 1. 🛡️ 100% Non-Custodial Architecture
-Unlike legacy fund managers or synthetic index tokens that mint wrapped derivatives (e.g. Set Protocol), Kairos uses atomic swap splitting. If a basket contains `40% JUP`, `30% JTO`, and `30% PYTH`, your investment is atomically routed and deposited as native SPL tokens into your personal token accounts.
-
-### 2. ⚡ Jupiter CPI Engine
-Kairos integrates directly with Jupiter Aggregator via Cross-Program Invocation (CPI) and the Jupiter v6 Swap API to guarantee best-execution routing, sub-second execution speeds, and minimal slippage across all Solana automated market makers (Raydium, Orca, Whirlpools, Meteora).
-
-### 3. 📊 Real-Time Technical Analysis Suite
-Every curated basket features a comprehensive market analysis interface:
-- **Interactive Candlestick & Area Charts**: Powered by TradingView Lightweight Charts with dynamic timeframe resolution (24H, 7D, 30D, 1Y, ALL).
-- **Technical Indicators**: Toggleable Simple Moving Average (SMA 20) and Exponential Moving Average (EMA 50) overlays.
-- **Benchmark Alpha Comparison**: Relative performance tracking against Solana ($SOL) and Bitcoin ($BTC).
-- **Historical Ledger & CSV Export**: Complete historical Net Asset Value (NAV) ledgers with direct CSV export for accounting and tax reporting.
-
-### 4. 🧪 Kairos Labs: Permissionless Basket Creation
-Create, configure, and curate custom thematic indices in minutes. Define custom asset weights, target rebalance thresholds, theme metadata, and publish them to the community explorer.
+The app is devnet-first. Router execution depends on the configured program, RPC, and swap pools; the architecture image describes the system boundary, not a claim that every external integration is live.
 
 ---
 
-## 🎯 Curated Thematic Baskets
+## Curated thematic baskets
 
 | # | Basket Name | Focus Theme | Key Constituents | Target Strategy |
 |---|-------------|-------------|------------------|-----------------|
@@ -105,7 +93,7 @@ Create, configure, and curate custom thematic indices in minutes. Define custom 
 
 ---
 
-## 💻 Tech Stack
+## Tech stack
 
 ### Frontend Client
 - **Framework**: [React 18](https://react.dev/) + [Vite](https://vitejs.dev/)
@@ -116,105 +104,163 @@ Create, configure, and curate custom thematic indices in minutes. Define custom 
 - **Icons & Motion**: Lucide React, Framer Motion
 
 ### Backend Engine
-- **Framework**: [Fastify](https://fastify.dev/) (High-throughput Node.js / Bun server)
+- **Framework**: TypeScript HTTP service running on Bun
 - **Language**: TypeScript
-- **Database / Cache**: Prisma ORM, SQLite / PostgreSQL
-- **Oracles & Price Aggregation**: DexScreener API, CoinGecko Pro, Pyth Network
-- **Trading Aggregation**: Jupiter v6 Swap & Price APIs
+- **Database**: PostgreSQL with PGlite-backed offline tests
+- **Price snapshots**: Pyth Hermes when configured; registry rates remain explicitly labelled test/devnet data
+- **Execution**: signed Solana transaction builders and the Kairos Anchor router where the devnet program is deployed
 
 ### On-Chain Programs
-- **Framework**: [Anchor Framework 0.30+](https://www.anchor-lang.com/)
+- **Framework**: [Anchor Framework 0.31.1](https://www.anchor-lang.com/)
 - **Language**: Rust
 - **Target**: Solana Sealevel Virtual Machine (SVM)
 
 ---
 
-## 🚀 Quickstart & Local Development
+## Quickstart
 
 ### Prerequisites
-- [Bun](https://bun.sh/) (v1.1+ recommended) or [Node.js](https://nodejs.org/) (v20+)
-- [Rust & Cargo](https://rustup.rs/) (v1.75+)
-- [Solana CLI](https://docs.solanalabs.com/cli/install) (v1.18+)
-- [Anchor CLI](https://www.anchor-lang.com/docs/installation) (v0.30.0+)
 
----
+- [Bun](https://bun.sh/) `1.4.2` (the version in `.bun-version`)
+- [Rust & Cargo](https://rustup.rs/) for program checks
+- [Solana CLI](https://docs.solanalabs.com/cli/install) and [Anchor CLI](https://www.anchor-lang.com/docs/installation) for on-chain work
+- Docker is optional; it is not needed for `make test`
 
-### 1. Repository Setup
+### 1. Repository setup
 
 ```bash
-# Clone the repository
-git clone https://github.com/HA2345567/Kairos.git
-cd Kairos
-
-# Install root dependencies
-bun install
+bun --version                 # must print 1.4.2
+bun install --frozen-lockfile
 ```
 
----
+The root `bun.lock` covers both workspaces. Dependencies are installed locally;
+do not install project packages globally.
 
-### 2. Frontend Development
+### 2. Configure local environment files
 
 ```bash
-# Navigate to frontend directory
-cd frontend
+# POSIX shells
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 
-# Install dependencies
-bun install
-
-# Configure environment variables
-cp .env.example .env
-
-# Start the Vite development server
-bun dev
+# Windows PowerShell equivalents:
+# Copy-Item backend/.env.example backend/.env
+# Copy-Item frontend/.env.example frontend/.env
 ```
 
-The frontend will be live at `http://localhost:8080`.
+For a real backend run, set `DATABASE_URL`, `RELAYER_KEYPAIR`, and a fresh
+`JWT_SECRET` in `backend/.env`. Keep these values local. The frontend template
+only contains public `VITE_*` settings.
 
----
-
-### 3. Backend Development Server
+### 3. Local development
 
 ```bash
-# Navigate to backend directory
-cd backend
+# Terminal 1: backend on http://localhost:3001
+bun run start:backend
 
-# Install dependencies
-bun install
-
-# Configure environment variables
-cp .env.example .env
-
-# Run database migrations
-bun prisma migrate dev
-
-# Start backend server
-bun dev
+# Terminal 2: frontend on http://localhost:3000
+bun run start:frontend
 ```
 
-The backend API will start at `http://localhost:3000`.
+Vite proxies `/api`, `/v1`, `/health`, and `/ws` to the backend during local
+development. `make run-backend` and `make run-frontend` are equivalent aliases.
 
----
-
-### 4. Solana Smart Program (Optional / Local Validator)
+For a demo rehearsal, run the two services together and then use the browser
+smoke checker:
 
 ```bash
-# Build the Anchor program
+bun run demo
+# In a second terminal:
+bun run check:demo
+```
+
+The demo command seeds a planned devnet catalog when needed, builds the frontend, then serves it at `http://127.0.0.1:8080`; the API is at
+`http://127.0.0.1:3001`. The preview proxies the API routes. The checker captures screenshots under
+`target/demo/` and verifies `/`, `/markets`, `/portfolio`, `/labs`, and `/admin`.
+
+For a pitch walkthrough, use the production frontend build and the configured
+PostgreSQL backend together:
+
+```bash
+bun run build
+bun run demo
+```
+
+Open `http://localhost:3000`. This uses the existing backend configuration; it
+does not simulate successful transactions. `bun run check:devnet` reports the
+signer balance, program deployment state, and estimated deployment rent without
+printing secrets. Live investing requires initialized devnet tokens and pools.
+
+### 4. Offline checks
+
+```bash
+# Required single test command; no RPC, Postgres account, or secrets needed.
+make test
+
+# Other local checks
+make build
+bun run --cwd backend typecheck
+bun run check:contracts
+```
+
+The backend tests use an in-memory PGlite database. Tests that require a live
+validator remain visible as documented skips; a skipped devnet test is not a
+claim that the network flow works.
+
+### 5. Docker build and run
+
+The Dockerfile uses the pinned Bun image, installs the system certificates and
+HTTP server needed by the image, installs from the frozen lockfile, and builds
+both workspaces. Docker is not required for `make test`.
+
+```bash
+# Build the image. Optionally bake a different API URL into the SPA.
+docker build --tag kairos:dev .
+
+# Run the backend API; backend/.env is local and must not be committed.
+docker run --rm --env-file backend/.env -p 3001:3001 kairos:dev
+
+# Run the already-built frontend instead.
+docker run --rm -e KAIROS_SERVICE=frontend -p 8080:8080 kairos:dev
+```
+
+### 6. Devnet setup and deployment
+
+These commands require a funded operator wallet, RPC access, and a PostgreSQL
+database. They are not part of the offline test contract.
+
+```bash
+# Prepare devnet registry/mint state after configuring backend/.env.
+bun run --cwd backend setup
+bun run --cwd backend seed
+
+# Build and deploy the Anchor program only when the deployment wallet is ready.
 anchor build
+anchor deploy --provider.cluster devnet
+```
 
-# Run local program tests
+For an OCI deployment, build and push `kairos:dev` (or a versioned tag), then
+provide the same environment variables through the platform's secret manager.
+Never put RPC keys, database credentials, relayer keypairs, admin tokens, or
+JWT secrets in the image, README, or repository.
+
+### 7. Solana smart program checks (optional)
+
+```bash
+anchor build
 anchor test
 ```
 
 ---
 
-## 📂 Repository Structure
+## Repository structure
 
 ```
 kairos/
-├── backend/                  # Fastify REST API, price indexing & quoting engine
+├── backend/                  # TypeScript API, PostgreSQL repository & workers
 │   ├── src/
 │   │   ├── routes/           # Baskets, prices, swaps, and analytics endpoints
-│   │   ├── services/         # Jupiter quoting, DexScreener caching & ledger
+│   │   ├── services/         # Quoting, execution, recovery & fee ledger
 │   │   └── config.ts         # Server configuration & environment validation
 │   └── tests/                # Backend unit and integration test suite
 │
@@ -237,6 +283,8 @@ kairos/
 │
 ├── docs/                     # Technical documentation & brand assets
 │   ├── assets/               # Screenshots, banners, hero previews
+│   ├── PRD_V4.md             # Normative product contract (devnet scope)
+│   ├── PRD_V4_COVERAGE_AUDIT.md # Current requirement coverage & gaps
 │   ├── BACKEND_DELIVERY.md   # Backend architecture & schema reference
 │   └── KEY_ROTATION.md       # Production key management & operational security
 │
@@ -247,15 +295,16 @@ kairos/
 
 ---
 
-## 🔐 Security & Non-Custodial Guarantee
+## Security and wallet control
 
-1. **No Intermediary Custody**: Kairos smart contracts never hold custody of investor capital. Every swap instruction routes funds through Jupiter and sends output tokens directly to your wallet within the exact same atomic transaction slot.
-2. **Deterministic Slippage**: All transactions specify strict slippage bounds across each constituent asset. If any sub-swap fails slippage checks, the entire transaction reverts safely.
-3. **No Private Key Retention**: Kairos operates completely client-side for signing. Transactions are constructed deterministically and handed over to standard Solana wallet adapters.
+- **Wallet signatures stay with the user.** Kairos builds transactions for the connected wallet to review and sign; wallet private keys are not sent to the API.
+- **Execution is stateful and recoverable.** The backend records transaction and recovery state so workers can track landing and confirmation.
+- **Network scope is explicit.** The supported delivery target is Solana devnet. Mainnet execution is not claimed by this README.
+- **Keep secrets out of Git.** Store RPC credentials, database passwords, relayer keys, admin tokens, and JWT secrets in local environment files or a deployment secret manager.
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the [MIT License](LICENSE).
 

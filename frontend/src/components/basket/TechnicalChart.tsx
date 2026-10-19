@@ -1,413 +1,191 @@
-import React, { useState, useMemo } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
-  ResponsiveContainer,
-  AreaChart,
   Area,
-  Line,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  Tooltip,
-  CartesianGrid,
-  ReferenceLine,
 } from "recharts";
-import {
-  computeTechnicalIndicators,
-  type TechnicalPoint,
-  type TechnicalSummary,
-} from "@/lib/technical-analysis";
-import type { Basket } from "@/lib/baskets-data";
-import {
-  Activity,
-  ArrowUpRight,
-  ArrowDownRight,
-  TrendingUp,
-  ShieldAlert,
-  Gauge,
-  SlidersHorizontal,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Maximize2, Minimize2 } from "lucide-react";
+
+export type HistoricalPeriod = "1W" | "1M" | "6M" | "1Y" | "3Y";
 
 interface TechnicalChartProps {
-  basket: Basket;
   rawHistory: { timestamp: number; navValue: number }[];
   isLoading?: boolean;
+  isFetching?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
   mobile?: boolean;
+  disclaimer?: string;
+  title?: string;
+  period: HistoricalPeriod;
+  onPeriodChange: (period: HistoricalPeriod) => void;
+  progress?: { loaded: number; publicMarkets: number; basketAssets: number; coverageWeightBps: number; pendingSymbols: string[] };
+  complete?: boolean;
+  availableFrom?: number | null;
 }
 
-type TimePeriod = "1W" | "1M" | "3M" | "ALL";
-type ChartMode = "NAV" | "SMA" | "RSI" | "DRAWDOWN";
+const PERIODS = { "1W": 7, "1M": 30, "6M": 183, "1Y": 365, "3Y": 1095 } as const;
 
 export function TechnicalChart({
-  basket,
   rawHistory,
   isLoading = false,
+  isFetching = false,
+  isError = false,
+  onRetry,
   mobile = false,
+  disclaimer,
+  title = "Historical Performance",
+  period,
+  onPeriodChange,
+  progress,
+  complete,
+  availableFrom,
 }: TechnicalChartProps) {
-  const [period, setPeriod] = useState<TimePeriod>("ALL");
-  const [chartMode, setChartMode] = useState<ChartMode>("NAV");
-  const [showSma, setShowSma] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+  const gradientId = useId().replace(/:/g, "");
+  const points = useMemo(() => {
+    const end = rawHistory[rawHistory.length - 1]?.timestamp ?? 0;
+    const days = PERIODS[period];
+    return rawHistory
+      .filter((point) => point.timestamp >= end - days * 86_400_000)
+      .map((point) => ({
+      ...point,
+      date: new Date(point.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    }));
+  }, [period, rawHistory]);
 
-  // Filter raw points by period
-  const filteredHistory = useMemo(() => {
-    if (!rawHistory || rawHistory.length === 0) return [];
-    if (period === "ALL") return rawHistory;
-
-    const now = rawHistory[rawHistory.length - 1].timestamp;
-    let cutoffMs = 0;
-    if (period === "1W") cutoffMs = 7 * 86400 * 1000;
-    else if (period === "1M") cutoffMs = 30 * 86400 * 1000;
-    else if (period === "3M") cutoffMs = 90 * 86400 * 1000;
-
-    const filtered = rawHistory.filter((p) => p.timestamp >= now - cutoffMs);
-    // Ensure at least 2 points
-    return filtered.length >= 2 ? filtered : rawHistory.slice(-Math.min(rawHistory.length, 14));
-  }, [rawHistory, period]);
-
-  // Compute indicators
-  const { points, summary } = useMemo(() => {
-    return computeTechnicalIndicators(filteredHistory);
-  }, [filteredHistory]);
-
-  const hasData = points.length > 0;
-  const isPositive = summary.currentReturnPct >= 0;
-
-  // Min and max for domain
-  const { minNav, maxNav } = useMemo(() => {
-    if (!hasData) return { minNav: 0, maxNav: 100 };
-    const values = points.map((p) => p.navValue);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const pad = (max - min) * 0.08 || 0.05;
-    return {
-      minNav: Math.max(0, Number((min - pad).toFixed(4))),
-      maxNav: Number((max + pad).toFixed(4)),
+  useEffect(() => {
+    if (!expanded) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExpanded(false);
     };
-  }, [points, hasData]);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [expanded]);
+
+  const first = points[0]?.navValue ?? null;
+  const last = points[points.length - 1]?.navValue ?? null;
+  const returnPct = first !== null && first > 0 && last !== null && points.length > 1
+    ? ((last / first) - 1) * 100
+    : null;
+  const positive = returnPct === null || returnPct >= 0;
+  const chartColor = returnPct === null ? "#8f8f8f" : positive ? "#228b22" : "#f87171";
 
   return (
-    <div className={cn("panel technical-chart-panel", mobile && "performance-mobile")}>
-      {/* Header with Title and Period Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+    <div
+      id="historical-chart"
+      className={cn("technical-chart-panel", mobile && "performance-mobile", expanded && "is-expanded")}
+      aria-label="Historical basket performance chart"
+    >
+      <header className="historical-chart-header">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
-              Real Historical NAV & Technicals
-            </h2>
-            <span className="flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-surface-muted border border-border text-foreground">
-              <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              SOLANA
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Real basket NAV curve, 20-day Simple Moving Average, RSI (14), and risk metrics.
+          <h2 className="historical-chart-title">{title}</h2>
+          <p className="historical-chart-caption">
+            Modeled basket NAV from available history. Not realized investor returns.
           </p>
+          {disclaimer && <p className="historical-chart-caption">{disclaimer}</p>}
         </div>
-
-        {/* Period Selector */}
-        <div className="flex items-center gap-1 bg-surface-muted/60 p-1 rounded-xl border border-border">
-          {(["1W", "1M", "3M", "ALL"] as TimePeriod[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={cn(
-                "px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer",
-                period === p
-                  ? "bg-surface text-foreground font-bold shadow-sm border border-border"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main KPI Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 p-4 rounded-xl bg-surface border border-border">
-        <div>
-          <span className="text-[11px] font-mono text-muted-foreground uppercase">CURRENT NAV</span>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-foreground mt-0.5">
-            {summary.currentNav > 0 ? `$${summary.currentNav.toFixed(4)}` : "—"}
-          </div>
-        </div>
-
-        <div>
-          <span className="text-[11px] font-mono text-muted-foreground uppercase">{period} RETURN</span>
-          <div
-            className={cn(
-              "text-xl sm:text-2xl font-bold font-mono flex items-center gap-1 mt-0.5",
-              isPositive ? "text-emerald-400" : "text-rose-400"
-            )}
-          >
-            {isPositive ? <ArrowUpRight className="size-5 shrink-0" /> : <ArrowDownRight className="size-5 shrink-0" />}
-            {isPositive ? "+" : ""}
-            {summary.currentReturnPct.toFixed(2)}%
-          </div>
-        </div>
-
-        <div>
-          <span className="text-[11px] font-mono text-muted-foreground uppercase">RSI (14)</span>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-xl sm:text-2xl font-bold font-mono text-foreground">
-              {summary.rsi14 ? summary.rsi14.toFixed(1) : "—"}
-            </span>
-            <span
-              className={cn(
-                "text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold border",
-                summary.rsiSignal === "Overbought" && "bg-rose-500/10 text-rose-400 border-rose-500/20",
-                summary.rsiSignal === "Bullish Momentum" && "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-                summary.rsiSignal === "Neutral" && "bg-surface-muted text-muted-foreground border-border",
-                summary.rsiSignal === "Bearish Pressure" && "bg-amber-500/10 text-amber-400 border-amber-500/20",
-                summary.rsiSignal === "Oversold" && "bg-blue-500/10 text-blue-400 border-blue-500/20"
-              )}
-            >
-              {summary.rsiSignal}
-            </span>
-          </div>
-        </div>
-
-        <div>
-          <span className="text-[11px] font-mono text-muted-foreground uppercase">ANNUALIZED VOL (σ)</span>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-foreground mt-0.5">
-            {summary.annualizedVolatilityPct > 0 ? `${summary.annualizedVolatilityPct.toFixed(1)}%` : "—"}
-          </div>
-        </div>
-      </div>
-
-      {/* Chart View Mode Toggle Bar */}
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <div className="flex items-center gap-1 text-xs">
-          <button
-            onClick={() => setChartMode("NAV")}
-            className={cn(
-              "px-2.5 py-1 rounded-lg border font-medium transition-colors cursor-pointer",
-              chartMode === "NAV"
-                ? "bg-surface text-foreground border-border font-bold shadow-sm"
-                : "text-muted-foreground border-transparent hover:text-foreground hover:bg-surface-muted"
-            )}
-          >
-            NAV Price
-          </button>
-          <button
-            onClick={() => setChartMode("RSI")}
-            className={cn(
-              "px-2.5 py-1 rounded-lg border font-medium transition-colors cursor-pointer",
-              chartMode === "RSI"
-                ? "bg-surface text-foreground border-border font-bold shadow-sm"
-                : "text-muted-foreground border-transparent hover:text-foreground hover:bg-surface-muted"
-            )}
-          >
-            RSI Oscillator
-          </button>
-          <button
-            onClick={() => setChartMode("DRAWDOWN")}
-            className={cn(
-              "px-2.5 py-1 rounded-lg border font-medium transition-colors cursor-pointer",
-              chartMode === "DRAWDOWN"
-                ? "bg-surface text-foreground border-border font-bold shadow-sm"
-                : "text-muted-foreground border-transparent hover:text-foreground hover:bg-surface-muted"
-            )}
-          >
-            Drawdown %
-          </button>
-        </div>
-
-        {chartMode === "NAV" && (
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={showSma}
-              onChange={(e) => setShowSma(e.target.checked)}
-              className="rounded accent-emerald-500 cursor-pointer"
-            />
-            <span>20 SMA</span>
+        <div className="historical-chart-controls">
+          <label className="historical-chart-mobile-range">
+            <span className="sr-only">Select time range</span>
+            <select value={period} onChange={(event) => onPeriodChange(event.target.value as HistoricalPeriod)} aria-label="Select time range">
+              {(Object.keys(PERIODS) as HistoricalPeriod[]).map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
           </label>
-        )}
+          <div className="historical-chart-ranges" role="group" aria-label="Chart time range">
+            {(Object.keys(PERIODS) as HistoricalPeriod[]).map((value) => (
+              <button key={value} type="button" aria-pressed={period === value} onClick={() => onPeriodChange(value)}>
+                {value}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="historical-chart-expand"
+            onClick={() => setExpanded((value) => !value)}
+            aria-label={expanded ? "Collapse chart" : "Expand chart"}
+            title={expanded ? "Collapse chart" : "Expand chart"}
+          >
+            {expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+        </div>
+      </header>
+
+      <div className="historical-chart-stats">
+        <span>Current index <b>{last?.toFixed(4) ?? "—"}</b></span>
+        <span>Window return <b className={positive ? "is-positive" : "is-negative"}>
+          {returnPct === null ? "—" : `${positive ? "+" : ""}${returnPct.toFixed(2)}%`}
+        </b></span>
+        {isFetching && !isLoading && <span className="historical-chart-refresh">Updating</span>}
       </div>
 
-      {/* Recharts Container */}
-      <div className="w-full h-[260px] sm:h-[300px]">
+      <div className="historical-chart-plot">
         {isLoading ? (
-          <div className="w-full h-full flex items-center justify-center bg-surface/40 rounded-xl border border-border">
-            <span className="text-xs font-mono text-muted-foreground animate-pulse">Loading technical series...</span>
+          <div className="grid h-full place-items-center rounded-xl border border-border bg-surface/40 text-xs text-muted-foreground">
+            Loading basket history…
           </div>
-        ) : !hasData ? (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-surface/40 rounded-xl border border-border p-6 text-center">
-            <p className="text-sm font-semibold text-foreground/80 mb-1">No historical points recorded</p>
-            <p className="text-xs text-muted-foreground">Historical daily data will be populated as markets trade.</p>
+        ) : isError && points.length < 2 ? (
+          <div className="historical-chart-empty" role="status">
+            <p className="historical-chart-empty-title">Couldn’t load basket history</p>
+            <p className="historical-chart-empty-copy">Market history is temporarily unavailable. Try again shortly.</p>
+            {onRetry && <button type="button" className="historical-chart-retry" onClick={onRetry}>Retry</button>}
           </div>
-        ) : chartMode === "RSI" ? (
-          /* RSI Oscillator View */
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={points} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="rsiGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop stopColor="#a855f7" stopOpacity={0.25} />
-                  <stop offset="1" stopColor="#a855f7" stopOpacity={0.0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
-              <XAxis dataKey="dateStr" tick={{ fill: "#737373", fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis domain={[0, 100]} ticks={[30, 50, 70]} tick={{ fill: "#737373", fontSize: 11 }} tickLine={false} axisLine={false} />
-              <ReferenceLine y={70} stroke="#ef4444" strokeDasharray="3 3" label={{ value: "Overbought (70)", fill: "#ef4444", fontSize: 10 }} />
-              <ReferenceLine y={30} stroke="#3b82f6" strokeDasharray="3 3" label={{ value: "Oversold (30)", fill: "#3b82f6", fontSize: 10 }} />
-              <ReferenceLine y={50} stroke="#525252" strokeDasharray="2 2" />
-              <Tooltip
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0].payload as TechnicalPoint;
-                  return (
-                    <div className="rounded-xl border border-border bg-[#1A1A1A] p-3 shadow-2xl text-xs font-mono">
-                      <div className="text-text-muted mb-1">{d.dateStr}</div>
-                      <div className="text-purple-400 font-bold">RSI (14): {d.rsi14 ?? "—"}</div>
-                      <div className="text-text-primary">NAV: ${d.navValue.toFixed(4)}</div>
-                    </div>
-                  );
-                }}
-              />
-              <Area type="monotone" dataKey="rsi14" stroke="#a855f7" strokeWidth={2} fill="url(#rsiGrad)" dot={false} isAnimationActive={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        ) : chartMode === "DRAWDOWN" ? (
-          /* Drawdown % View */
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={points} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop stopColor="#ef4444" stopOpacity={0.0} />
-                  <stop offset="1" stopColor="#ef4444" stopOpacity={0.3} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
-              <XAxis dataKey="dateStr" tick={{ fill: "#737373", fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fill: "#737373", fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
-              <Tooltip
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0].payload as TechnicalPoint;
-                  return (
-                    <div className="rounded-xl border border-border bg-[#1A1A1A] p-3 shadow-2xl text-xs font-mono">
-                      <div className="text-text-muted mb-1">{d.dateStr}</div>
-                      <div className="text-rose-400 font-bold">Drawdown: {d.drawdownPct}%</div>
-                      <div className="text-text-primary">NAV: ${d.navValue.toFixed(4)}</div>
-                    </div>
-                  );
-                }}
-              />
-              <Area type="monotone" dataKey="drawdownPct" stroke="#ef4444" strokeWidth={2} fill="url(#ddGrad)" dot={false} isAnimationActive={false} />
-            </AreaChart>
-          </ResponsiveContainer>
+        ) : points.length < 2 ? (
+          <div className="historical-chart-empty">
+            {progress && progress.publicMarkets > 0 && progress.loaded < progress.publicMarkets ? (
+              <>
+                <span className="historical-chart-loader" aria-hidden="true" />
+                <p className="historical-chart-empty-title">Building the basket history</p>
+                <p className="historical-chart-empty-copy">Historical pools loaded: {progress.loaded} of {progress.publicMarkets}. The chart will fill as source candles arrive.</p>
+              </>
+            ) : (
+              <>
+                <p className="historical-chart-empty-title">No historical NAV available</p>
+                <p className="historical-chart-empty-copy">No verified public pool history is available for the selected period.</p>
+              </>
+            )}
+          </div>
         ) : (
-          /* Primary NAV Price & SMA View */
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={points} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+            <AreaChart data={points} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
               <defs>
-                <linearGradient id="navGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity={0.22} />
-                  <stop offset="1" stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity={0.0} />
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop stopColor="#737373" stopOpacity={0.12} />
+                  <stop offset="1" stopColor="#737373" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
-              <XAxis dataKey="dateStr" tick={{ fill: "#737373", fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis
-                domain={[minNav, maxNav]}
-                tick={{ fill: "#737373", fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v) => `$${v >= 10 ? v.toFixed(1) : v.toFixed(2)}`}
-              />
+              <CartesianGrid stroke="#303030" strokeDasharray="3 5" vertical={false} />
+              <XAxis dataKey="date" tick={{ fill: "#8f8f8f", fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={24} />
+              <YAxis domain={["auto", "auto"]} tick={{ fill: "#8f8f8f", fontSize: 11 }} tickLine={false} axisLine={false} width={48} />
               <Tooltip
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0].payload as TechnicalPoint;
+                content={({ active, payload, label }) => {
+                  const navPoint = payload?.find((item) => item.dataKey === "navValue");
+                  if (!active || !navPoint) return null;
                   return (
-                    <div className="rounded-xl border border-border bg-[#1A1A1A] p-3.5 shadow-2xl text-xs font-mono min-w-[170px]">
-                      <div className="text-text-muted mb-1.5 flex items-center justify-between">
-                        <span>{d.dateStr}</span>
-                        <span className={d.returnPct >= 0 ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>
-                          {d.returnPct >= 0 ? "+" : ""}
-                          {d.returnPct}%
-                        </span>
-                      </div>
-                      <div className="text-sm font-bold text-text-primary mb-1">
-                        NAV: ${d.navValue.toFixed(4)}
-                      </div>
-                      {d.sma20 && (
-                        <div className="text-amber-400 text-[11px]">
-                          20 SMA: ${d.sma20.toFixed(4)}
-                        </div>
-                      )}
-                      {d.rsi14 && (
-                        <div className="text-purple-400 text-[11px] mt-0.5">
-                          RSI (14): {d.rsi14}
-                        </div>
-                      )}
+                    <div style={{ background: "#242424", border: "1px solid #383838", borderRadius: 10, padding: "8px 10px", fontSize: 12 }}>
+                      <p style={{ margin: "0 0 4px", color: "#a0a0a0" }}>{label}</p>
+                      <strong style={{ color: "#f5f5f5" }}>{Number(navPoint.value).toFixed(4)} basket index</strong>
                     </div>
                   );
                 }}
               />
-              <Area
-                type="monotone"
-                dataKey="navValue"
-                stroke={isPositive ? "#10b981" : "#ef4444"}
-                strokeWidth={2.4}
-                fill="url(#navGrad)"
-                dot={false}
-                isAnimationActive={false}
-              />
-              {showSma && (
-                <Line
-                  type="monotone"
-                  dataKey="sma20"
-                  stroke="#f59e0b"
-                  strokeWidth={1.8}
-                  strokeDasharray="4 4"
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              )}
+              <Area dataKey="navValue" type="monotone" stroke={chartColor} fill={`url(#${gradientId})`} strokeWidth={2.5} dot={false} isAnimationActive={false} activeDot={{ r: 4, fill: chartColor, stroke: "#242424", strokeWidth: 2 }} />
             </AreaChart>
           </ResponsiveContainer>
         )}
       </div>
-
-      {/* Quantitative & Risk Metrics Footer Bar — labels top-aligned, values on a
-          fixed 24px line so all four share one baseline, captions bottom-aligned */}
-      <div className="mt-5 pt-4 border-t border-border grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
-        <div className="bg-surface/60 p-2.5 rounded-lg border border-border/60 flex flex-col">
-          <span className="text-muted-foreground block text-[10px] leading-4">SHARPE RATIO</span>
-          <span className="font-bold text-foreground text-sm leading-6 mt-1">
-            {summary.sharpeRatio > 0 ? summary.sharpeRatio.toFixed(2) : "N/A"}
-          </span>
-          <span className="text-[10px] text-muted-foreground block mt-auto">Risk-adjusted return</span>
-        </div>
-
-        <div className="bg-surface/60 p-2.5 rounded-lg border border-border/60 flex flex-col">
-          <span className="text-muted-foreground block text-[10px] leading-4">MAX DRAWDOWN</span>
-          <span className="font-bold text-rose-400 text-sm leading-6 mt-1">
-            {summary.maxDrawdownPct ? `${summary.maxDrawdownPct}%` : "N/A"}
-          </span>
-          <span className="text-[10px] text-muted-foreground block mt-auto">Peak-to-trough decline</span>
-        </div>
-
-        <div className="bg-surface/60 p-2.5 rounded-lg border border-border/60 flex flex-col">
-          <span className="text-muted-foreground block text-[10px] leading-4">20-DAY SMA</span>
-          <span className="font-bold text-amber-400 text-sm leading-6 mt-1">
-            {summary.sma20 ? `$${summary.sma20.toFixed(4)}` : "N/A"}
-          </span>
-          <span className="text-[10px] text-muted-foreground block mt-auto">
-            {summary.isAboveSma20 ? "▲ Above 20 SMA" : "▼ Below 20 SMA"}
-          </span>
-        </div>
-
-        <div className="bg-surface/60 p-2.5 rounded-lg border border-border/60 flex flex-col">
-          <span className="text-muted-foreground block text-[10px] leading-4">52W HIGH / LOW</span>
-          <span className="font-bold text-foreground text-sm leading-6 mt-1">
-            ${summary.high52w.toFixed(4)} / ${summary.low52w.toFixed(4)}
-          </span>
-          <span className="text-[10px] text-muted-foreground block mt-auto">Historical range</span>
-        </div>
-      </div>
+      {availableFrom && points.length > 1 && <p className="historical-chart-date-range">Showing source history from {new Date(availableFrom).toLocaleDateString()} to {new Date(points[points.length - 1].timestamp).toLocaleDateString()}.</p>}
+      {complete === false && points.length > 1 && (
+        <p className="historical-chart-partial">
+          Partial basket history · {((progress?.coverageWeightBps ?? 0) / 100).toFixed(1)}% of target weight represented
+          {progress?.pendingSymbols?.length ? ` · Loading ${progress.pendingSymbols.join(", ")}` : ""}.
+        </p>
+      )}
     </div>
   );
 }

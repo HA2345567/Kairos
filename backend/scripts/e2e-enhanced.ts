@@ -13,8 +13,8 @@
  * 9. Close/unwind operations
  * 10. Final state verification
  *
- * Run from backend/ AFTER `npm run setup` has provisioned the mints:
- *   KAIROS_E2E_WALLET=<path-to-keypair.json> npx tsx scripts/e2e-enhanced.ts
+ * Run from backend/ AFTER `bun run setup` has provisioned the mints:
+ *   KAIROS_E2E_WALLET=<path-to-keypair.json> bun scripts/e2e-enhanced.ts
  */
 import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -50,7 +50,7 @@ async function get(path: string) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async def main(): Promise<void> {
+async function main(): Promise<void> {
   console.log(`[e2e-enhanced] Testing Kairos devnet lifecycle`);
   console.log(`[e2e-enhanced] Target: ${BASE}`);
   console.log(`[e2e-enhanced] Basket: ${BASKET}`);

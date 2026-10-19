@@ -1,44 +1,42 @@
-import { useMemo } from "react";
 import { Basket } from "@/lib/baskets-data";
 import { Link } from "react-router-dom";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TokenAvatar } from "@/components/common/TokenAvatar";
-import { RealtimeSparkline } from "@/components/common/RealtimeSparkline";
-import { useBasketNavHistory } from "@/hooks/useBasketNavHistory";
+import { BasketSparkline } from "@/components/common/BasketSparkline";
+import { useMarketBasketNavHistory } from "@/hooks/useBasketNavHistory";
 import { Button } from "@/components/arc/button";
 
 interface BasketRowProps {
   basket: Basket;
   index: number;
   onInvestClick?: (basket: Basket) => void;
-  livePrices?: Record<string, { priceUsd: number; change24h: number }>;
+  livePrices?: Record<string, { priceUsd: number; change24h: number | null }>;
 }
 
 export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRowProps) {
-  const { data: navSummary, isLoading: isNavLoading } = useBasketNavHistory(basket.id);
+  const { data: navSummary, isLoading: isNavLoading } = useMarketBasketNavHistory(basket.slug || basket.id, "1Y");
 
-  const hasData = Boolean(navSummary && navSummary.history && navSummary.history.length > 0);
-  const allTimeReturn = hasData ? navSummary!.allTimeReturnPct : null;
-  const isPositive = allTimeReturn !== null ? allTimeReturn >= 0 : true;
-  const returnString = allTimeReturn !== null ? `${allTimeReturn >= 0 ? "+" : ""}${allTimeReturn.toFixed(2)}%` : null;
-
-  // Find top performer token for the subline with real-time live prices
-  const topToken = useMemo(() => {
-    if (!basket.tokens || basket.tokens.length === 0) return null;
-    const tokensWithLive = basket.tokens.map((t) => {
-      const lookup = t.priceMint ?? t.mint;
-      const live = livePrices?.[lookup] || livePrices?.[t.mint];
-      return {
-        ...t,
-        change24h: live?.change24h !== undefined ? live.change24h : t.change24h,
-        priceUsd: live?.priceUsd !== undefined ? live.priceUsd : t.priceUsd,
-      };
-    });
-    return tokensWithLive.sort(
-      (a, b) => Math.abs(b.change24h || 0) - Math.abs(a.change24h || 0)
-    )[0];
-  }, [basket.tokens, livePrices]);
+  const historyPoints = navSummary?.history ?? [];
+  const hasData = historyPoints.length > 1;
+  const historyCoverageBps = navSummary?.progress.coverageWeightBps ?? 0;
+  const historyLabel = navSummary && !navSummary.complete
+    ? `1Y · ${Math.round(historyCoverageBps / 100)}% COVERED`
+    : "1Y HISTORY";
+  const firstHistoryValue = historyPoints[0]?.navValue;
+  const currentHistoryValue = historyPoints[historyPoints.length - 1]?.navValue;
+  const historicalReturn = hasData && firstHistoryValue && firstHistoryValue > 0 && currentHistoryValue !== undefined
+    ? ((currentHistoryValue / firstHistoryValue) - 1) * 100
+    : null;
+  const isPositive = historicalReturn === null || historicalReturn >= 0;
+  const returnString = historicalReturn !== null ? `${historicalReturn >= 0 ? "+" : ""}${historicalReturn.toFixed(2)}%` : null;
+  const pricedTokens = basket.tokens
+    .map((token) => ({ token, price: livePrices?.[token.priceMint ?? token.mint] }))
+    .filter((item): item is { token: Basket["tokens"][number]; price: { priceUsd: number; change24h: number | null } } => Boolean(item.price && typeof item.price.change24h === "number"));
+  const pricedWeight = pricedTokens.reduce((sum, item) => sum + item.token.weightBps, 0);
+  const weightedChange24h = pricedWeight > 0
+    ? pricedTokens.reduce((sum, item) => sum + item.price.change24h * item.token.weightBps, 0) / pricedWeight
+    : null;
 
   return (
     <div className="group relative flex items-center justify-between gap-3 sm:gap-6 bg-surface hover:bg-surface-hover px-4 py-3.5 sm:px-6 sm:py-4 transition-colors duration-150">
@@ -90,22 +88,12 @@ export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRo
                 />
               ))}
             </div>
-
-            {/* Top Gainer Badge matching Cesto screenshot (e.g. · PUMP +7.6% today) */}
-            {topToken && (
-              <span className="text-[11px] sm:text-xs font-mono text-text-secondary flex items-center gap-1 shrink-0">
-                <span className="text-text-muted">·</span>
-                <span className="font-semibold text-foreground">{topToken.symbol}</span>
-                <span
-                  className={
-                    topToken.change24h >= 0 ? "text-emerald-400 font-semibold" : "text-rose-400 font-semibold"
-                  }
-                >
-                  {topToken.change24h >= 0 ? "+" : ""}
-                  {topToken.change24h}% today
-                </span>
+            {weightedChange24h !== null && (
+              <span className={cn("font-mono text-[10px] font-semibold", weightedChange24h >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                24h {weightedChange24h >= 0 ? "+" : ""}{weightedChange24h.toFixed(2)}%
               </span>
             )}
+
           </div>
         </div>
       </div>
@@ -119,13 +107,11 @@ export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRo
               <span className="inline-block w-16 h-3 bg-surface-hover animate-pulse rounded" />
             </div>
           ) : hasData ? (
-            <RealtimeSparkline
-              id={basket.id}
-              initialData={navSummary!.sparkline}
+            <BasketSparkline
+              values={historyPoints.map((point) => point.navValue)}
               isPositive={isPositive}
               width={140}
               height={38}
-              enableLiveTicks={true}
             />
           ) : (
             <div className="w-[140px] h-[38px] flex items-center justify-center">
@@ -151,7 +137,7 @@ export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRo
             <span className="font-mono text-xs text-text-muted font-medium">No data yet</span>
           )}
           <span className="text-[10px] font-mono uppercase font-semibold text-text-muted tracking-wider">
-            ALL TIME
+          {historyLabel}
           </span>
         </div>
 
@@ -159,14 +145,16 @@ export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRo
         <Button
           variant="primary"
           size="sm"
+          disabled={!basket.isInvestable}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
+            if (!basket.isInvestable) return;
             onInvestClick?.(basket);
           }}
-          className="font-bold relative z-10 shrink-0"
+          className="font-bold relative z-10 shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Invest
+          {basket.isInvestable ? "Invest" : "Paused"}
         </Button>
       </div>
     </div>

@@ -1,7 +1,7 @@
 /**
  * Kairos devnet bootstrap (plan.md §4, PRD §11).
  *
- * Run from backend/:  npx tsx scripts/devnet-setup.ts
+ * Run from repository root: bun run --cwd backend setup
  *
  * Everything is deterministic (labels -> sha256 seeds), so re-runs are
  * idempotent and survive devnet resets:
@@ -24,6 +24,7 @@ import { DEVNET_LABELS, deterministicKeypair } from "../src/chain/devnetState";
 import { ensureFundedAta, ensureMint } from "../src/chain/mints";
 import { relayerService } from "../src/services/relayer.service";
 import type { DevnetState } from "../src/db/schema";
+import { DEVNET_ASSETS } from "../src/chain/devnet-assets";
 
 const DECIMALS = 6;
 const TREASURY_ASSET_UI = 10_000_000;
@@ -31,33 +32,27 @@ const TREASURY_USDC_UI = 1_000_000;
 const AIRDROP_SOL = 2;
 const AIRDROP_ATTEMPTS = 5;
 
-interface AssetSpec {
-  symbol: string;
-  priceUsd: number;
-  legType: "spl" | "xstock";
-  marketClosed?: boolean;
-}
-
-/** Frozen devnet asset registry (mirrors PRD §11). */
-const ASSET_SPECS: AssetSpec[] = [
-  { symbol: "tNVDA", priceUsd: 180, legType: "xstock" },
-  { symbol: "tGOLD", priceUsd: 2400, legType: "xstock" },
-  { symbol: "tTSLA", priceUsd: 250, legType: "xstock", marketClosed: true },
-  { symbol: "tJUP", priceUsd: 0.85, legType: "spl" },
-  { symbol: "tJTO", priceUsd: 2.3, legType: "spl" },
-  { symbol: "tBONK", priceUsd: 0.000021, legType: "spl" },
-  { symbol: "tRENDER", priceUsd: 5.6, legType: "spl" },
-  { symbol: "tHNT", priceUsd: 6.8, legType: "spl" },
-  { symbol: "tPYTH", priceUsd: 0.42, legType: "spl" },
-  { symbol: "tKMNO", priceUsd: 0.06, legType: "spl" },
-];
-
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const explorer = (kind: "address" | "tx", id: string) =>
   `https://explorer.solana.com/${kind}/${id}?cluster=devnet`;
 
 function log(step: string, msg: string): void {
   console.log(`[devnet-setup] ${step.padEnd(22)} ${msg}`);
+}
+
+function safeEndpoint(endpoint: string): string {
+  const url = new URL(endpoint);
+  for (const key of url.searchParams.keys()) {
+    if (/key|token|secret|auth|password/i.test(key)) url.searchParams.set(key, "[redacted]");
+  }
+  return url.toString();
+}
+
+function safeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message
+    .replace(process.env.HELIUS_API_KEY || "\0", "[redacted]")
+    .replace(/([?&][^=]*(?:key|token|secret|auth|password)=)[^&\s]*/gi, "$1[redacted]");
 }
 
 /** Best-effort airdrop with signature confirmation; alternates primary/fallback RPC. */
@@ -83,7 +78,7 @@ async function airdrop(
     } catch (err) {
       log(
         "airdrop",
-        `attempt ${attempt} on ${conn.rpcEndpoint} failed: ${err instanceof Error ? err.message : String(err)}`
+        `attempt ${attempt} on ${safeEndpoint(conn.rpcEndpoint)} failed: ${safeError(err)}`
       );
     }
     await sleep(3_000);
@@ -98,7 +93,7 @@ async function main(): Promise<void> {
 
   const conn = getConnection();
   const fallbackConn = getFallbackConnection();
-  log("connect", `primary ${conn.rpcEndpoint} / fallback ${fallbackConn.rpcEndpoint}`);
+  log("connect", `primary ${safeEndpoint(conn.rpcEndpoint)} / fallback ${safeEndpoint(fallbackConn.rpcEndpoint)}`);
 
   const relayer = relayerService.getKeypair();
   const treasury = deterministicKeypair(DEVNET_LABELS.treasury);
@@ -119,9 +114,7 @@ async function main(): Promise<void> {
     );
   }
   if (relayerSol <= 0.05) {
-    console.warn(
-      "[devnet-setup] WARNING: relayer is nearly out of SOL — subsequent transactions will fail. Re-run later to top up."
-    );
+    throw new Error("Relayer has insufficient SOL after faucet attempts; no mint setup was attempted.");
   }
 
   // ---- 2. USDC mint ----
@@ -131,7 +124,7 @@ async function main(): Promise<void> {
 
   // ---- 3. asset mints + 4. funded treasury ATAs ----
   const assetEntries: DevnetState["assets"] = [];
-  for (const spec of ASSET_SPECS) {
+  for (const spec of DEVNET_ASSETS) {
     const label = DEVNET_LABELS.assetMint(spec.symbol);
     const mintKp = deterministicKeypair(label);
     await ensureMint(conn, relayer, label, DECIMALS, mintKp.publicKey);
@@ -145,7 +138,7 @@ async function main(): Promise<void> {
     );
     log(
       "mint",
-      `${spec.symbol.padEnd(8)} ${mintKp.publicKey.toBase58()} treasury ATA ${ata.toBase58()} funded ${TREASURY_ASSET_UI.toLocaleString()} UI`
+      `${spec.symbol.padEnd(8)} ${mintKp.publicKey.toBase58()} treasury ATA ${ata.ata.toBase58()} funded ${TREASURY_ASSET_UI.toLocaleString()} UI`
     );
     assetEntries.push({
       symbol: spec.symbol,
@@ -166,7 +159,7 @@ async function main(): Promise<void> {
     usdcKp,
     TREASURY_USDC_UI
   );
-  log("treasury", `USDC ATA ${treasuryUsdcAta.toBase58()} funded ${TREASURY_USDC_UI.toLocaleString()} UI`);
+  log("treasury", `USDC ATA ${treasuryUsdcAta.ata.toBase58()} funded ${TREASURY_USDC_UI.toLocaleString()} UI`);
 
   // ---- 5. write devnet-state.json ----
   const state: DevnetState = {
@@ -187,7 +180,7 @@ async function main(): Promise<void> {
 
   // ---- summary ----
   console.log("\n=== Kairos devnet summary ===");
-  console.log(`cluster      devnet (rpc ${conn.rpcEndpoint})`);
+  console.log(`cluster      devnet (rpc ${safeEndpoint(conn.rpcEndpoint)})`);
   console.log(`relayer      ${relayer.publicKey.toBase58()}  (${relayerSol.toFixed(4)} SOL)`);
   console.log(`             ${explorer("address", relayer.publicKey.toBase58())}`);
   console.log(`treasury     ${treasury.publicKey.toBase58()}`);
@@ -213,7 +206,7 @@ async function main(): Promise<void> {
   } catch {
     /* evidence only */
   }
-  console.log("\n[devnet-setup] done. Next: npx tsx scripts/seed.ts");
+  console.log("\n[devnet-setup] done. Next: bun run --cwd backend seed");
 }
 
 main().catch((err) => {

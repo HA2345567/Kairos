@@ -1,17 +1,17 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useState } from "react";
-import { Menu, X, Wallet, ArrowRight } from "lucide-react";
+import { Menu, X, Wallet, ArrowRight, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { WalletDropdown } from "@/components/wallet/WalletDropdown";
+import { ClusterBanner } from "@/components/system/ClusterBanner";
 import { KairosLogo } from "@/components/common/KairosLogo";
-import { Button } from "@/components/arc/button";
 
 const NAV = [
   { to: "/markets", label: "Baskets" },
   { to: "/positions", label: "Positions" },
-  { to: "/ideas", label: "Ideas", isBeta: true },
+  { to: "/ideas", label: "Ideas" },
 ];
 
 export function Header() {
@@ -20,7 +20,7 @@ export function Header() {
   const isLanding = location.pathname === "/";
 
   // Solana Wallet Adapter
-  const { connected, publicKey, disconnect } = useWallet();
+  const { connected, publicKey, disconnect, wallet } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
 
   const isConnected = connected && !!publicKey;
@@ -41,6 +41,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/20">
+      <ClusterBanner />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
         {/* Left: Company Logo + Name — Kairos */}
         <div className="flex items-center gap-8">
@@ -67,11 +68,6 @@ export function Header() {
                 }
               >
                 <span>{item.label}</span>
-                {item.isBeta && (
-                  <span className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-full bg-primary text-primary-foreground leading-none">
-                    BETA
-                  </span>
-                )}
               </NavLink>
             ))}
           </nav>
@@ -80,28 +76,40 @@ export function Header() {
         {/* Right: Landing shows "Launch App", App pages show "Connect Wallet" */}
         <div className="hidden md:flex items-center gap-3">
           {isLanding ? (
-            <Link
-              to="/labs/create"
-              className="inline-flex items-center justify-center gap-1.5 rounded-full bg-primary hover:bg-neutral-200 text-primary-foreground font-bold text-xs px-3.5 h-[32px] transition-all duration-200 shadow-sm cursor-pointer select-none active:scale-95"
-            >
-              <span>Launch App</span>
-              <ArrowRight className="size-3.5 stroke-[2.5]" />
-            </Link>
+            <>
+              <Link
+                to="/docs"
+                className="inline-flex h-[32px] items-center justify-center rounded-full border border-border/60 bg-background/55 px-4 text-xs font-semibold text-foreground/75 transition-colors hover:border-border-strong hover:bg-surface hover:text-foreground"
+              >
+                Docs
+              </Link>
+              <Link
+                to="/labs/create"
+                className="inline-flex items-center justify-center gap-1.5 rounded-full bg-primary hover:bg-neutral-200 text-primary-foreground font-bold text-xs px-3.5 h-[32px] transition-all duration-200 shadow-sm cursor-pointer select-none active:scale-95"
+              >
+                <span>Launch App</span>
+                <ArrowRight className="size-3.5 stroke-[2.5]" />
+              </Link>
+            </>
           ) : (
             <>
               {!isConnected ? (
-                <Button
+                <button
+                  type="button"
                   onClick={handleSignIn}
-                  variant="primary"
-                  size="sm"
-                  className="rounded-full !min-h-[32px] !h-[32px] px-3.5 text-xs font-bold gap-1.5"
+                  className="group inline-flex h-10 items-center gap-2.5 rounded-full border border-white/10 bg-[#1b1b1b] py-1 pl-1.5 pr-4 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(0,0,0,0.22)] transition-all hover:border-white/20 hover:bg-[#242424] active:scale-[0.98]"
                 >
-                  <Wallet className="size-3.5" />
-                  <span>Sign In</span>
-                </Button>
+                  <span className="grid size-7 place-items-center rounded-full bg-gradient-to-br from-[#d7c2ff] via-[#bba0ff] to-[#79f2c0] text-[#111] shadow-[0_0_16px_rgba(153,69,255,0.25)]">
+                    <Wallet className="size-3.5" aria-hidden="true" />
+                  </span>
+                  <span>Connect wallet</span>
+                  <ArrowUpRight className="size-3.5 text-white/45 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-white/80" aria-hidden="true" />
+                </button>
               ) : (
                 <WalletDropdown
                   address={rawAddr || ""}
+                  walletName={wallet?.adapter.name}
+                  walletIcon={wallet?.adapter.icon}
                   onDisconnect={handleDisconnect}
                 />
               )}
@@ -137,23 +145,27 @@ export function Header() {
               }
             >
               <span>{item.label}</span>
-              {item.isBeta && (
-                <span className="px-2 py-0.5 text-[9px] font-bold uppercase rounded-full bg-primary text-primary-foreground">
-                  BETA
-                </span>
-              )}
             </NavLink>
           ))}
           <div className="pt-2 border-t border-border/30 space-y-2">
             {isLanding ? (
-              <Link
-                to="/labs/create"
-                onClick={() => setOpen(false)}
-                className="w-full py-2.5 rounded-full bg-primary hover:opacity-90 text-primary-foreground font-extrabold text-sm tracking-wide flex items-center justify-center gap-2 select-none transition-all active:scale-95 shadow-sm"
-              >
-                <span>Launch App</span>
-                <ArrowRight className="size-4 stroke-[2.5]" />
-              </Link>
+              <div className="flex gap-2">
+                <Link
+                  to="/docs"
+                  onClick={() => setOpen(false)}
+                  className="flex-1 rounded-full border border-border/60 bg-surface py-2.5 text-center text-sm font-semibold text-foreground/80 transition-colors hover:bg-surface-elevated"
+                >
+                  Docs
+                </Link>
+                <Link
+                  to="/labs/create"
+                  onClick={() => setOpen(false)}
+                  className="flex-[1.4] rounded-full bg-primary py-2.5 text-center text-sm font-extrabold tracking-wide text-primary-foreground shadow-sm transition-all hover:opacity-90 active:scale-95"
+                >
+                  <span>Launch App</span>
+                  <ArrowRight className="ml-1 inline size-4 stroke-[2.5]" />
+                </Link>
+              </div>
             ) : (
               <>
                 {!isConnected ? (
@@ -162,10 +174,18 @@ export function Header() {
                       setOpen(false);
                       handleSignIn();
                     }}
-                    className="w-full rounded-xl bg-primary hover:opacity-90 text-primary-foreground font-bold py-2.5 text-sm transition-all flex items-center justify-center gap-2 shadow-sm"
+                    className="group flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#1b1b1b] p-2 text-white transition-all hover:border-white/20 hover:bg-[#242424] active:scale-[0.99]"
                   >
-                    <Wallet className="size-4" />
-                    Sign In
+                    <span className="flex items-center gap-3">
+                      <span className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-[#d7c2ff] via-[#bba0ff] to-[#79f2c0] text-[#111] shadow-[0_0_18px_rgba(153,69,255,0.2)]">
+                        <Wallet className="size-4" aria-hidden="true" />
+                      </span>
+                      <span className="text-left">
+                        <span className="block text-sm font-semibold">Connect wallet</span>
+                        <span className="mt-0.5 block text-[11px] font-normal text-white/50">Phantom · Backpack · Solflare</span>
+                      </span>
+                    </span>
+                    <ArrowUpRight className="mr-1 size-4 text-white/45 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" />
                   </button>
                 ) : (
                   <div className="p-3 bg-surface rounded-2xl border border-border/30 space-y-3">

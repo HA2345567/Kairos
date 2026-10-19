@@ -20,6 +20,13 @@ export default {
       },
     },
     extend: {
+      fontWeight: {
+        medium: "500",
+        semibold: "550",
+        bold: "600",
+        extrabold: "650",
+        black: "700",
+      },
       fontFamily: {
         display: ['"Archivo"', '"Archivo Narrow"', "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "Roboto", "sans-serif"],
         sans: ['"Archivo"', '"Archivo Narrow"', "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "Roboto", "sans-serif"],
