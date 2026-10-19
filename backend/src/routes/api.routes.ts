@@ -4,6 +4,11 @@ import { registerAuthRoutes } from "./auth.routes";
 import { registerCatalogRoutes } from "./catalog.routes";
 import { registerTradeRoutes } from "./trade.routes";
 import { registerAdminRoutes } from "./admin.routes";
+import { registerAgentRoutes } from "./agent.routes";
+import { registerStreamRoutes } from "./stream.routes";
+import { registerLabsRoutes } from "./labs.routes";
+import { registerAnalyticsRoutes } from "./analytics.routes";
+import { registerEligibilityRoutes } from "./eligibility.routes";
 
 /**
  * Route aggregator (contracts §12). Wraps every handler so thrown AppErrors
@@ -45,4 +50,9 @@ export function registerRoutes(app: KairosHttpServer): void {
   registerCatalogRoutes(wrapped);
   registerTradeRoutes(wrapped);
   registerAdminRoutes(wrapped);
+  registerAgentRoutes(wrapped);
+  registerStreamRoutes(wrapped);
+  registerLabsRoutes(wrapped);
+  registerAnalyticsRoutes(wrapped);
+  registerEligibilityRoutes(wrapped);
 }

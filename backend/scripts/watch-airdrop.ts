@@ -3,11 +3,11 @@
  *
  * Runs until the relayer holds >= TARGET_SOL devnet SOL (or the time budget
  * expires), then — if provisioning hasn't happened yet — kicks off
- * `npm run setup`, `npm run seed` and the e2e acceptance driver
+ * `bun run setup`, `bun run seed` and the e2e acceptance driver
  * automatically. Jitters each attempt and alternates amount size because the
  * devnet faucet limit is per-IP/per-amount.
  *
- * Usage:  npx tsx scripts/watch-airdrop.ts [--interval-ms N] [--budget-min N]
+ * Usage:  bun scripts/watch-airdrop.ts [--interval-ms N] [--budget-min N]
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -107,8 +107,8 @@ async function main(): Promise<void> {
   // Funded: run provisioning + seed + acceptance unless state already exists.
   const stateFile = join(process.cwd(), "data", "devnet-state.json");
   if (!existsSync(stateFile) || !readFileSync(stateFile, "utf8").includes('"usdc"')) {
-    log("running `npm run setup`...");
-    const r1 = spawnSync("npm", ["run", "setup"], { stdio: "inherit", shell: true });
+    log("running `bun run setup`...");
+    const r1 = spawnSync(process.execPath, ["run", "setup"], { stdio: "inherit" });
     log(`setup exit=${r1.status}`);
     if (r1.status !== 0) {
       process.exitCode = 3;
@@ -117,8 +117,8 @@ async function main(): Promise<void> {
   } else {
     log("devnet-state.json exists — skipping setup");
   }
-  log("running `npm run seed`...");
-  const r2 = spawnSync("npm", ["run", "seed"], { stdio: "inherit", shell: true });
+  log("running `bun run seed`...");
+  const r2 = spawnSync(process.execPath, ["run", "seed"], { stdio: "inherit" });
   log(`seed exit=${r2.status}`);
   process.exitCode = r2.status ?? 0;
 }

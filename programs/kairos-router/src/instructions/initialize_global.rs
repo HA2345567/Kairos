@@ -26,7 +26,7 @@ pub fn handler(
     treasury: Pubkey,
     fee_bps: u16,
 ) -> Result<()> {
-    require!(fee_bps <= GlobalConfig::MAX_FEE_BPS, KairosError::InvalidFeeBps);
+    require!(GlobalConfig::fee_bps_is_valid(fee_bps), KairosError::InvalidFeeBps);
 
     let cfg = &mut ctx.accounts.global_config;
     cfg.admin = ctx.accounts.payer.key();

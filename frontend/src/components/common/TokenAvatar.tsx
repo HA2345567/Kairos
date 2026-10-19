@@ -9,6 +9,44 @@ interface TokenAvatarProps {
   size?: "xs" | "sm" | "md" | "lg";
 }
 
+const TOKEN_ICON_PATHS: Record<string, string> = {
+  ARX: "/tokens/arx.png",
+  BP: "/tokens/bp.png",
+  CLOUD: "/tokens/cloud.png",
+  BONK: "/tokens/bonk.jpg",
+  BUIDL: "/tokens/buidl.svg",
+  FARTCOIN: "/tokens/fartcoin.svg",
+  GOLD: "/tokens/gold.svg",
+  GOAT: "/tokens/goat.svg",
+  HNT: "/tokens/hnt.png",
+  HONEY: "/tokens/honey.svg",
+  IOT: "/tokens/iot.svg",
+  JITOSOL: "/tokens/jitosol.png",
+  JTO: "/tokens/jto.png",
+  JUP: "/tokens/jup.png",
+  IO: "/tokens/io.svg",
+  KMNO: "/tokens/kmno.png",
+  MET: "/tokens/met.png",
+  MOBILE: "/tokens/mobile.svg",
+  MSOL: "/tokens/msol.png",
+  NOS: "/tokens/nos.svg",
+  NVDA: "/tokens/nvda.svg",
+  ORCA: "/tokens/orca.png",
+  OUSG: "/tokens/ousg.svg",
+  PENGU: "/tokens/pengu.svg",
+  PIPPIN: "/tokens/pippin.svg",
+  PYTH: "/tokens/pyth.svg",
+  RAY: "/tokens/ray.png",
+  RENDER: "/tokens/render.png",
+  SOL: "/tokens/sol.png",
+  SPYX: "/tokens/spyx.svg",
+  TRUMP: "/tokens/trump.svg",
+  TSLA: "/tokens/tesla.svg",
+  USDY: "/tokens/usdy.svg",
+  XAUM: "/tokens/xaum.svg",
+  WIF: "/tokens/wif.jpg",
+};
+
 // Custom fallback styling per Solana ecosystem token
 const TOKEN_STYLES: Record<
   string,
@@ -111,7 +149,8 @@ export function TokenAvatar({
   const [hasError, setHasError] = useState(false);
 
   // Normalize fallback symbol
-  const cleanSymbol = symbol ? symbol.toUpperCase() : "TOKEN";
+  const underlyingSymbol = symbol.replace(/^t(?=[A-Z])/, "").toUpperCase();
+  const cleanSymbol = underlyingSymbol || "TOKEN";
   const style = TOKEN_STYLES[cleanSymbol] || {
     bg: "bg-gradient-to-tr from-amber-500 to-yellow-600",
     text: "text-black font-extrabold",
@@ -122,7 +161,7 @@ export function TokenAvatar({
   const imageSource =
     src && src.trim().length > 0
       ? src
-      : `/tokens/${cleanSymbol.toLowerCase()}.png`;
+      : TOKEN_ICON_PATHS[cleanSymbol] ?? `/tokens/${cleanSymbol.toLowerCase()}.png`;
 
   if (hasError) {
     return (

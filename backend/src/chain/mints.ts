@@ -84,7 +84,7 @@ function uniqueSigners(payer: Keypair, extra?: Keypair): Keypair[] {
  * Idempotently ensure an associated token account exists for `owner` and, when
  * `mintAuthorityKeypair` + `amountUi` are given, top the balance up to
  * `amountUi` (mints only the shortfall, so re-running does not inflate supply).
- * Returns the ATA address.
+ * Returns the ATA address and confirmed chain signature (when a transaction was sent).
  */
 export async function ensureFundedAta(
   conn: Connection,
@@ -93,7 +93,7 @@ export async function ensureFundedAta(
   owner: PublicKey,
   mintAuthorityKeypair?: Keypair,
   amountUi?: number
-): Promise<PublicKey> {
+): Promise<{ ata: PublicKey; signature: string | null }> {
   const ata = await ataFor(mint, owner);
 
   const instructions: TransactionInstruction[] = [
@@ -116,7 +116,7 @@ export async function ensureFundedAta(
   // Nothing to do if the ATA already exists and no top-up was required.
   if (instructions.length === 1) {
     const info = await withFailover((c) => c.getAccountInfo(ata));
-    if (info) return ata;
+    if (info) return { ata, signature: null };
   }
 
   const { blockhash, lastValidBlockHeight } = await withFailover((c) =>
@@ -151,5 +151,5 @@ export async function ensureFundedAta(
       )
     );
   }
-  return ata;
+  return { ata, signature };
 }

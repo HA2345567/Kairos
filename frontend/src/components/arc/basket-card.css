@@ -69,7 +69,7 @@
   min-width: 0;
   margin: 0;
   font-size: clamp(0.9rem, 1.15vw, 1.05rem);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.35;
   color: var(--foreground);
 }
@@ -120,6 +120,16 @@
   object-fit: cover;
 }
 
+.arc-card-theme .kairos-market-card .kairos-token-stack img {
+  width: 24px;
+  height: 24px;
+  margin-left: -6px;
+}
+
+.arc-card-theme .kairos-market-card .kairos-token-stack img:first-child {
+  margin-left: 0;
+}
+
 .kairos-token-stack img:first-child {
   margin-left: 0;
 }
@@ -131,20 +141,8 @@
   font-weight: 600;
 }
 
-.kairos-card-points {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  padding: 2.5px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface-hover);
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.4;
-  white-space: nowrap;
+.arc-card-theme .kairos-market-card .kairos-token-stack span {
+  font-size: 12px;
 }
 
 .kairos-card-return {
@@ -166,7 +164,7 @@
 .kairos-card-return strong {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.9rem;
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .kairos-card-return .positive {

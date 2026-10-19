@@ -9,10 +9,9 @@ import type { DevnetState } from "../db/schema";
 /**
  * Devnet state (contracts.md §5 DevnetState, §6 devnetState.ts).
  *
- * All devnet identities are derived deterministically from labels:
- *   Keypair.fromSeed(sha256(label))
- * so a devnet reset + re-run of scripts/devnet-setup.ts reproduces the exact
- * same mints / treasury / relayer addresses.
+ * Mock token mints and the test treasury are derived deterministically from
+ * labels so setup can recover after a devnet reset. The transaction relayer
+ * is separate and must use a secret key from environment configuration.
  *
  * The DevnetState shape is owned by the DB lane (src/db/schema.ts) and
  * re-exported here for chain/ consumers.
@@ -25,22 +24,13 @@ export type DevnetAssetState = DevnetState["assets"][number];
 export const DEVNET_LABELS = {
   usdcMint: "kairos-devnet-usdc-v1",
   treasury: "kairos-devnet-treasury-v1",
-  /** Devnet relayer (fee payer). NOT the seed-42 config keypair: that address
-   *  (2iXtA8oe…) is owned by the Token program on devnet and can never pay fees. */
-  relayer: "kairos-devnet-relayer-v1",
   assetMint: (symbol: string) => `kairos-devnet-asset-${symbol}-v1`,
 };
 
 export function deterministicKeypair(label: string): Keypair {
-  const seed = createHash("sha256").update(label).digest(); // 32 bytes
-  return Keypair.fromSeed(seed);
+  return Keypair.fromSeed(createHash("sha256").update(label).digest());
 }
 
-/**
- * Path of backend/data/devnet-state.json. Prefers config.devnetStatePath
- * (contracts.md §2); falls back to a module-relative resolution so the chain
- * lane keeps working while config.ts is being replaced by the DB lane.
- */
 export function devnetStatePath(): string {
   const fromConfig = (config as { devnetStatePath?: string }).devnetStatePath;
   if (fromConfig) return fromConfig;

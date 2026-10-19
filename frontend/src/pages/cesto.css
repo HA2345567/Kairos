@@ -3,9 +3,9 @@
    ======================================================== */
 
 .cesto-page {
-  max-width: 1440px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 26px 28px 72px;
+  padding: 48px 32px;
   color: var(--text-primary);
   background: var(--background);
 }
@@ -42,7 +42,7 @@
   gap: 8px;
   color: var(--text-primary);
   font-size: 22px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
@@ -58,7 +58,7 @@
   border: 1px solid #2e2e2e;
   border-radius: 999px;
   padding: 3px 8px;
-  font-weight: 800;
+  font-weight: 600;
   font-family: var(--font-mono, monospace);
   letter-spacing: 0.05em;
 }
@@ -71,7 +71,7 @@
   gap: 8px;
   border-radius: 10px;
   padding: 10px 16px;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 13px;
   cursor: pointer;
   transition: opacity 0.15s ease, transform 0.1s ease;
@@ -144,7 +144,7 @@
   gap: 6px;
   color: #737373;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.09em;
   font-family: var(--font-mono, monospace);
   margin-bottom: 4px;
@@ -153,7 +153,7 @@
 .labs-banner h2 {
   margin: 4px 0 4px;
   font-size: 19px;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--text-primary);
   letter-spacing: -0.02em;
 }
@@ -191,7 +191,7 @@
   border-radius: 9999px;
   padding: 3px 8px 3px 4px;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   color: #f5f5f5;
   font-family: var(--font-mono, monospace);
 }
@@ -336,7 +336,7 @@
 .idea-tokens-label {
   font-size: 9px;
   font-family: var(--font-mono, monospace);
-  font-weight: 700;
+  font-weight: 600;
   color: #888888;
   margin-top: 6px;
   text-align: center;
@@ -370,13 +370,13 @@
 
 .idea-return-tag {
   color: #38bdf8;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .idea-title {
   color: var(--text-primary);
   font-size: 13.5px;
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: none;
   line-height: 1.35;
 }
@@ -423,7 +423,7 @@
   color: #f5f5f5;
   border: 1px solid #333333;
   font-size: 9px;
-  font-weight: 800;
+  font-weight: 600;
   font-family: var(--font-mono, monospace);
 }
 
@@ -476,7 +476,7 @@
   margin: 0 0 12px;
   font-size: 12px;
   color: var(--text-primary);
-  font-weight: 700;
+  font-weight: 600;
   font-family: var(--font-mono, monospace);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -503,7 +503,7 @@
   border: 1px solid #333333;
   color: #f5f5f5;
   font-size: 9px;
-  font-weight: 800;
+  font-weight: 600;
   font-family: var(--font-mono, monospace);
   display: grid;
   place-items: center;
@@ -595,7 +595,7 @@
 .top-basket-return {
   color: #38bdf8;
   font-family: var(--font-mono, monospace);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .side-tip {
@@ -724,7 +724,7 @@
    ======================================================== */
 
 .positions-page {
-  padding-top: 40px;
+  padding-top: 48px;
 }
 
 .positions-heading {
@@ -819,7 +819,7 @@
   color: var(--primary-foreground);
   text-decoration: none;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   transition: opacity 0.15s ease, transform 0.1s ease;
 }
 

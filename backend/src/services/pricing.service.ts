@@ -1,88 +1,61 @@
-import { createHash } from "node:crypto";
 import { repository } from "../db/repository";
 import { config } from "../config";
 
 /**
- * Pricing service (PRD §4.3, §4.7): live price resolution + snapshot recording.
+ * Devnet quote-price lookup. Impact requires an execution-route quote.
  *
- * Live price source of record is the token registry (seeded from
- * devnet-state.json); the snapshot worker refreshes it every minute with a
- * deterministic ±0.1% jitter and appends price_snapshots rows (also the
- * backtest history). Price staleness matters only for the quote guard: a
- * snapshot older than the effective stale window means the feed stopped
- * updating — QUOTE_STALE. Chaos: KAIROS_CHAOS_STALE_PRICE_SEC forces the
- * window so the stale path is testable on demand (PRD §11.3).
+ * Devnet quotes use the configured registry price until a verified feed is
+ * connected. Only provider snapshots may contribute to historical results.
  */
 
-const DEFAULT_STALE_SEC = 300; // devnet snapshot cadence is 60 s
-
-export interface LivePrice {
+export interface QuotePrice {
   priceUsd: number;
-  ts: string;
-  source: "snapshot" | "registry";
+  ts: string | null;
+  source: "pyth" | "chainlink" | "devnet-registry";
+  sourceRef: string | null;
+  confidenceUsd: number | null;
   stale: boolean;
-  ageSec: number;
+  ageSec: number | null;
 }
 
 function effectiveStaleSec(): number {
-  return config.chaos.stalePriceSec ?? DEFAULT_STALE_SEC;
+  return config.chaos.stalePriceSec ?? config.stalePriceSec;
 }
 
-function jitterFor(mint: string, minuteBucket: number): number {
-  // Deterministic per (mint, minute) so restarts agree; range ±0.1%.
-  const h = createHash("sha256").update(`${mint}:${minuteBucket}`).digest();
-  const unit = h.readUInt16BE(0) / 0xffff; // 0..1
-  return (unit - 0.5) * 0.002;
-}
-
-export function getLivePrice(mint: string): LivePrice {
-  const token = repository.getToken(mint);
+export async function getQuotePrice(mint: string): Promise<QuotePrice> {
+  const token = (await repository.getToken(mint));
   if (!token) throw new Error(`TOKEN_NOT_FOUND:${mint}`);
 
-  const latest = repository.latestPrice(mint);
+  const latest = (await repository.latestPrice(mint));
   const now = Date.now();
   if (latest) {
     const ageSec = (now - new Date(latest.ts).getTime()) / 1000;
-    // Recent snapshot wins; ancient snapshots (seeded backtest history) do not.
-    if (ageSec >= 0 && ageSec <= DEFAULT_STALE_SEC * 2) {
+    // Recent Pyth/Chainlink data takes precedence over the devnet registry rate.
+    if (
+      Number.isFinite(latest.priceUsd) && latest.priceUsd > 0 &&
+      ageSec >= 0 && ageSec <= config.pythMaxAgeSec
+    ) {
       return {
-        priceUsd: latest.priceUsd > 0 ? latest.priceUsd : token.priceUsd,
+        priceUsd: latest.priceUsd,
         ts: latest.ts,
-        source: "snapshot",
+        source: latest.source,
+        sourceRef: latest.sourceRef ?? null,
+        confidenceUsd: latest.confidence ?? null,
         stale: ageSec > effectiveStaleSec(),
         ageSec: Math.round(ageSec),
       };
     }
   }
-  // Registry price: the seeded "live" price on devnet (never stale by itself —
-  // chaos forces staleness via KAIROS_CHAOS_STALE_PRICE_SEC + snapshot age).
-  return { priceUsd: token.priceUsd, ts: new Date().toISOString(), source: "registry", stale: false, ageSec: 0 };
+  // Devnet-only indicative rate. It is not a live market quote.
+  return {
+    priceUsd: token.priceUsd,
+    ts: null,
+    source: "devnet-registry",
+    sourceRef: null,
+    confidenceUsd: null,
+    stale: !config.isDevnet() || !Number.isFinite(token.priceUsd) || token.priceUsd <= 0,
+    ageSec: null,
+  };
 }
 
-/** One snapshot per registry token: deterministic random walk + registry refresh. */
-export function recordSnapshots(): number {
-  const now = new Date();
-  const minuteBucket = Math.floor(now.getTime() / 60_000);
-  const tsIso = now.toISOString();
-  let written = 0;
-  for (const token of repository.getAllTokens()) {
-    if (token.type === "stablecoin") continue; // USDC stays $1
-    const next = Number((token.priceUsd * (1 + jitterFor(token.mint, minuteBucket))).toFixed(10));
-    if (next <= 0) continue;
-    repository.updateTokenPrice(token.mint, next);
-    repository.addSnapshot(token.mint, tsIso, next, "kairos-sim");
-    written++;
-  }
-  return written;
-}
-
-/**
- * Simple price-impact model for the quote guard (documented heuristic):
- * 0.05% impact per $1,000 of leg notional. Curators get the default 1% cap
- * (config.maxPriceImpactPct).
- */
-export function priceImpactPct(notionalUsdc: number): number {
-  return (notionalUsdc / 1000) * 0.05;
-}
-
-export const pricingService = { getLivePrice, recordSnapshots, priceImpactPct };
+export const pricingService = { getQuotePrice };

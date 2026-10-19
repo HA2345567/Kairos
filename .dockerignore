@@ -1,0 +1,16 @@
+.git
+.github
+.planning
+.opencode
+.claude
+**/node_modules
+**/dist
+**/build
+**/.env
+**/.env.*
+!**/.env.example
+*.log
+*.sqlite
+*.db
+target
+coverage

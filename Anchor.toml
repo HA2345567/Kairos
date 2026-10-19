@@ -3,20 +3,17 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-kairos_router = "ELfFskTFe9keckQ7yN3hgZ2csq7hUHAR7QuPNoErQqPw"
+kairos_router = "3jWJZPdDou1h8UrT871Qi573yqQkFYYW8Jqiug9Pne5w"
 
 [programs.devnet]
-kairos_router = "ELfFskTFe9keckQ7yN3hgZ2csq7hUHAR7QuPNoErQqPw"
-
-[programs.mainnet]
-kairos_router = "ELfFskTFe9keckQ7yN3hgZ2csq7hUHAR7QuPNoErQqPw"
+kairos_router = "3jWJZPdDou1h8UrT871Qi573yqQkFYYW8Jqiug9Pne5w"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "Devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "ts-mocha -p ./tsconfig.json tests/kairos-router.ts --timeout 200000"
+test = "bun test ./tests/kairos-router.ts --timeout 200000"

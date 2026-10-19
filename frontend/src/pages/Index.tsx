@@ -3,7 +3,8 @@ import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/arc/button";
 import PromptBar from "@/components/landing/PromptBar";
 import { HorizontalBasketMarquee } from "@/components/basket/HorizontalBasketMarquee";
-import { CURATED_BASKETS, type Basket } from "@/lib/baskets-data";
+import { ExecutionFlowSection } from "@/components/landing/ExecutionFlowSection";
+import { useBaskets } from "@/lib/baskets-data";
 import {
   Accordion,
   AccordionItem,
@@ -55,8 +56,10 @@ const FAQS = [
 ];
 
 export default function Landing() {
+  const { data: baskets = [] } = useBaskets();
+
   return (
-    <PageShell>
+    <PageShell hideFooter={false}>
       {/* Section 1: Hero Section — Classical Ruins (Visible only in this area) */}
       <section className="relative overflow-hidden border-b border-border/40 -mt-16 pt-24 pb-14 sm:pb-16 min-h-[580px] lg:min-h-[620px] flex items-center bg-background">
         {/* Background Artwork Layer — Pure classical ruins visible ONLY in this hero area */}
@@ -67,21 +70,27 @@ export default function Landing() {
             className="w-full h-full object-cover object-center"
           />
         </div>
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 z-[1] pointer-events-none bg-gradient-to-b from-black/20 via-black/25 to-black/40"
+        />
 
         <div className="container relative z-10 pb-4 pt-6 md:pb-6 md:pt-8">
           <div className="mx-auto flex max-w-5xl flex-col items-center text-center animate-fade-up">
-            <h1 className="mt-1 font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-tight tracking-[-0.03em] whitespace-nowrap text-white drop-shadow-[0_3px_12px_rgba(0,0,0,0.9)] [text-shadow:_0_2px_16px_rgba(0,0,0,0.85)]">
-              <span className="text-white">Your Taste.</span>{" "}
-              <span className="text-white/80">Your Investment.</span>
+            <h1
+              className="mt-1 max-w-full whitespace-nowrap font-display font-medium text-[clamp(1.8rem,6.3vw,5.5rem)] leading-none tracking-[-0.055em] text-center drop-shadow-[0_4px_18px_rgba(0,0,0,0.6)] [text-shadow:_0_1px_0_rgba(255,255,255,0.24),_0_8px_20px_rgba(0,0,0,0.5)]"
+              style={{ fontVariationSettings: '"wdth" 100' }}
+            >
+              <span className="inline bg-gradient-to-b from-white via-[#f2f3f5] to-[#b7bdc6] bg-clip-text text-transparent">Your Taste.</span>{" "}
+              <span className="inline bg-gradient-to-b from-white via-[#f2f3f5] to-[#b7bdc6] bg-clip-text text-transparent">Your Investment.</span>
             </h1>
-            
+
             <div className="mt-5 sm:mt-6 flex items-center justify-center gap-4 animate-fade-up" style={{ animationDelay: "150ms" }}>
               <span className="font-mono text-xs sm:text-[13px] font-bold uppercase tracking-[0.35em] text-white/90 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">POWERED BY</span>
               <img src="/solanaLogo.svg" alt="Solana" className="h-4 sm:h-5 w-auto drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]" />
             </div>
             <p className="mt-4 sm:mt-5 max-w-2xl text-base sm:text-lg md:text-xl font-normal leading-relaxed text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] [text-shadow:_0_1px_8px_rgba(0,0,0,0.9)]">
-              Curated high-conviction baskets executed via Jupiter CPI. Constituent tokens land directly in your own wallet — zero vaults, zero custody.
-            </p>
+              Turn an idea into a Solana basket, shape its token allocations, and trade through Jupiter. Your tokens settle directly in your wallet — never in a pooled vault.</p>
 
             {/* Prompt Bar */}
             <div className="mt-6 sm:mt-7 w-full max-w-xl animate-fade-up" style={{ animationDelay: "200ms" }}>
@@ -106,7 +115,7 @@ export default function Landing() {
       <section className="relative overflow-hidden pt-8 pb-14 sm:pb-16 border-b border-border/40 bg-background">
         {/* Infinite Horizontal Moving Basket Cards Track */}
         <div className="w-full overflow-hidden">
-          <HorizontalBasketMarquee baskets={CURATED_BASKETS} speedSeconds={50} />
+          <HorizontalBasketMarquee baskets={baskets} speedSeconds={50} />
         </div>
 
         <div className="container relative z-10 mt-6 sm:mt-8">
@@ -158,6 +167,8 @@ export default function Landing() {
         </div>
       </section>
 
+      <ExecutionFlowSection />
+
       {/* Section 4: Frequently Asked Questions */}
       <section className="border-b border-border/40 py-24 bg-surface/20">
         <div className="container max-w-4xl">
@@ -207,7 +218,7 @@ export default function Landing() {
           <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-20">
             <Link
               to="/markets"
-              className="inline-flex items-center justify-center rounded-full border border-white/20 hover:border-white/40 bg-[#161616]/90 hover:bg-[#222222] backdrop-blur-md px-6 py-2.5 sm:px-8 sm:py-3 font-display text-xs sm:text-sm font-bold uppercase tracking-wider text-white transition-all shadow-xl hover:shadow-[0_0_24px_rgba(255,255,255,0.15)] active:scale-95 whitespace-nowrap cursor-pointer"
+              className="inline-flex items-center justify-center rounded-full border border-white/20 hover:border-white/40 bg-[#161616]/90 hover:bg-[#222222] backdrop-blur-md px-7 py-3 sm:px-9 sm:py-3.5 font-display text-sm sm:text-base font-bold uppercase tracking-wider text-white transition-all shadow-xl hover:shadow-[0_0_24px_rgba(255,255,255,0.15)] active:scale-95 whitespace-nowrap cursor-pointer"
             >
               TRY KAIROS NOW
             </Link>

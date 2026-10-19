@@ -1,39 +1,20 @@
 /**
  * Kairos DB seeder (plan.md §4, PRD §11).
  *
- * Run from backend/:  npx tsx scripts/seed.ts   (after scripts/devnet-setup.ts)
+ * Run from backend/:  bun scripts/seed.ts   (after bun scripts/devnet-setup.ts)
  *
- * Seeds backend/data/kairos.db from the REAL devnet state:
- *   - token registry (real deterministic mints, prices, leg types, market-hours flag)
+ * Seeds the configured PostgreSQL database from the devnet setup state:
+ *   - token registry (devnet mints, configured test rates, leg types, market-hours flag)
  *   - 6 baskets + their v1 compositions (weights sum EXACTLY 10000 bps)
- *   - 3 years of hourly price_snapshots per asset: deterministic random walk
- *     seeded by symbol, starting at 40% of the current price and engineered to
- *     end exactly at the current price
  *   - global_kill_switch=false setting
  *
- * Idempotent: tokens/baskets upsert; snapshot history is seeded once per mint
- * (skipped when the mint already has any snapshot).
+ * Idempotent: tokens and baskets are upserted; market history is never seeded.
  */
-import { createHash } from "node:crypto";
 import { repository } from "../src/db/repository";
 import { loadDevnetState } from "../src/chain/devnetState";
 import type { Basket, BasketLeg, BasketVersion, Token } from "../src/db/schema";
-
-// ---------- deterministic PRNG (seeded by symbol) ----------
-
-function seedFromSymbol(symbol: string): number {
-  return createHash("sha256").update(symbol).digest().readUInt32BE(0);
-}
-
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+import { config } from "../src/config";
+import { plannedDevnetCatalog } from "../src/chain/devnet-assets";
 
 // ---------- baskets (weights MUST sum to exactly 10000) ----------
 
@@ -47,145 +28,66 @@ interface BasketSpec {
   legs: LegSpec[];
 }
 
-const ALL_SYMBOLS = [
-  "tNVDA",
-  "tGOLD",
-  "tTSLA",
-  "tJUP",
-  "tJTO",
-  "tBONK",
-  "tRENDER",
-  "tHNT",
-  "tPYTH",
-  "tKMNO",
-];
-
 const BASKETS: BasketSpec[] = [
   {
-    slug: "solana-infra-governance",
-    name: "Solana Infra & Governance",
-    thesis:
-      "Exposure to Solana's core trading infrastructure and protocol governance: Jupiter's liquidity routing and Jito's staking/mev layer.",
-    category: "governance",
+    slug: "solana-infrastructure",
+    name: "Solana Infrastructure",
+    thesis: "Core Solana trading and network infrastructure across liquidity routing, staking and oracle services.",
+    category: "infrastructure",
     legs: [
-      ["tJUP", 5000],
-      ["tJTO", 5000],
+      ["tCLOUD", 1060], ["tBP", 1000], ["tJUP", 900], ["tJitoSOL", 800],
+      ["tSOL", 800], ["tMSOL", 800], ["tKMNO", 800], ["tRAY", 800],
+      ["tORCA", 800], ["tMET", 800], ["tARX", 800], ["tJTO", 640],
     ],
   },
   {
-    slug: "solana-sigma",
-    name: "Solana Sigma",
-    thesis:
-      "Systematic Solana beta: oracle/ data infrastructure, governance, restaking and compute across four high-beta legs.",
+    slug: "solana-sigma-basket",
+    name: "Solana Sigma Basket",
+    thesis: "A diversified Solana ecosystem allocation spanning oracles, liquidity, lending and decentralized compute.",
     category: "defi",
-    legs: [
-      ["tPYTH", 3500],
-      ["tJUP", 2500],
-      ["tKMNO", 2000],
-      ["tRENDER", 2000],
-    ],
+    legs: [["tPYTH", 3500], ["tJUP", 2500], ["tKMNO", 2000], ["tRENDER", 2000]],
   },
   {
-    slug: "digital-gold",
-    name: "Digital Gold",
-    thesis:
-      "Single-leg exposure to tokenized gold as an inflation hedge and portfolio diversifier.",
-    category: "commodities",
-    legs: [["tGOLD", 10000]],
+    slug: "solana-culture-memes",
+    name: "Solana Culture & Memes",
+    thesis: "A high-volatility basket spanning Solana-native meme communities, internet culture, and social tokens.",
+    category: "culture",
+    legs: [["tBONK", 3600], ["tTRUMP", 2700], ["tPENGU", 2700], ["tWIF", 500], ["tFARTCOIN", 500]],
   },
   {
-    slug: "magnificent-seven-devnet",
-    name: "Magnificent Seven (Devnet)",
-    thesis:
-      "Equal-weight basket spanning every asset listed on Kairos devnet — tokenized equities, commodities and Solana ecosystem DePIN/DeFi.",
-    category: "diversified",
-    legs: ALL_SYMBOLS.map((s): LegSpec => [s, 1000]),
+    slug: "solana-ai-compute",
+    name: "Solana AI & Compute",
+    thesis: "Solana-based GPU and confidential compute networks powering AI workloads, rendering, and encrypted applications.",
+    category: "ai-compute",
+    legs: [["tRENDER", 2500], ["tNOS", 2500], ["tIO", 2500], ["tARX", 2500]],
   },
   {
-    slug: "tokenized-equities",
-    name: "Tokenized Equities",
-    thesis:
-      "Concentrated exposure to tokenized US mega-cap equities with NVDA tilt; TSLA leg is market-hours restricted.",
-    category: "equities",
-    legs: [
-      ["tNVDA", 6000],
-      ["tTSLA", 4000],
-    ],
-  },
-  {
-    slug: "depin-index",
-    name: "DePIN Index",
-    thesis:
-      "Decentralized physical infrastructure networks: wireless (Helium) and decentralized GPU/render compute.",
+    slug: "solana-depin-infrastructure",
+    name: "Solana DePIN Infrastructure",
+    thesis: "A cross-section of Solana DePIN networks spanning wireless coverage, mobile connectivity, map data, and decentralized GPU compute.",
     category: "depin",
-    legs: [
-      ["tHNT", 5000],
-      ["tRENDER", 5000],
-    ],
+    legs: [["tHNT", 2000], ["tMOBILE", 2000], ["tIOT", 2000], ["tHONEY", 2000], ["tRENDER", 2000]],
+  },
+  {
+    slug: "solana-real-world-assets",
+    name: "Solana Real World Assets",
+    thesis: "A diversified Solana RWA preview spanning tokenized Treasuries, institutional liquidity funds, public-market ETFs, and gold.",
+    category: "real-world-assets",
+    legs: [["tUSDY", 2000], ["tOUSG", 2000], ["tBUIDL", 2000], ["tSPYX", 2000], ["tXAUM", 2000]],
   },
 ];
-
-/** Placeholder performance figures (deterministic, cosmetic until pricing lane computes real ones). */
-function performanceFor(slug: string): Basket["performance"] {
-  const h = seedFromSymbol(slug);
-  const r = (base: number) => Number(((h % 100) / 100 + base).toFixed(2));
-  return { "1W": r(0.4), "1M": r(2.1), "6M": r(7.3), "1Y": r(15.8) };
-}
-
-// ---------- snapshot walk ----------
-
-const HISTORY_HOURS = 3 * 365 * 24; // 26,280 hourly points
-const WALK_VOLATILITY = 0.004; // ±0.4% per-hour noise bound
-
-function generateWalk(symbol: string, currentPrice: number): number[] {
-  const rand = mulberry32(seedFromSymbol(symbol));
-  const startPrice = 0.4 * currentPrice;
-  const n = HISTORY_HOURS;
-  const totalLogDrift = Math.log(currentPrice / startPrice);
-
-  // log-space walk with noise, then a linear correction in log space so the
-  // series starts at exactly startPrice and ends at exactly currentPrice.
-  const logWalk = new Array<number>(n + 1);
-  logWalk[0] = Math.log(startPrice);
-  for (let i = 1; i <= n; i++) {
-    const noise = (rand() * 2 - 1) * WALK_VOLATILITY;
-    logWalk[i] = logWalk[i - 1] + (totalLogDrift / n) + noise;
-  }
-  const endError = Math.log(currentPrice) - logWalk[n];
-  const out = new Array<number>(n + 1);
-  for (let i = 0; i <= n; i++) {
-    const corrected = logWalk[i] + (endError * i) / n;
-    out[i] = Number(Math.exp(corrected).toPrecision(10));
-  }
-  return out;
-}
-
-function seedSnapshots(symbol: string, mint: string, currentPrice: number): number {
-  if (repository.latestPrice(mint) !== null) {
-    console.log(`[seed] snapshots for ${symbol}: already present, skipping`);
-    return 0;
-  }
-  const series = generateWalk(symbol, currentPrice);
-  const endMs = Date.now();
-  const startMs = endMs - HISTORY_HOURS * 3_600_000;
-  const t0 = Date.now();
-  for (let i = 0; i <= HISTORY_HOURS; i++) {
-    const ts = new Date(startMs + i * 3_600_000).toISOString();
-    repository.addSnapshot(mint, ts, series[i], "seed-walk");
-  }
-  console.log(
-    `[seed] snapshots for ${symbol}: ${series.length} rows in ${((Date.now() - t0) / 1000).toFixed(1)}s`
-  );
-  return series.length;
-}
 
 // ---------- main ----------
 
-function main(): void {
-  const state = loadDevnetState();
+async function main(): Promise<void> {
+  if (!config.isDevnet()) throw new Error("This seeder only supports devnet");
+  const catalogOnly = process.argv.includes("--catalog-only");
+  const deployedState = catalogOnly ? null : loadDevnetState();
+  const preview = catalogOnly;
+  const state = deployedState ?? (catalogOnly ? plannedDevnetCatalog() : null);
   if (!state) {
     console.error(
-      `[seed] ${"devnet-state.json"} not found at expected path — run "npx tsx scripts/devnet-setup.ts" first`
+      `[seed] devnet-state.json not found at expected path — run "bun scripts/devnet-setup.ts" first`
     );
     process.exitCode = 1;
     return;
@@ -193,7 +95,8 @@ function main(): void {
 
   const bySymbol = new Map(state.assets.map((a) => [a.symbol, a]));
 
-  // ---- tokens (real devnet mints) ----
+  // Preserve registry restrictions. Catalog-only previews may refresh their
+  // illustrative fallback prices from this source list.
   const tokens: Token[] = [
     {
       mint: state.usdc.mint,
@@ -217,8 +120,14 @@ function main(): void {
       priceUsd: a.priceUsd,
     })),
   ];
-  for (const t of tokens) repository.saveToken(t);
-  console.log(`[seed] tokens: ${tokens.length} upserted (incl. USDC)`);
+  for (const t of tokens) {
+    const existing = await repository.getToken(t.mint);
+    if (!existing) await repository.saveToken(t);
+    else if (preview && existing.priceUsd !== t.priceUsd) {
+      await repository.saveToken({ ...existing, priceUsd: t.priceUsd });
+    }
+  }
+  console.log(`[seed] tokens: ${tokens.length} checked (incl. USDC)`);
 
   // ---- baskets + v1 versions ----
   const nowIso = new Date().toISOString();
@@ -233,8 +142,26 @@ function main(): void {
       throw new Error(`[seed] basket "${spec.slug}" references unknown assets: ${unknown.join(", ")}`);
     }
 
-    const basketId = `bkt-${spec.slug}`;
-    const versionId = `bv-${spec.slug}-1`;
+    const existingBasket = await repository.getBasketBySlug(spec.slug);
+    const currentVersion = existingBasket
+      ? await repository.getBasketVersion(existingBasket.activeVersionId)
+      : undefined;
+    const existingMatches = currentVersion?.legs.length === spec.legs.length && spec.legs.every(([symbol, weightBps], index) => {
+      const asset = bySymbol.get(symbol)!;
+      const currentLeg = currentVersion.legs[index];
+      return currentLeg?.mint === asset.mint && currentLeg.weightBps === weightBps;
+    });
+
+    // Preserve operator-managed versions. A catalog preview is the exception:
+    // once real devnet state is available, promote its deterministic preview
+    // version to the funded devnet catalog (even when the weights are equal).
+    if (existingBasket && (currentVersion?.publishedBy !== "devnet-preview" || (preview && existingMatches))) {
+      continue;
+    }
+
+    const basketId = existingBasket?.id ?? `bkt-${spec.slug}`;
+    const versionNumber = currentVersion ? currentVersion.version + 1 : 1;
+    const versionId = `bv-${spec.slug}-${versionNumber}`;
     const legs: BasketLeg[] = spec.legs.map(([symbol, weightBps]) => {
       const asset = bySymbol.get(symbol)!;
       return {
@@ -252,47 +179,52 @@ function main(): void {
     const version: BasketVersion = {
       id: versionId,
       basketId,
-      version: 1,
-      changelog: "Initial composition",
-      publishedBy: "kairos-ops",
+      version: versionNumber,
+      changelog: preview
+        ? currentVersion ? "Updated planned devnet composition; on-chain publication pending" : "Planned devnet composition; on-chain publication pending"
+        : "Initial composition",
+      publishedBy: preview ? "devnet-preview" : "kairos-ops",
       publishedAt: nowIso,
       legs,
     };
-    repository.saveBasketVersion(version);
+    (await repository.saveBasketVersion(version));
 
-    const basket: Basket = {
-      id: basketId,
-      slug: spec.slug,
-      name: spec.name,
-      thesis: spec.thesis,
-      category: spec.category,
-      status: "active",
-      activeVersionId: versionId,
-      minUsdc: 25,
-      performance: performanceFor(spec.slug),
-      protocols: ["Kairos Router"],
-    };
-    repository.saveBasket(basket);
+    const basket: Basket = existingBasket
+      ? {
+          ...existingBasket,
+          name: spec.name,
+          thesis: spec.thesis,
+          category: spec.category,
+          activeVersionId: versionId,
+          ...(preview ? {} : { status: "active" as const }),
+        }
+      : {
+          id: basketId,
+          slug: spec.slug,
+          name: spec.name,
+          thesis: spec.thesis,
+          category: spec.category,
+          status: preview ? "paused" : "active",
+          activeVersionId: versionId,
+          minUsdc: 25,
+          protocols: ["Kairos Router"],
+        };
+    (await repository.saveBasket(basket));
     console.log(
-      `[seed] basket ${spec.slug.padEnd(28)} legs ${spec.legs.length}  weights ${spec.legs
+      `[seed] basket ${spec.slug.padEnd(28)} v${versionNumber} legs ${spec.legs.length}  weights ${spec.legs
         .map(([s, w]) => `${s}:${w}`)
         .join(" ")}`
     );
   }
   console.log(`[seed] baskets: ${BASKETS.length} versions + ${legCount} legs saved`);
 
-  // ---- 3y hourly price history ----
-  let snapshotCount = 0;
-  for (const asset of state.assets) {
-    snapshotCount += seedSnapshots(asset.symbol, asset.mint, asset.priceUsd);
-  }
-  console.log(`[seed] snapshots: ${snapshotCount} rows added (3y hourly per asset)`);
-
   // ---- settings ----
-  repository.setSetting("global_kill_switch", "false");
-  console.log(`[seed] settings: global_kill_switch=false`);
+  if (await repository.getSetting("global_kill_switch") === undefined) {
+    await repository.setSetting("global_kill_switch", "false");
+  }
+  if (preview) console.log("[seed] Catalog preview only: baskets paused; no chain state or performance history created.");
 
   console.log("[seed] done.");
 }
 
-main();
+(await main());

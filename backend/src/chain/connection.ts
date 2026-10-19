@@ -70,8 +70,8 @@ export function sendRawTransaction(rawTransaction: Uint8Array | Buffer) {
 }
 
 /** getSignatureStatuses with failover. */
-export function getSignatureStatuses(signatures: string[]) {
-  return withFailover((c) => c.getSignatureStatuses(signatures, { searchTransactionHistory: false }));
+export function getSignatureStatuses(signatures: string[], searchTransactionHistory = false) {
+  return withFailover((c) => c.getSignatureStatuses(signatures, { searchTransactionHistory }));
 }
 
 /** simulateTransaction with failover (no signature verification by default). */

@@ -40,7 +40,7 @@ export function Footer() {
             </h4>
             <ul className="space-y-3 font-display text-sm text-muted-foreground">
               <li>
-                <Link to="/markets" className="hover:text-foreground transition-colors block">
+                <Link to="/docs" className="hover:text-foreground transition-colors block">
                   Docs
                 </Link>
               </li>

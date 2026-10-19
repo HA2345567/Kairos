@@ -1,4 +1,3 @@
-import React from "react";
 import { Link } from "react-router-dom";
 import type { Basket } from "@/lib/baskets-data";
 import { useBasketNavHistory } from "@/hooks/useBasketNavHistory";
@@ -13,18 +12,16 @@ export function CylinderBasketCard({ basket, className = "" }: CylinderBasketCar
   const { data: navSummary } = useBasketNavHistory(basket.id);
 
   const name = basket.name || "Untitled Basket";
-  const points = basket.pointsMultiplier || "3x Pts";
   const desc = basket.description || "";
   const image = basket.imageUrl || "/baskets/solana-orb.png";
 
   // Compute live return percentage
-  const hasRealNav = Boolean(navSummary && navSummary.history && navSummary.history.length > 0);
-  const computedReturnPct = hasRealNav ? navSummary!.allTimeReturnPct : null;
-  const returnString =
-    computedReturnPct !== null
-      ? `${computedReturnPct >= 0 ? "+" : ""}${computedReturnPct.toFixed(2)}%`
-      : basket.displayReturn?.value || "+0.00%";
-  const isPositive = !returnString.startsWith("-");
+  const hasHistory = Boolean(navSummary?.history.length);
+  const computedReturnPct = hasHistory ? navSummary!.allTimeReturnPct : null;
+  const returnString = computedReturnPct === null
+    ? null
+    : `${computedReturnPct >= 0 ? "+" : ""}${computedReturnPct.toFixed(2)}%`;
+  const isPositive = computedReturnPct !== null && computedReturnPct >= 0;
 
   const rawIcons = basket.tokens ? basket.tokens.map((t) => t.icon) : [];
   const visibleIcons = rawIcons.slice(0, 3);
@@ -55,12 +52,10 @@ export function CylinderBasketCard({ basket, className = "" }: CylinderBasketCar
       {/* Bottom Information Panel — matches BasketCard ArcCard body */}
       <div className="flex flex-col flex-1 p-3.5 bg-[#1A1A1A] group-hover:bg-[#222222] transition-colors justify-between">
         <div>
-          {/* Title Row with Basket Name & Points Multiplier */}
-          <div className="flex items-center justify-between gap-1.5 w-full">
+          <div className="flex items-center gap-1.5 w-full">
             <h3 className="text-sm font-bold text-foreground truncate group-hover:text-emerald-300 transition-colors">
               {name}
             </h3>
-            {points && <span className="kairos-card-points shrink-0">{points}</span>}
           </div>
 
           {/* Thesis Description */}
@@ -69,7 +64,7 @@ export function CylinderBasketCard({ basket, className = "" }: CylinderBasketCar
           </p>
         </div>
 
-        {/* Split Bottom Row: Constituent Tokens Stack & All Time Return */}
+        {/* Constituent tokens and hypothetical return */}
         <div className="pt-2 border-t border-border/40 flex items-center justify-between gap-2 mt-auto">
           {/* Token Stack */}
           {visibleIcons.length > 0 ? (
@@ -90,9 +85,9 @@ export function CylinderBasketCard({ basket, className = "" }: CylinderBasketCar
 
           {/* Return Metric */}
           <div className="kairos-card-return text-right">
-            <small>ALL TIME RETURN</small>
-            <strong className={isPositive ? "positive" : "negative"}>
-              {returnString}
+            <small>HYPOTHETICAL RETURN</small>
+            <strong className={returnString ? (isPositive ? "positive" : "negative") : "text-muted-foreground"}>
+              {returnString ?? "No data yet"}
             </strong>
           </div>
         </div>

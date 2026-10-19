@@ -40,12 +40,12 @@ const FALLBACK_TOKENS: Token[] = [
   },
 ];
 
-export function seedDatabase(): void {
+export async function seedDatabase(): Promise<void> {
   // Real devnet state exists -> the CHAIN lane's scripts/seed.ts owns seeding.
   if (existsSync(config.devnetStatePath)) {
     return;
   }
   for (const token of FALLBACK_TOKENS) {
-    repository.saveToken(token);
+    (await repository.saveToken(token));
   }
 }

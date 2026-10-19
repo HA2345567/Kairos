@@ -1,14 +1,19 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Connection, MessageV0, PublicKey, VersionedTransaction } from "@solana/web3.js";
+import nacl from "tweetnacl";
 import { repository } from "../db/repository";
 import { Execution, ExecutionLeg } from "../db/schema";
 import { AppError } from "../errors";
 import { config } from "../config";
 import { quoteService } from "./quote.service";
+import { getQuotePrice } from "./pricing.service";
 import { relayerService } from "./relayer.service";
+import { assertSettled, legSide, recoverySell, retryBuy } from "./execution-recovery";
+import { saveRecovery, type RecoveryAction } from "../db/recovery";
+import { recoveryRequest } from "./recovery-request";
+import { poolForPair } from "../chain/pool-config";
 import { getConnection, getSignatureStatuses } from "../chain/connection";
 import {
-  USDC_DECIMALS,
   buildLegSwapTx,
   buildReverseLegTx,
   getLatestBlockhashWithHeight,
@@ -16,6 +21,11 @@ import {
 } from "../chain/mockSwap";
 import { getTokenBalances } from "../chain/balances";
 import { DEVNET_LABELS, deterministicKeypair, loadDevnetState } from "../chain/devnetState";
+import { usdcToBaseUnits } from "./money";
+import { hashExecutionRequest } from "./request-hash";
+import { assertTransactionAllowlisted } from "../chain/allowlist";
+import { assertPrepareHealth, isKillSwitchActive } from "./controls";
+import { KAIROS_ROUTER_PROGRAM_ID, RAYDIUM_CPMM_PROGRAM_ID } from "../chain/programSwap";
 
 /**
  * Execution engine (PRD §4.4): prepare → sign (client) → submit → land.
@@ -29,14 +39,15 @@ import { DEVNET_LABELS, deterministicKeypair, loadDevnetState } from "../chain/d
  * Landing  lives in workers/landing.ts (send → confirm → per-leg status →
  *            position/fee/outbox updates → execution state machine).
  *
- * Fees: input-side for opens/rebalances (separate USDC transfer in leg 1's
- * transaction), output-side (deducted from proceeds) for close/unwind —
+ * Fees: input-side for opens/rebalances (separate USDC or SOL transfer per leg),
+ * output-side (deducted from proceeds) for close/unwind —
  * never both (PRD §4.4 rule 5).
  */
 
 export interface PrepareParams {
   basketSlug: string;
-  usdcAmount: number;
+  usdcAmount?: number;
+  solAmount?: number;
   walletAddress: string;
   idempotencyKey: string;
 }
@@ -51,39 +62,30 @@ export interface PrepareLegInput {
   mint: string;
   symbol: string;
   inUsdcAmount: number;
+  side?: "buy" | "sell";
+  inAssetBaseUnits?: number;
+  feeUsdc?: number;
   /** Pre-computed expected asset out in base units; recomputed when omitted. */
   expectedOutBaseUnits?: number;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const usdToBase = (usd: number) => Math.round(usd * 10 ** USDC_DECIMALS);
+const usdToBase = usdcToBaseUnits;
 
-/** Pool accounts for an asset mint, from shared/devnet-config.json (program builder). */
-function poolForMint(mint: string): {
-  authority: PublicKey;
-  ammConfig: PublicKey;
-  poolState: PublicKey;
-  inputVault: PublicKey;
-  outputVault: PublicKey;
-  observation: PublicKey;
-} {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const fs = require("node:fs") as typeof import("node:fs");
-  const path = require("node:path") as typeof import("node:path");
-  const cfgPath = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..", "..", "shared", "devnet-config.json");
-  const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
-  const entry = Object.values<{ mint0: string; mint1: string } & Record<string, string>>(cfg.pools).find(
-    (p) => p.mint0 === mint || p.mint1 === mint
-  );
-  if (!entry) throw new AppError("BASKET_NOT_FOUND", `No CPMM pool configured for mint ${mint}`, 422);
-  return {
-    authority: new PublicKey(entry.authority ?? cfg.raydiumAuthority),
-    ammConfig: new PublicKey(entry.ammConfig ?? cfg.ammConfig),
-    poolState: new PublicKey(entry.poolId),
-    inputVault: new PublicKey(entry.vault0),
-    outputVault: new PublicKey(entry.vault1),
-    observation: new PublicKey(entry.observationKey),
-  };
+async function mapWithConcurrency<T, R>(
+  items: T[], limit: number, fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await fn(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 function requireDevnet() {
@@ -94,8 +96,35 @@ function requireDevnet() {
   return state;
 }
 
-function killSwitchActive(): boolean {
-  return repository.getSetting("global_kill_switch") === "true";
+async function killSwitchActive(): Promise<boolean> {
+  return isKillSwitchActive();
+}
+
+export function allocateFeeBaseUnits(totalFee: number, legs: PrepareLegInput[]): number[] {
+  const total = usdToBase(totalFee);
+  if (total <= 0 || legs.length === 0) return legs.map(() => 0);
+  const weights = legs.map((leg) => Math.max(0, usdToBase(leg.inUsdcAmount)));
+  const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
+  if (weightSum <= 0) return legs.map(() => 0);
+  const fees = weights.map((weight) => Math.floor((total * weight) / weightSum));
+  const largest = weights.indexOf(Math.max(...weights));
+  fees[largest] += total - fees.reduce((sum, fee) => sum + fee, 0);
+  return fees;
+}
+
+/** Split an integer amount without losing remainder units to per-leg rounding. */
+export function allocateIntegerUnits(total: number, weights: number[]): number[] {
+  if (!Number.isSafeInteger(total) || total < 0 || weights.some(weight => !Number.isSafeInteger(weight) || weight < 0)) {
+    throw new AppError("INVALID_INPUT", "Integer allocation values must be non-negative safe integers", 422);
+  }
+  const weightSum = weights.reduce((sum, weight) => sum + BigInt(weight), 0n);
+  if (total === 0 || weightSum === 0n) return weights.map(() => 0);
+  const totalBig = BigInt(total);
+  const allocated = weights.map(weight => Number((totalBig * BigInt(weight)) / weightSum));
+  const remainder = total - allocated.reduce((sum, amount) => sum + amount, 0);
+  const largest = weights.indexOf(Math.max(...weights));
+  allocated[largest] += remainder;
+  return allocated;
 }
 
 /** Shared prepare pipeline: builds + simulates per-leg txs and persists a PREPARED execution. */
@@ -107,9 +136,14 @@ async function prepareWithLegs(opts: {
   basketVersionId: string;
   totalUsdc: number;
   feeUsdc: number;
+  fundingAsset?: "USDC" | "SOL";
+  solInputAmount?: number;
+  solPriceUsd?: number;
   legs: PrepareLegInput[];
   auditAction: string;
   baseExecutionId?: string;
+  recoveryAction?: RecoveryAction;
+  replaceRecoveryId?: string;
 }): Promise<Execution> {
   const state = requireDevnet();
   const user = new PublicKey(opts.walletAddress);
@@ -117,22 +151,45 @@ async function prepareWithLegs(opts: {
   const treasury = deterministicKeypair(DEVNET_LABELS.treasury);
   const usdcMint = new PublicKey(state.usdc.mint);
   const conn = getConnection();
+  // PRD X11: exits (close, unwind, sell-only work) must stay available while
+  // trading is paused or degraded, so only buy-side work is gated below.
+  const hasBuys = opts.legs.some(
+    (leg) => (leg.side ?? (opts.type === "close" ? "sell" : "buy")) === "buy"
+  );
 
-  const { blockhash, lastValidBlockHeight } = await getLatestBlockhashWithHeight(conn);
+  // NFR-05 degrade closed: refuse a buy-side prepare while relayer/RPC health is
+  // unknown. Sell-only work never reaches this gate.
+  await assertPrepareHealth(hasBuys);
 
-  // Best-effort USDC balance guard for opens only (PRD §4.4): sells are funded
+  let blockhash: string;
+  let lastValidBlockHeight: number;
+  try {
+    ({ blockhash, lastValidBlockHeight } = await getLatestBlockhashWithHeight(conn));
+  } catch (err) {
+    throw new AppError(
+      "ALL_AGGREGATORS_DOWN",
+      `Venue/RPC health is unavailable: ${(err as Error).message}`,
+      503
+    );
+  }
+
+  // Verify the selected funding balance for opens only: sells are funded
   // by the assets being sold, and rebalance buys are funded by the sells.
   // Skipped in simulation mode (no live faucet/balances on this host).
   if (opts.type === "open" && !config.simulateLanding) {
     try {
-      const balances = await getTokenBalances(conn, user, [usdcMint]);
-      const usdcRaw = Number(balances[usdcMint.toBase58()] ?? 0);
-      if (usdcRaw < usdToBase(opts.totalUsdc)) {
-        throw new AppError(
-          "INSUFFICIENT_BALANCE",
-          `Wallet holds ${(usdcRaw / 1e6).toFixed(2)} USDC, needs ${opts.totalUsdc.toFixed(2)}`,
-          422
-        );
+      if (opts.fundingAsset === "SOL") {
+        const lamports = await conn.getBalance(user, "confirmed");
+        const neededLamports = Math.round((opts.solInputAmount ?? 0) * 1e9);
+        if (lamports < neededLamports) {
+          throw new AppError("INSUFFICIENT_BALANCE", `Wallet holds ${(lamports / 1e9).toFixed(4)} SOL, needs ${(neededLamports / 1e9).toFixed(4)} SOL`, 422);
+        }
+      } else {
+        const balances = await getTokenBalances(conn, user, [usdcMint]);
+        const usdcRaw = Number(balances[usdcMint.toBase58()] ?? 0);
+        if (usdcRaw < usdToBase(opts.totalUsdc)) {
+          throw new AppError("INSUFFICIENT_BALANCE", `Wallet holds ${(usdcRaw / 1e6).toFixed(2)} USDC, needs ${opts.totalUsdc.toFixed(2)}`, 422);
+        }
       }
     } catch (err) {
       if (err instanceof AppError) throw err;
@@ -140,14 +197,38 @@ async function prepareWithLegs(opts: {
     }
   }
 
-  const preparedTxs: string[] = [];
-  const messageHashes: string[] = [];
-  const legs: ExecutionLeg[] = [];
-  let feeCharged = false;
+  const feeByLeg = allocateFeeBaseUnits(opts.feeUsdc, opts.legs);
+  const solPrincipalByLeg: number[] = [];
+  const solFeeByLeg: number[] = [];
+  if (opts.fundingAsset === "SOL") {
+    if (!opts.solPriceUsd || !Number.isFinite(opts.solPriceUsd) || opts.solPriceUsd <= 0 ||
+        !Number.isFinite(opts.solInputAmount) || (opts.solInputAmount ?? 0) <= 0) {
+      throw new AppError("INVALID_INPUT", "SOL funding requires a valid amount and price", 422);
+    }
+    const totalSolLamports = Math.round(opts.solInputAmount! * 1_000_000_000);
+    const feeSolLamports = Math.round((opts.feeUsdc / opts.solPriceUsd) * 1_000_000_000);
+    if (!Number.isSafeInteger(totalSolLamports) || totalSolLamports <= 0 || !Number.isSafeInteger(feeSolLamports) ||
+        feeSolLamports < 0 || feeSolLamports > totalSolLamports) {
+      throw new AppError("INVALID_INPUT", "SOL amount cannot cover the quoted platform fee", 422);
+    }
+    const principalWeights = opts.legs.map(leg => usdToBase(leg.inUsdcAmount));
+    solPrincipalByLeg.push(...allocateIntegerUnits(totalSolLamports - feeSolLamports, principalWeights));
+    solFeeByLeg.push(...allocateIntegerUnits(feeSolLamports, feeByLeg));
+  }
+  const publishedVersion = config.swapBuilder === "program" && opts.fundingAsset !== "SOL"
+    ? await repository.getBasketVersion(opts.basketVersionId)
+    : undefined;
+  if (config.swapBuilder === "program" && opts.fundingAsset !== "SOL" &&
+      (!publishedVersion || publishedVersion.basketId !== opts.basketId ||
+       !Number.isInteger(publishedVersion.version) || publishedVersion.version < 1 || publishedVersion.version > 0xffff_ffff)) {
+    throw new AppError("BASKET_VERSION_NOT_FOUND", "The selected immutable basket version is unavailable", 409);
+  }
+  if (publishedVersion && opts.legs.some(leg => !publishedVersion.legs.some(item => item.mint === leg.mint))) {
+    throw new AppError("BASKET_VERSION_MISMATCH", "A requested mint is outside the selected basket version", 409);
+  }
 
-  for (let i = 0; i < opts.legs.length; i++) {
-    const legIn = opts.legs[i];
-    const token = repository.getToken(legIn.mint);
+  const preparedLegResults = await mapWithConcurrency(opts.legs, 4, async (legIn, i) => {
+    const token = (await repository.getToken(legIn.mint));
     if (!token) throw new AppError("BASKET_NOT_FOUND", `Leg mint ${legIn.mint} is not in the token registry`, 422);
     const decimals = token.decimals;
     const price = token.priceUsd > 0 ? token.priceUsd : 1;
@@ -155,30 +236,38 @@ async function prepareWithLegs(opts: {
     const expectedOutBase =
       legIn.expectedOutBaseUnits ?? Math.floor((legIn.inUsdcAmount / price) * 10 ** decimals);
 
-    // Fee rides on the first leg only (input-side), never on every leg.
-    const includeFeeUsdcBaseUnits = !feeCharged && opts.feeUsdc > 0 ? usdToBase(opts.feeUsdc) : 0;
-    if (includeFeeUsdcBaseUnits > 0) feeCharged = true;
+    // Allocate the basket fee over legs so a failed leg never charges fees for
+    // legs that did not land.
+    const feeBaseUnits = legIn.feeUsdc === undefined ? feeByLeg[i] ?? 0 : usdToBase(legIn.feeUsdc);
+    const includeFeeUsdcBaseUnits = feeBaseUnits;
 
-    const isSell = opts.type === "close" || opts.type === "rebalance" ? undefined : false;
-    void isSell;
+    const isSell = (legIn.side ?? (opts.type === "close" ? "sell" : "buy")) === "sell";
+    if (isSell && (!Number.isSafeInteger(legIn.inAssetBaseUnits) || legIn.inAssetBaseUnits! <= 0)) {
+      throw new AppError("INVALID_INPUT", "Sell input must be a positive safe integer in base units", 422);
+    }
 
     const built =
-      config.swapBuilder === "program"
+      config.swapBuilder === "program" && opts.fundingAsset !== "SOL"
         ? await (async () => {
             // On-chain kairos_router path (user's build order: program → backend).
             // Fee + memo live INSIDE the program instruction; min-out slippage
             // uses the quote's min.
-            const { buildProgramBuyLeg, buildProgramSellLeg, globalConfigPda, basketConfigPda } =
+            const { buildProgramBuyLeg, buildProgramSellLeg, globalConfigPda, basketConfigPda, basketVersionPda } =
               await import("../chain/programSwap");
             const common = {
               user,
               usdcMint,
               assetMint: new PublicKey(legIn.mint),
+              basketId: opts.basketId,
               relayer,
               recentBlockhash: blockhash,
+              basketVersion: publishedVersion!.version,
+              basketLegCount: publishedVersion!.legs.length,
+              basketVersionPda: basketVersionPda(opts.basketId, publishedVersion!.version),
+              feeBps: opts.type === "rebalance" ? config.rebalanceFeeBps : config.platformFeeBps,
               memo: `kairos:${opts.basketId}:${opts.basketVersionId}:leg${i + 1}`,
             };
-            if (opts.type === "close") {
+            if (isSell) {
               const p = await buildProgramSellLeg({
                 ...common,
                 userAssetAta: await (await import("@solana/spl-token")).getAssociatedTokenAddress(
@@ -195,10 +284,8 @@ async function prepareWithLegs(opts: {
                 ),
                 globalConfigPda: globalConfigPda(),
                 basketConfigPda: basketConfigPda(opts.basketId),
-                pool: poolForMint(legIn.mint),
-                amountInAssetBase: Number(
-                  (legIn as PrepareLegInput & { inAssetBaseUnits?: number }).inAssetBaseUnits ?? 0
-                ),
+                pool: poolForPair(legIn.mint, state.usdc.mint),
+                amountInAssetBase: legIn.inAssetBaseUnits!,
                 minUsdcOutBase: expectedOutBase,
               });
               return { transaction: p.transaction, messageHash: p.messageHash };
@@ -219,25 +306,26 @@ async function prepareWithLegs(opts: {
               ),
               globalConfigPda: globalConfigPda(),
               basketConfigPda: basketConfigPda(opts.basketId),
-              pool: poolForMint(legIn.mint),
-              amountInUsdcBase: inBase,
+              pool: poolForPair(state.usdc.mint, legIn.mint),
+              amountInUsdcBase: inBase + feeBaseUnits,
               minAmountOutBase: Math.floor(
                 (Number(expectedOutBase) * (10000 - 50)) / 10000
               ),
             });
             return { transaction: p.transaction, messageHash: p.messageHash };
           })()
-        : opts.type === "close"
+        : isSell
         ? await buildReverseLegTx({
             user,
             usdcMint,
             assetMint: new PublicKey(legIn.mint),
             assetDecimals: decimals,
             // For close legs prepared here (unwind), in/out are already base units.
-            inAssetBaseUnits: Number((legIn as PrepareLegInput & { inAssetBaseUnits?: number }).inAssetBaseUnits ?? 0),
+            inAssetBaseUnits: legIn.inAssetBaseUnits!,
             expectedOutUsdcBaseUnits: expectedOutBase,
             treasury,
             relayer,
+            includeFeeUsdcBaseUnits,
             recentBlockhash: blockhash,
           })
         : await buildLegSwapTx({
@@ -249,9 +337,21 @@ async function prepareWithLegs(opts: {
             expectedOutBaseUnits: expectedOutBase,
             treasury,
             relayer,
-            includeFeeUsdcBaseUnits,
+            includeFeeUsdcBaseUnits: opts.fundingAsset === "SOL" ? 0 : includeFeeUsdcBaseUnits,
+            ...(opts.fundingAsset === "SOL" && opts.solPriceUsd
+              ? {
+                  inputSolLamports: solPrincipalByLeg[i] ?? 0,
+                  includeFeeSolLamports: solFeeByLeg[i] ?? 0,
+                }
+              : {}),
             recentBlockhash: blockhash,
           });
+
+    await assertTransactionAllowlisted(
+      built.transaction,
+      opts.fundingAsset === "SOL" ? [legIn.mint] : [state.usdc.mint, legIn.mint],
+      config.swapBuilder === "program" && opts.fundingAsset !== "SOL" ? [KAIROS_ROUTER_PROGRAM_ID, RAYDIUM_CPMM_PROGRAM_ID] : []
+    );
 
     if (config.simulateLanding) {
       // Simulation mode: skip the RPC simulate gate (mints don't exist on any
@@ -267,33 +367,67 @@ async function prepareWithLegs(opts: {
       }
     }
 
-    preparedTxs.push(Buffer.from(built.transaction.serialize()).toString("base64"));
-    messageHashes.push(built.messageHash);
-    legs.push({
+    return {
+      preparedTx: Buffer.from(built.transaction.serialize()).toString("base64"),
+      messageHash: built.messageHash,
+      leg: {
       id: `leg-${i + 1}`,
       executionId: "",
       mint: legIn.mint,
       symbol: legIn.symbol,
       inAmountUsdc: legIn.inUsdcAmount,
+      inUsdcBaseUnits: String(inBase),
+      feeUsdc: feeBaseUnits / 1_000_000,
+      feeBaseUnits: String(feeBaseUnits),
+      side: isSell ? "sell" : "buy",
+      inputBaseUnits: String(isSell ? legIn.inAssetBaseUnits : inBase + feeBaseUnits),
       expectedOut: String(expectedOutBase),
       messageHash: built.messageHash,
       status: "PENDING",
-    });
-  }
+      } satisfies ExecutionLeg,
+    };
+  });
+  const preparedTxs = preparedLegResults.map(result => result.preparedTx);
+  const messageHashes = preparedLegResults.map(result => result.messageHash);
+  const legs = preparedLegResults.map(result => result.leg);
 
   const now = new Date();
-  const wallet = repository.getWalletByAddress(opts.walletAddress);
+  const wallet = (await repository.getWalletByAddress(opts.walletAddress));
   const execution: Execution = {
     id: "exec-" + randomUUID().slice(0, 10),
+    baseExecutionId: opts.baseExecutionId,
+    recoveryAction: opts.recoveryAction,
     walletId: wallet?.id ?? `wal-${opts.walletAddress.slice(0, 8)}`,
     walletAddress: opts.walletAddress,
     basketId: opts.basketId,
     basketVersionId: opts.basketVersionId,
     type: opts.type,
+    fundingAsset: opts.fundingAsset ?? "USDC",
+    solInputAmount: opts.solInputAmount,
+    solPriceUsd: opts.solPriceUsd,
     status: "PREPARED",
     idempotencyKey: opts.idempotencyKey,
+    requestHash: hashExecutionRequest({
+      type: opts.type,
+      basketId: opts.basketId,
+      basketVersionId: opts.basketVersionId,
+      totalUsdcBaseUnits: String(usdcToBaseUnits(opts.totalUsdc)),
+      feeUsdcBaseUnits: String(usdcToBaseUnits(opts.feeUsdc)),
+      legs: legs.map((leg) => ({
+        mint: leg.mint,
+        side: leg.side,
+        inUsdcBaseUnits: leg.inUsdcBaseUnits ?? String(usdcToBaseUnits(leg.inAmountUsdc)),
+        inputBaseUnits: leg.inputBaseUnits,
+        feeBaseUnits: leg.feeBaseUnits ?? String(usdcToBaseUnits(leg.feeUsdc ?? 0)),
+        expectedOut: leg.expectedOut,
+      })),
+      baseExecutionId: opts.baseExecutionId,
+      recoveryAction: opts.recoveryAction,
+    }),
     totalUsdc: opts.totalUsdc,
+    totalUsdcBaseUnits: String(usdcToBaseUnits(opts.totalUsdc)),
     feeUsdc: opts.feeUsdc,
+    feeUsdcBaseUnits: String(usdcToBaseUnits(opts.feeUsdc)),
     preparedTxs,
     messageHashes,
     blockhash,
@@ -305,17 +439,28 @@ async function prepareWithLegs(opts: {
   };
   legs.forEach((l) => (l.executionId = execution.id));
 
+  if (opts.recoveryAction) return saveRecovery(execution, opts.replaceRecoveryId);
+
   try {
-    repository.saveExecution(execution);
+    (await repository.saveExecution(execution));
   } catch (err) {
     if (err instanceof AppError && err.code === "IDEMPOTENCY_CONFLICT") {
-      const existing = repository.getExecutionByIdempotency(opts.idempotencyKey);
-      if (existing) return existing;
+      const existing = (await repository.getExecutionByIdempotency(opts.idempotencyKey, opts.walletAddress));
+      if (existing) {
+        if (
+          existing.type === opts.type &&
+          existing.basketId === opts.basketId &&
+          existing.totalUsdc === opts.totalUsdc
+        ) {
+          return existing;
+        }
+        throw new AppError("IDEMPOTENCY_CONFLICT", "Idempotency key already used for a different request", 409);
+      }
     }
     throw err;
   }
 
-  repository.logAudit({
+  (await repository.logAudit({
     actor: opts.walletAddress,
     action: opts.auditAction,
     entity: "execution",
@@ -327,66 +472,102 @@ async function prepareWithLegs(opts: {
       legs: legs.length,
       baseExecutionId: opts.baseExecutionId,
     },
-  });
+  }));
   return execution;
 }
 
 export class ExecutionService {
   async prepare(params: PrepareParams): Promise<Execution> {
-    if (killSwitchActive()) {
+    if ((await killSwitchActive())) {
       throw new AppError("KILL_SWITCH_ACTIVE", "New investments are halted by the kill switch", 503);
     }
 
-    // Idempotency: same key returns the same execution, never double-lands.
-    const existing = repository.getExecutionByIdempotency(params.idempotencyKey);
+    let usdcAmount = params.usdcAmount;
+    let solPriceUsd: number | undefined;
+    if (params.solAmount !== undefined) {
+      if (!Number.isFinite(params.solAmount) || params.solAmount <= 0) {
+        throw new AppError("MIN_INVESTMENT", "Enter a valid positive SOL amount", 400);
+      }
+      const solPrice = await getQuotePrice("So11111111111111111111111111111111111111112");
+      if (solPrice.stale || !Number.isFinite(solPrice.priceUsd) || solPrice.priceUsd <= 0) {
+        throw new AppError("PRICE_STALE", "SOL/USD price is unavailable for this Devnet quote", 503);
+      }
+      solPriceUsd = solPrice.priceUsd;
+      usdcAmount = params.solAmount * solPriceUsd;
+    }
+    if (usdcAmount === undefined || !Number.isFinite(usdcAmount) || usdcAmount <= 0) {
+      throw new AppError("MIN_INVESTMENT", "Enter a valid investment amount", 400);
+    }
+
+    // Idempotency keys are wallet-scoped and can only replay the same request.
+    const existing = (await repository.getExecutionByIdempotency(params.idempotencyKey, params.walletAddress));
     if (existing) {
-      if (existing.walletAddress.toLowerCase() !== params.walletAddress.toLowerCase()) {
-        throw new AppError("IDEMPOTENCY_CONFLICT", "Idempotency key already used by another wallet", 409);
+      const basket = (await repository.getBasketBySlug(params.basketSlug));
+      if (
+        existing.baseExecutionId !== undefined || existing.type !== "open" ||
+        existing.basketId !== basket?.id ||
+        existing.totalUsdc !== usdcAmount
+      ) {
+        throw new AppError("IDEMPOTENCY_CONFLICT", "Idempotency key already used for a different request", 409);
       }
       return existing;
     }
 
-    const basket = repository.getBasketBySlug(params.basketSlug);
+    const basket = (await repository.getBasketBySlug(params.basketSlug));
     if (!basket) throw new AppError("BASKET_NOT_FOUND", `Basket ${params.basketSlug} not found`, 404);
-    if (basket.status !== "active") throw new AppError("BASKET_NOT_ACTIVE", undefined, 422);
-    if (params.usdcAmount < basket.minUsdc) {
+    if (basket.status !== "active") {
+      throw new AppError(
+        "BASKET_NOT_ACTIVE",
+        "This basket is paused because its Devnet assets are not initialized and funded.",
+        422,
+      );
+    }
+    if (usdcAmount < basket.minUsdc) {
       throw new AppError("MIN_INVESTMENT", `Minimum investment is ${basket.minUsdc} USDC`, 422);
     }
 
-    const quote = await quoteService.getQuote(params.basketSlug, params.usdcAmount);
+    const quote = await quoteService.getQuote(params.basketSlug, usdcAmount);
     const investable = quote.legs.filter((l) => l.inUsdcAmount >= config.dustThresholdUsdc);
     if (investable.length === 0) {
-      throw new AppError("DUST_LEG_FORBIDDEN", "Amount too small — every leg would be dust", 422);
+      throw new AppError("DUST_LEG", "Amount too small — every leg would be dust");
     }
 
-    return prepareWithLegs({
+    return (await prepareWithLegs({
       walletAddress: params.walletAddress,
       idempotencyKey: params.idempotencyKey,
       type: "open",
       basketId: basket.id,
       basketVersionId: quote.basketVersionId,
-      totalUsdc: params.usdcAmount,
+      totalUsdc: usdcAmount,
       feeUsdc: quote.platformFeeUsdc,
+      ...(params.solAmount !== undefined
+        ? { fundingAsset: "SOL" as const, solInputAmount: params.solAmount, solPriceUsd }
+        : { fundingAsset: "USDC" as const }),
       legs: investable.map((l) => ({
         mint: l.mint,
         symbol: l.symbol,
         inUsdcAmount: l.inUsdcAmount,
       })),
       auditAction: "PREPARE_EXECUTION",
-    });
+    }));
   }
 
   async submit(params: SubmitParams): Promise<Execution> {
-    const execution = repository.getExecution(params.executionId);
+    const execution = (await repository.getExecution(params.executionId));
     if (!execution) throw new AppError("EXECUTION_NOT_FOUND", undefined, 404);
 
     // Idempotent: already submitted / landing / terminal → return as-is.
     if (execution.status !== "PREPARED") return execution;
 
     if (new Date(execution.expiresAt).getTime() < Date.now()) {
-      execution.status = "EXPIRED";
-      execution.updatedAt = new Date().toISOString();
-      repository.saveExecution(execution);
+      const current = await repository.withExecutionLock(execution.id, async (current) => {
+        if (current.status === "PREPARED") {
+          current.status = "EXPIRED";
+          await repository.updateExecutionStatus(current.id, current.status);
+        }
+        return current;
+      });
+      if (current.status !== "EXPIRED") return current;
       throw new AppError("EXECUTION_EXPIRED", "Prepared transactions were never signed in time", 410);
     }
 
@@ -398,10 +579,6 @@ export class ExecutionService {
       );
     }
 
-    // Delegated-signing wallets (auto-rebalance) submit the partially-signed
-    // prepared transactions as-is; everyone else must have added the user sig.
-    const wallet = repository.getWalletByAddress(execution.walletAddress);
-    const delegated = wallet?.delegatedSigning === true;
     const userPk = new PublicKey(execution.walletAddress);
 
     for (let i = 0; i < params.signedTxs.length; i++) {
@@ -409,10 +586,7 @@ export class ExecutionService {
       try {
         signedTx = VersionedTransaction.deserialize(Buffer.from(params.signedTxs[i], "base64"));
       } catch {
-        execution.status = "FAILED";
-        execution.updatedAt = new Date().toISOString();
-        repository.saveExecution(execution);
-        throw new AppError("TAMPERED_TRANSACTION", "Malformed transaction bytes", 400);
+        throw new AppError("MESSAGE_TAMPERED", "Malformed transaction bytes", 400);
       }
 
       // Byte verification (critical security control, PRD §4.4).
@@ -420,134 +594,147 @@ export class ExecutionService {
         .update(Buffer.from(signedTx.message.serialize()))
         .digest("hex");
       if (incomingHash !== execution.messageHashes[i]) {
-        execution.status = "FAILED";
-        execution.updatedAt = new Date().toISOString();
-        repository.saveExecution(execution);
-        repository.logAudit({
+        (await repository.logAudit({
           actor: execution.walletAddress,
           action: "BYTE_VERIFICATION_FAILED",
           entity: "execution",
           entityId: execution.id,
           before: { leg: i, expectedHash: execution.messageHashes[i] },
           after: { incomingHash },
-        });
-        throw new AppError("TAMPERED_TRANSACTION", "Signed message differs from the prepared message", 400);
+        }));
+        throw new AppError("MESSAGE_TAMPERED", "Signed message differs from the prepared message", 400);
       }
 
-      if (!delegated) {
-        const msg = signedTx.message as MessageV0;
-        const userIndex = msg.staticAccountKeys.findIndex((k) => k.equals(userPk));
-        const hasUserSig =
-          userIndex >= 0 &&
-          userIndex < msg.header.numRequiredSignatures &&
-          signedTx.signatures[userIndex]?.some((b) => b !== 0);
-        if (!hasUserSig) {
-          throw new AppError("TAMPERED_TRANSACTION", "User signature missing on leg " + (i + 1), 400);
+      const msg = signedTx.message as MessageV0;
+      const messageBytes = msg.serialize();
+      const signerCount = msg.header.numRequiredSignatures;
+      for (let signerIndex = 0; signerIndex < signerCount; signerIndex++) {
+        const signature = signedTx.signatures[signerIndex];
+        const signer = msg.staticAccountKeys[signerIndex];
+        if (
+          !signature ||
+          signature.every((byte) => byte === 0) ||
+          !nacl.sign.detached.verify(messageBytes, signature, signer.toBytes())
+        ) {
+          throw new AppError("INVALID_SIGNATURE", `Invalid required signature on leg ${i + 1}`, 400);
         }
       }
+      const userIndex = msg.staticAccountKeys
+        .slice(0, signerCount)
+        .findIndex((key) => key.equals(userPk));
+      if (userIndex < 0) {
+        throw new AppError("INVALID_SIGNATURE", "Wallet is not a required signer on leg " + (i + 1), 400);
+      }
     }
 
-    // Accept → queue landing. The response returns immediately; workers land.
-    execution.status = "SUBMITTED";
-    execution.updatedAt = new Date().toISOString();
-    for (let i = 0; i < params.signedTxs.length; i++) {
-      const leg = execution.legs[i];
-      repository.enqueueJob(
-        execution.id,
-        leg.id,
-        "land_leg",
-        {
-          executionId: execution.id,
-          legId: leg.id,
-          signedTxBase64: params.signedTxs[i],
-          mint: leg.mint,
-        },
-        Date.now()
-      );
-    }
-    repository.saveExecution(execution);
-    repository.enqueueOutbox("execution.submitted", {
-      executionId: execution.id,
-      legs: execution.legs.length,
+    // Jobs, state, audit, and outbox become visible in one commit. A competing
+    // submit waits for this lock, then returns the already accepted execution.
+    const accepted = await repository.withExecutionLock(execution.id, async (current) => {
+      if (current.status !== "PREPARED") return current;
+      if (new Date(current.expiresAt).getTime() < Date.now()) {
+        current.status = "EXPIRED";
+        await repository.updateExecutionStatus(current.id, current.status);
+        return current;
+      }
+      current.status = "SUBMITTED";
+      current.updatedAt = new Date().toISOString();
+      for (let i = 0; i < params.signedTxs.length; i++) {
+        const leg = current.legs[i];
+        await repository.enqueueJob(
+          current.id,
+          leg.id,
+          "land_leg",
+          {
+            executionId: current.id,
+            legId: leg.id,
+            signedTxBase64: params.signedTxs[i],
+            mint: leg.mint,
+          },
+          Date.now()
+        );
+      }
+      await repository.updateExecutionStatus(current.id, current.status);
+      await repository.enqueueOutbox("execution.submitted", {
+        executionId: current.id,
+        legs: current.legs.length,
+      });
+      await repository.logAudit({
+        actor: current.walletAddress,
+        action: "SUBMIT_EXECUTION",
+        entity: "execution",
+        entityId: current.id,
+        after: { status: "SUBMITTED", legs: current.legs.length },
+      });
+      return current;
     });
-    repository.logAudit({
-      actor: execution.walletAddress,
-      action: "SUBMIT_EXECUTION",
-      entity: "execution",
-      entityId: execution.id,
-      after: { status: "SUBMITTED", legs: execution.legs.length },
-    });
-    return execution;
+    if (accepted.status === "EXPIRED") throw new AppError("EXECUTION_EXPIRED", "Prepared transactions expired before acceptance", 410);
+    return accepted;
   }
 
   /** Retry only the FAILED legs of a previous execution (PRD §4.4). */
   async retryFailed(baseExecutionId: string, idempotencyKey: string, walletAddress: string): Promise<Execution> {
-    if (killSwitchActive()) {
-      throw new AppError("KILL_SWITCH_ACTIVE", "New investments are halted by the kill switch", 503);
-    }
-    const base = repository.getExecution(baseExecutionId);
+    const base = (await repository.getExecution(baseExecutionId));
     if (!base) throw new AppError("EXECUTION_NOT_FOUND", undefined, 404);
-    if (base.walletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+    if (base.walletAddress !== walletAddress) {
       throw new AppError("UNAUTHORIZED", "Execution belongs to another wallet", 403);
     }
+    assertSettled(base);
+    const recovery = await recoveryRequest(base, idempotencyKey, "retry");
+    if (recovery.existing) return recovery.existing;
     const failed = base.legs.filter((l) => l.status === "FAILED");
     if (failed.length === 0) {
       throw new AppError("NO_FAILED_LEGS", "Every leg of this execution landed; nothing to retry", 422);
     }
 
-    const feeUsdc = Number(((failed.reduce((s, l) => s + l.inAmountUsdc, 0) * config.platformFeeBps) / 10000).toFixed(4));
-    const netTotal = failed.reduce((s, l) => s + l.inAmountUsdc, 0);
+    const legs = await Promise.all(failed.map(async leg => legSide(base, leg) === "sell"
+      ? recoverySell(leg, leg.inputBaseUnits, await repository.getToken(leg.mint), base.type === "rebalance" ? config.rebalanceFeeBps : config.platformFeeBps)
+      : retryBuy(leg, base.type, base.type === "rebalance" ? config.rebalanceFeeBps : config.platformFeeBps)));
+    if (legs.some(leg => leg.side === "buy") && await killSwitchActive()) {
+      throw new AppError("KILL_SWITCH_ACTIVE", "New investments are halted by the kill switch", 503);
+    }
+    const feeUsdc = legs.reduce((sum, leg) => sum + (leg.feeUsdc ?? 0), 0);
+    const totalUsdc = legs.reduce((sum, leg) => sum + leg.inUsdcAmount + (leg.side === "buy" ? leg.feeUsdc ?? 0 : 0), 0);
 
-    return prepareWithLegs({
+    return (await prepareWithLegs({
       walletAddress,
       idempotencyKey,
-      type: "open",
+      type: base.type,
       basketId: base.basketId,
       basketVersionId: base.basketVersionId,
-      totalUsdc: netTotal,
+      totalUsdc,
       feeUsdc,
-      legs: failed.map((l) => ({ mint: l.mint, symbol: l.symbol, inUsdcAmount: l.inAmountUsdc })),
+      legs,
       auditAction: "RETRY_FAILED_LEGS",
       baseExecutionId: base.id,
-    });
+      recoveryAction: "retry",
+      replaceRecoveryId: recovery.replaceId,
+    }));
   }
 
   /** Unwind: sell the CONFIRMED legs of a partial execution back to USDC. */
   async unwind(executionId: string, idempotencyKey: string, walletAddress: string): Promise<Execution> {
-    const base = repository.getExecution(executionId);
+    const base = (await repository.getExecution(executionId));
     if (!base) throw new AppError("EXECUTION_NOT_FOUND", undefined, 404);
-    if (base.walletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+    if (base.walletAddress !== walletAddress) {
       throw new AppError("UNAUTHORIZED", "Execution belongs to another wallet", 403);
     }
-    const landed = base.legs.filter((l) => l.status === "CONFIRMED" && Number(l.actualOut ?? 0) > 0);
+    assertSettled(base);
+    const recovery = await recoveryRequest(base, idempotencyKey, "unwind");
+    if (recovery.existing) return recovery.existing;
+    const landed = base.legs.filter((l) => l.status === "CONFIRMED" && legSide(base, l) === "buy" && Number(l.actualOut ?? 0) > 0);
     if (landed.length === 0) {
-      throw new AppError("DUST_LEG_FORBIDDEN", "No landed legs to unwind", 422);
+      throw new AppError("DUST_LEG", "No landed legs to unwind");
     }
 
     // Sell-leg fee model: OUTPUT-side (deducted from USDC proceeds) — the
     // user has no USDC balance to transfer pre-sell; "never both" still holds.
-    const legs: PrepareLegInput[] = [];
-    let totalGross = 0;
-    let totalFee = 0;
-    for (const leg of landed) {
-      const token = repository.getToken(leg.mint);
-      const decimals = token?.decimals ?? 6;
-      const price = token && token.priceUsd > 0 ? token.priceUsd : 1;
-      const assetBase = Number(leg.actualOut);
-      const gross = (assetBase / 10 ** decimals) * price;
-      const fee = Number(((gross * config.platformFeeBps) / 10000).toFixed(4));
-      totalGross += gross;
-      totalFee += fee;
-      legs.push({
-        mint: leg.mint,
-        symbol: leg.symbol,
-        inUsdcAmount: Number(gross.toFixed(4)),
-        expectedOutBaseUnits: Math.floor((gross - fee) * 10 ** USDC_DECIMALS),
-        ...( { inAssetBaseUnits: assetBase } as object),
-      } as PrepareLegInput);
-    }
+    const legs = await Promise.all(landed.map(async leg => recoverySell(
+      leg, leg.receipt?.actualOut ?? leg.actualOut, await repository.getToken(leg.mint), config.platformFeeBps
+    )));
+    const totalGross = legs.reduce((sum, leg) => sum + leg.inUsdcAmount, 0);
+    const totalFee = legs.reduce((sum, leg) => sum + (leg.feeUsdc ?? 0), 0);
 
-    return prepareWithLegs({
+    return (await prepareWithLegs({
       walletAddress,
       idempotencyKey,
       type: "close",
@@ -558,7 +745,9 @@ export class ExecutionService {
       legs,
       auditAction: "UNWIND_LANDED_LEGS",
       baseExecutionId: base.id,
-    });
+      recoveryAction: "unwind",
+      replaceRecoveryId: recovery.replaceId,
+    }));
   }
 }
 

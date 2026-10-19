@@ -58,7 +58,7 @@
 
 .basket-card .card-title span:first-child {
   font-family: inherit;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 19px;
   color: #ffffff;
   letter-spacing: -0.3px;
@@ -74,7 +74,7 @@
   padding: 2px 7px;
   border-radius: 6px;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   background-color: #37264e;
   color: #bf86ff;
   border: 1px solid rgba(191, 134, 255, 0.2);
@@ -127,7 +127,7 @@
   align-items: center;
   justify-content: center;
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 600;
   color: #ffffff;
 }
 
@@ -160,7 +160,7 @@
 
 .return-block strong {
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 600;
   font-family: monospace;
   color: #00FF85;
   letter-spacing: -0.3px;

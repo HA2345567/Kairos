@@ -5,7 +5,7 @@ use anchor_lang::solana_program::{
 };
 use anchor_spl::token::{Token, TokenAccount};
 use crate::errors::KairosError;
-use crate::state::{BasketConfig, GlobalConfig};
+use crate::state::{version_contains_mint, BasketConfig, BasketVersion, BasketVersionExtension, GlobalConfig};
 
 pub const RAYDIUM_CPMM_PROGRAM_ID: Pubkey = pubkey!("DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb");
 pub const MEMO_V2_PROGRAM_ID: Pubkey = pubkey!("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
@@ -33,14 +33,17 @@ pub struct InvestLegExecuted {
 ///   5. memo, then event.
 /// Any failure reverts the whole instruction, so a failed leg charges no fee.
 #[derive(Accounts)]
+#[instruction(version: u32)]
 pub struct SwapAndDistributeLeg<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
 
-    #[account(constraint = !global_config.paused @ KairosError::ProgramPaused)]
-    pub global_config: Account<'info, GlobalConfig>,
+    #[account(seeds = [b"global"], bump = global_config.bump,
+        constraint = !global_config.paused @ KairosError::ProgramPaused)]
+    pub global_config: Box<Account<'info, GlobalConfig>>,
 
     #[account(
+        mut,
         constraint = user_usdc_ata.owner == user.key() @ KairosError::InvalidUserAta,
         constraint = user_usdc_ata.mint == global_config.usdc_mint @ KairosError::UsdcMintMismatch
     )]
@@ -66,7 +69,15 @@ pub struct SwapAndDistributeLeg<'info> {
         bump = basket_config.bump,
         constraint = basket_config.is_active @ KairosError::BasketNotActive
     )]
-    pub basket_config: Account<'info, BasketConfig>,
+    pub basket_config: Box<Account<'info, BasketConfig>>,
+
+    #[account(
+        seeds = [b"version", basket_config.basket_id.as_bytes(), &version.to_le_bytes()],
+        bump = basket_version.bump,
+        constraint = basket_version.basket_id == basket_config.basket_id @ KairosError::InvalidBasketVersion,
+        constraint = basket_version.version == version @ KairosError::InvalidBasketVersion
+    )]
+    pub basket_version: Box<Account<'info, BasketVersion>>,
 
     /// CHECK: Validated against Raydium CPMM devnet/mainnet program ID
     #[account(
@@ -110,10 +121,20 @@ pub struct SwapAndDistributeLeg<'info> {
 
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
+
+    /// CHECK: The pinned executable SPL Memo program is invoked below.
+    #[account(address = MEMO_V2_PROGRAM_ID, executable)]
+    pub memo_program: UncheckedAccount<'info>,
+
+    /// Optional overflow entry. Older basket versions omit it using the
+    /// program-id sentinel; 11–12-leg versions must pass their extension PDA.
+    pub basket_version_extension: Option<Account<'info, BasketVersionExtension>>,
 }
 
 pub fn handler<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, SwapAndDistributeLeg<'info>>,
+    _version: u32,
+    fee_bps: u16,
     amount_in_usdc: u64,
     min_amount_out: u64,
     memo: String,
@@ -121,22 +142,26 @@ pub fn handler<'a, 'b, 'c, 'info>(
     // 1. Global kill switch (constraint above) + basket active (constraint).
     let global = &ctx.accounts.global_config;
     let basket = &ctx.accounts.basket_config;
+    let versioned_basket = &ctx.accounts.basket_version;
+    require!(GlobalConfig::fee_bps_is_valid(fee_bps), KairosError::InvalidFeeBps);
+    require!(fee_bps <= global.fee_bps, KairosError::InvalidFeeBps);
 
     // 2. Pool account sanity: the CPI input mint must be the pinned USDC and
     //    the output mint must match the destination ATA.
     let target_mint = ctx.accounts.user_dest_ata.mint;
-    let is_valid_mint = basket
-        .items
-        .iter()
-        .take(basket.leg_count as usize)
-        .any(|item| item.mint == target_mint);
+    let is_valid_mint = version_contains_mint(
+        versioned_basket.key(),
+        versioned_basket,
+        ctx.accounts.basket_version_extension.as_ref().map(|extension| &**extension),
+        target_mint,
+    )?;
     require!(is_valid_mint, KairosError::InvalidUserAta);
     require_keys_eq!(ctx.accounts.output_mint.key(), target_mint, KairosError::InvalidUserAta);
     require_keys_eq!(ctx.accounts.input_mint.key(), global.usdc_mint, KairosError::UsdcMintMismatch);
 
     // 3. Fee (input-side) + swap the net amount.
     let fee_usdc = u128::from(amount_in_usdc)
-        .checked_mul(u128::from(global.fee_bps))
+        .checked_mul(u128::from(fee_bps))
         .and_then(|v| v.checked_div(10_000))
         .and_then(|v| u64::try_from(v).ok())
         .ok_or(KairosError::MathOverflow)?;
@@ -197,6 +222,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
     };
 
     let account_infos = [
+        ctx.accounts.cpmm_program.to_account_info(),
         ctx.accounts.user.to_account_info(),
         ctx.accounts.authority.to_account_info(),
         ctx.accounts.amm_config.to_account_info(),
@@ -229,7 +255,7 @@ pub fn handler<'a, 'b, 'c, 'info>(
             accounts: vec![],
             data: memo.as_bytes().to_vec(),
         };
-        invoke(&memo_ix, &[])?;
+        invoke(&memo_ix, &[ctx.accounts.memo_program.to_account_info()])?;
     }
 
     emit!(InvestLegExecuted {

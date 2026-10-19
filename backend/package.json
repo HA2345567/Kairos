@@ -5,23 +5,28 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
     "typecheck": "tsc --noEmit",
-    "setup": "tsx scripts/devnet-setup.ts",
-    "seed": "tsx scripts/seed.ts",
-    "test": "node --import tsx --test \"tests/**/*.test.ts\""
+    "setup": "bun scripts/devnet-setup.ts",
+    "seed": "bun scripts/seed.ts",
+    "test": "bun test tests --parallel=1 --max-concurrency=1",
+    "nfr": "bun scripts/nfr-probe.ts",
+    "acceptance": "bun scripts/acceptance-devnet.ts"
   },
   "dependencies": {
-    "@coral-xyz/anchor": "^0.30.1",
+    "@coral-xyz/anchor": "0.31.1",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.0",
     "bs58": "^6.0.0",
     "dotenv": "^16.4.7",
+    "pg": "^8.16.3",
     "tweetnacl": "^1.0.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/pg": "^8.15.5",
+    "@electric-sql/pglite": "^0.3.14",
     "@types/node": "^22.13.0",
     "tsx": "^4.23.15",
     "typescript": "^5.7.3"

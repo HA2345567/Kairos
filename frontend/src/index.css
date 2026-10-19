@@ -1,9 +1,26 @@
-@import url("https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62.5..125,100..900;1,62.5..125,100..900&family=Archivo+Narrow:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap");
 @import "./components/arc/foundation.css";
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@font-face {
+  font-family: "Archivo";
+  src: url("/fonts/archivo-variable-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 62.5% 125%;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Archivo";
+  src: url("/fonts/archivo-variable-latin-italic.woff2") format("woff2");
+  font-style: italic;
+  font-weight: 100 900;
+  font-stretch: 62.5% 125%;
+  font-display: swap;
+}
 
 /* Kairos Design System — Powered by Arc Foundation */
 
@@ -95,6 +112,18 @@
     font-variation-settings: "wdth" 88;
     letter-spacing: -0.02em;
     color: inherit;
+  }
+
+  h1 {
+    font-weight: 600;
+  }
+
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 550;
   }
 
   button,
@@ -348,7 +377,7 @@
   position: relative;
   background-color: var(--primary);
   color: var(--primary-foreground) !important;
-  font-weight: 800;
+  font-weight: 600;
   border: 1px solid var(--border-strong);
   border-radius: 9999px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
