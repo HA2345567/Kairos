@@ -8,7 +8,7 @@ interface WalletAuthContextValue {
   authenticating: boolean;
   error: string | null;
   ensureAuthenticated: () => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const WalletAuthContext = createContext<WalletAuthContextValue | null>(null);
@@ -143,10 +143,14 @@ export function WalletAuthProvider({ children }: { children: ReactNode }) {
     });
   }, [address, publicKey, authenticated, authenticating, ensureAuthenticated]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     // Revoke server-side first (PRD §4.5 one-click revoke); local state clears
     // even if the network call fails, because a stale local token is useless.
-    void kairosApi.logout().catch(() => kairosApi.clearAuth());
+    try {
+      await kairosApi.logout();
+    } catch {
+      kairosApi.clearAuth();
+    }
     setAuthenticated(false);
     setError(null);
   }, []);

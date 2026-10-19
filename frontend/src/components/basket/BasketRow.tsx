@@ -19,6 +19,10 @@ export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRo
 
   const historyPoints = navSummary?.history ?? [];
   const hasData = historyPoints.length > 1;
+  const historyCoverageBps = navSummary?.progress.coverageWeightBps ?? 0;
+  const historyLabel = navSummary && !navSummary.complete
+    ? `1Y · ${Math.round(historyCoverageBps / 100)}% COVERED`
+    : "1Y HISTORY";
   const firstHistoryValue = historyPoints[0]?.navValue;
   const currentHistoryValue = historyPoints[historyPoints.length - 1]?.navValue;
   const historicalReturn = hasData && firstHistoryValue && firstHistoryValue > 0 && currentHistoryValue !== undefined
@@ -133,7 +137,7 @@ export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRo
             <span className="font-mono text-xs text-text-muted font-medium">No data yet</span>
           )}
           <span className="text-[10px] font-mono uppercase font-semibold text-text-muted tracking-wider">
-            1Y HISTORY
+          {historyLabel}
           </span>
         </div>
 

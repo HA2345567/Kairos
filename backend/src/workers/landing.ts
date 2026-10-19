@@ -22,7 +22,9 @@ import { logger, recordLegTerminalLatency } from "../observability";
 
 const POLL_INTERVAL_MS = 1_000;
 const CONFIRM_DEADLINE_MS = 90_000;
-const CONFIRM_POLL_MS = 2_000;
+// Devnet slots are much shorter than the old two-second poll interval. Check
+// more often so confirmed legs settle promptly without weakening commitment.
+const CONFIRM_POLL_MS = 750;
 const MAX_CONCURRENT_LEGS = 4;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

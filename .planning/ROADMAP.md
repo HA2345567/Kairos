@@ -1,5 +1,10 @@
 # Kairos — Devnet Product Roadmap
 
+**Normative contract:** [docs/PRD_V4.md](../docs/PRD_V4.md) (Kairos PRD v4.0,
+devnet only). Phase success criteria below exist to satisfy its FR/FE/NFR tables;
+current coverage is tracked in
+[docs/PRD_V4_COVERAGE_AUDIT.md](../docs/PRD_V4_COVERAGE_AUDIT.md).
+
 ## Milestone v1.0: Devnet product aligned to PRD v4.0
 
 ### Phase 1: Catalog truth and foundation

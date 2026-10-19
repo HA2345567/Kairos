@@ -616,6 +616,9 @@
 .labs-create-modal-card {
   width: 100%;
   max-width: 32rem;
+  max-height: calc(100dvh - 2rem);
+  display: flex;
+  flex-direction: column;
   border-radius: 0.75rem;
   border: 1px solid var(--border);
   background: var(--surface-muted);
@@ -712,7 +715,8 @@
 }
 
 .labs-create-modal-list {
-  max-height: 20rem;
+  max-height: min(20rem, 42dvh);
+  min-height: 0;
   overflow-y: auto;
   padding: 0.5rem;
   display: flex;

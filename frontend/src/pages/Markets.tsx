@@ -153,6 +153,25 @@ function GrainCard({ children }: { children: ReactNode }) {
 }
 
 const INITIAL_CATEGORIES = ["All"];
+const MARKET_DISPLAY_ORDER = [
+  "solana-infrastructure",
+  "solana-real-world-assets",
+  "solana-sigma-basket",
+  "solana-culture-memes",
+  "solana-ai-compute",
+  "solana-depin-infrastructure",
+];
+const MARKET_DISPLAY_ORDER_INDEX = new Map(
+  MARKET_DISPLAY_ORDER.map((slug, index) => [slug, index])
+);
+
+function orderMarketBaskets(markets: Basket[]): Basket[] {
+  return [...markets].sort((a, b) => {
+    const aIndex = MARKET_DISPLAY_ORDER_INDEX.get(a.slug) ?? Number.MAX_SAFE_INTEGER;
+    const bIndex = MARKET_DISPLAY_ORDER_INDEX.get(b.slug) ?? Number.MAX_SAFE_INTEGER;
+    return aIndex - bIndex || a.name.localeCompare(b.name);
+  });
+}
 
 export default function Markets() {
   const [baskets, setBaskets] = useState<Basket[]>([]);
@@ -183,9 +202,10 @@ export default function Markets() {
       try {
         const fetchedBaskets = await fetchBaskets();
         if (active) {
-          setBaskets(fetchedBaskets);
+          const orderedBaskets = orderMarketBaskets(fetchedBaskets);
+          setBaskets(orderedBaskets);
           const uniqueCategories = Array.from(
-            new Set(fetchedBaskets.map((basket) => basket.category))
+            new Set(orderedBaskets.map((basket) => basket.category))
           );
           setCategories(["All", ...uniqueCategories.sort()]);
         }

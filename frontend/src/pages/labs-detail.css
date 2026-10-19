@@ -5,7 +5,7 @@
   margin: 0 auto;
   padding: 48px 32px;
   color: #fdfdfd;
-  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  font-family: var(--font-body, "Archivo", sans-serif);
   font-size: 16px;
   line-height: 24px;
 }
@@ -209,7 +209,7 @@
   min-width: 0;
   margin: 0;
   color: #fdfdfd;
-  font-family: "Manrope", var(--font-display, ui-sans-serif), sans-serif;
+  font-family: var(--font-display, "Archivo", sans-serif);
   font-size: 30px;
   font-weight: 700;
   letter-spacing: -0.035em;
@@ -516,7 +516,7 @@
 .labsdetail-history-header h2 {
   margin: 0;
   color: #fdfdfd;
-  font-family: "Manrope", var(--font-display, ui-sans-serif), sans-serif;
+  font-family: var(--font-display, "Archivo", sans-serif);
   font-size: 16px;
   font-weight: 650;
   line-height: 1.3;
@@ -934,7 +934,7 @@
 }
 
 .labsdetail-legend-portfolio {
-  background: #22c55e;
+  background: #d4d4d4;
 }
 
 .labsdetail-legend-benchmark {
@@ -1129,6 +1129,28 @@
 
   .labsdetail-allocation {
     grid-template-columns: 28px minmax(0, 1fr) 46px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 900px) {
+  .labsdetail-columns {
+    flex-direction: column;
+  }
+
+  .labsdetail-left-column,
+  .labsdetail-side-column {
+    width: 100%;
+  }
+
+  .labsdetail-side-column {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .labsdetail-review-card {
+    grid-column: 1 / -1;
   }
 }
 

@@ -12,6 +12,7 @@ const NAV = [
   { to: "/markets", label: "Baskets" },
   { to: "/positions", label: "Positions" },
   { to: "/ideas", label: "Ideas" },
+  { to: "/settings", label: "Settings" },
 ];
 
 export function Header() {
@@ -53,7 +54,7 @@ export function Header() {
 
         {/* Center: Floating Capsule Navigation Pill (Hidden on landing page, shown inside the app) */}
         {!isLanding && (
-          <nav className="hidden md:flex items-center border border-border/40 bg-surface/90 backdrop-blur-md p-1.5 rounded-2xl shadow-sm">
+          <nav className="hidden lg:flex items-center border border-border/40 bg-surface/90 backdrop-blur-md p-1.5 rounded-2xl shadow-sm">
             {NAV.map((item) => (
               <NavLink
                 key={item.to}
@@ -74,7 +75,7 @@ export function Header() {
         )}
 
         {/* Right: Landing shows "Launch App", App pages show "Connect Wallet" */}
-        <div className="hidden md:flex items-center gap-3">
+        <div className="hidden lg:flex items-center gap-3">
           {isLanding ? (
             <>
               <Link
@@ -99,7 +100,7 @@ export function Header() {
                   onClick={handleSignIn}
                   className="group inline-flex h-10 items-center gap-2.5 rounded-full border border-white/10 bg-[#1b1b1b] py-1 pl-1.5 pr-4 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(0,0,0,0.22)] transition-all hover:border-white/20 hover:bg-[#242424] active:scale-[0.98]"
                 >
-                  <span className="grid size-7 place-items-center rounded-full bg-gradient-to-br from-[#d7c2ff] via-[#bba0ff] to-[#79f2c0] text-[#111] shadow-[0_0_16px_rgba(153,69,255,0.25)]">
+                  <span className="grid size-7 place-items-center rounded-full bg-gradient-to-br from-neutral-100 via-neutral-300 to-neutral-500 text-[#111] shadow-[0_0_16px_rgba(255,255,255,0.14)]">
                     <Wallet className="size-3.5" aria-hidden="true" />
                   </span>
                   <span>Connect wallet</span>
@@ -119,7 +120,7 @@ export function Header() {
 
         {/* Mobile menu toggle */}
         <button
-          className="md:hidden rounded-lg border border-border p-2 text-foreground"
+          className="lg:hidden rounded-lg border border-border p-2 text-foreground"
           onClick={() => setOpen((s) => !s)}
           aria-label="Toggle Menu"
         >
@@ -129,7 +130,7 @@ export function Header() {
 
       {/* Mobile Drawer */}
       {open && (
-        <div className="border-t border-border/40 bg-background/95 backdrop-blur-xl px-4 py-3 md:hidden space-y-2">
+        <div className="border-t border-border/40 bg-background/95 backdrop-blur-xl px-4 py-3 lg:hidden space-y-2">
           {!isLanding && NAV.map((item) => (
             <NavLink
               key={item.to}
@@ -177,7 +178,7 @@ export function Header() {
                     className="group flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#1b1b1b] p-2 text-white transition-all hover:border-white/20 hover:bg-[#242424] active:scale-[0.99]"
                   >
                     <span className="flex items-center gap-3">
-                      <span className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-[#d7c2ff] via-[#bba0ff] to-[#79f2c0] text-[#111] shadow-[0_0_18px_rgba(153,69,255,0.2)]">
+                      <span className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-neutral-100 via-neutral-300 to-neutral-500 text-[#111] shadow-[0_0_18px_rgba(255,255,255,0.12)]">
                         <Wallet className="size-4" aria-hidden="true" />
                       </span>
                       <span className="text-left">

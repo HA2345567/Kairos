@@ -1,7 +1,13 @@
 # Kairos PRD v4.0 Coverage and Implementation Plan
 
+> **Superseded (2026-10-18):** this plan was audited at `afb5454`. The current
+> HEAD audit is [docs/PRD_V4_COVERAGE_AUDIT.md](PRD_V4_COVERAGE_AUDIT.md). Keep
+> this file for the Wave-by-Wave implementation history; use the audit for
+> current status.
+
 **Audit date:** 2026-10-17
-**Source of truth:** PRD v4.0 supplied in the working session.
+**Source of truth:** [docs/PRD_V4.md](PRD_V4.md) (PRD v4.0; at audit time this
+existed only in the working session).
 **Repository state audited:** `afb5454 feat: enforce allowlists and finalized reconciliation`
 
 ## Executive result
@@ -166,8 +172,8 @@ should not be used to hide an incomplete backend or smart-contract boundary.
 
 ### Wave 0 — freeze the contract and remove ambiguity
 
-1. Treat the user-supplied PRD v4.0 as normative; keep the repository's v3
-   document as historical context only.
+1. Treat [docs/PRD_V4.md](PRD_V4.md) as normative (it is now committed); keep the
+   repository's v3 document as historical context only.
 2. Keep the existing Bun/React/PostgreSQL/Anchor stack. Record deliberate stack
    deviations rather than starting a framework migration.
 3. Declare one devnet execution path:

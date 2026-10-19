@@ -1,5 +1,10 @@
 # Kairos Requirements
 
+These IDs are the milestone's traceability labels. The normative contract they
+trace to is [docs/PRD_V4.md](../docs/PRD_V4.md) (Kairos PRD v4.0, devnet only);
+per-requirement status against that contract lives in
+[docs/PRD_V4_COVERAGE_AUDIT.md](../docs/PRD_V4_COVERAGE_AUDIT.md).
+
 ## v1 Requirements
 
 ### Catalog and curation

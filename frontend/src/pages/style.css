@@ -1513,7 +1513,7 @@ button {
   position: fixed;
   right: 22px;
   bottom: 78px;
-  width: 290px;
+  width: min(290px, calc(100vw - 32px));
   background: var(--surface, #242424);
   padding: 22px;
   border: 1px solid var(--border);
@@ -2608,5 +2608,15 @@ button {
 
   .market-detail-page .invest-panel {
     display: none;
+  }
+
+  .help-button {
+    right: 16px;
+    bottom: 82px;
+  }
+
+  .help-popover {
+    right: 16px;
+    bottom: 136px;
   }
 }
