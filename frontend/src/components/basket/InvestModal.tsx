@@ -172,7 +172,13 @@ export function InvestModal({
       // §13.1 age gate: the backend refuses prepare with ELIGIBILITY_REQUIRED,
       // so surface the attestation before any transaction is built.
       await ensureAuthenticated();
-      const eligibility = await kairosApi.getEligibility();
+      setStep("quoting");
+      const [eligibilityResult, quoteResult] = await Promise.allSettled([
+        kairosApi.getEligibility(),
+        kairosApi.getQuote(basket.slug, amountToInvest, "SOL"),
+      ]);
+      if (eligibilityResult.status === "rejected") throw eligibilityResult.reason;
+      const eligibility = eligibilityResult.value;
       if (!eligibility.eligibility.eligible) {
         setIsInvesting(false);
         setStep("input");
@@ -188,9 +194,11 @@ export function InvestModal({
         );
       }
 
-      // Step 1: Quote from the backend's configured devnet price source
-      setStep("quoting");
-      const quoteRes = await kairosApi.getQuote(basket.slug, amountToInvest, "SOL");
+      // Eligibility and the display quote are independent backend reads. Run
+      // them together; prepare still recomputes the authoritative quote before
+      // it builds any wallet-signable transaction.
+      if (quoteResult.status === "rejected") throw quoteResult.reason;
+      const quoteRes = quoteResult.value;
       const quoteLegs = quoteRes?.quote?.legs;
       if (!quoteLegs?.length) throw new Error("The quote did not include any investable basket legs.");
       setLiveQuote(quoteLegs);
@@ -240,18 +248,32 @@ export function InvestModal({
         idempotencyKey,
       });
       setStep("confirming");
-      let curExec = await kairosApi.getExecution(execId);
-      for (let i = 0; i < 30 && ["SUBMITTED", "LANDING"].includes(curExec.status); i++) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        curExec = await kairosApi.getExecution(execId);
+      const confirmationDeadline = Date.now() + 30_000;
+      let status = await kairosApi.getExecutionStatus(execId);
+      let pollDelayMs = 250;
+      while (!status.terminal && Date.now() < confirmationDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, pollDelayMs));
+        status = await kairosApi.getExecutionStatus(execId);
+        pollDelayMs = Math.min(pollDelayMs + 250, 1_000);
       }
-      if (curExec.status !== "COMPLETED") {
+      if (status.status !== "COMPLETED") {
+        const allLegsExpired = status.legs.length > 0 && status.legs.every(
+          leg => leg.status === "FAILED" && leg.error === "BLOCKHASH_EXPIRED"
+        );
+        if (allLegsExpired) {
+          throw new Error(
+            `Execution ${execId} expired before Devnet accepted the transactions. No SOL was spent. Reopen Invest to prepare and sign a fresh batch.`
+          );
+        }
         throw new Error(
-          curExec.status === "PARTIALLY_COMPLETED"
+          status.status === "PARTIALLY_COMPLETED"
             ? `Execution ${execId} completed partially. Resume or unwind it from execution history.`
-            : `Execution ${execId} is ${curExec.status.toLowerCase()}. Check execution history before retrying.`
+            : `Execution ${execId} is ${status.status.toLowerCase()}. Check execution history before retrying.`
         );
       }
+      // Fetch the full record once, after terminal confirmation, for the
+      // transaction signature shown in the success view.
+      const curExec = await kairosApi.getExecution(execId);
       sig = curExec.legs.find((leg) => leg.txSignature)?.txSignature ?? "";
       if (!sig) throw new Error(`Execution ${execId} completed without a recorded transaction signature.`);
 

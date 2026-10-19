@@ -158,6 +158,10 @@ class KairosApiClient {
       if (data.error && typeof data.error === 'string') {
         const fallbackMessages: Record<string, string> = {
           BASKET_NOT_ACTIVE: "This basket is paused until its Devnet assets are initialized and funded.",
+          BLOCKHASH_EXPIRED: "The prepared Devnet transactions expired before submission. No transaction was sent. Reopen Invest to prepare and sign a fresh batch.",
+          INVALID_SIGNATURE: "The signed batch failed verification before submission. No Solana transaction was sent. Reconnect your wallet and prepare a fresh batch.",
+          PROGRAM_NOT_DEPLOYED: "The Kairos router is not deployed on this Solana cluster yet. No transaction was prepared or sent.",
+          ROUTER_REGISTRY_NOT_READY: "This basket version is not published in the on-chain router registry. No transaction was prepared or sent.",
         };
         throw new ApiError(
           response.status,

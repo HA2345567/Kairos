@@ -21,6 +21,7 @@ const LeaderboardPage = lazy(() => import("./pages/Leaderboard.tsx"));
 const ExecutionStatusPage = lazy(() => import("./pages/ExecutionStatusPage.tsx"));
 const PositionDetailPage = lazy(() => import("./pages/PositionDetailPage.tsx"));
 const LegalPage = lazy(() => import("./pages/LegalPage.tsx"));
+const SettingsPage = lazy(() => import("./pages/Settings.tsx"));
 const DocsPage = lazy(() => import("./pages/DocsPage.tsx"));
 
 /** FE-09: anonymized page views; must live inside the router. */
@@ -70,6 +71,7 @@ const App = () => (
               <Route path="/positions" element={<Portfolio />} />
               <Route path="/positions/:id" element={<PositionDetailPage />} />
               <Route path="/executions/:id" element={<ExecutionStatusPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
               <Route path="/terms" element={<LegalPage />} />
               <Route path="/privacy" element={<LegalPage />} />
               <Route path="/ideas" element={<Labs />} />

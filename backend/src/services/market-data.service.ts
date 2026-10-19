@@ -157,9 +157,10 @@ function requestSparkline(asset: MarketAsset) {
   if (queuedSparklineMints.has(key) || (sparklineRetryAfter.get(key) ?? 0) > Date.now()) return;
   queuedSparklineMints.add(key);
   const url = `https://api.geckoterminal.com/api/v2/networks/solana/pools/${encodeURIComponent(asset.poolAddress)}/ohlcv/hour?aggregate=1&limit=24&currency=usd&token=${encodeURIComponent(asset.marketMint)}`;
-  // Card charts are visible immediately on basket pages, so let the 24H candle
-  // request run before the slower daily history backfill.
-  void enqueueProviderRequest(url, true)
+  // The basket history chart is the primary historical view and needs the
+  // provider's limited request slots first. Use endpoint start/end references
+  // for card sparklines until lower-priority hourly candles arrive.
+  void enqueueProviderRequest(url)
     .then(async (response) => {
       if (!response.ok) {
         if (response.status === 429) sparklineRetryAfter.set(key, Date.now() + retryDelayMs(response, 60_000));

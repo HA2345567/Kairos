@@ -15,8 +15,8 @@
 .basket-card {
   display: flex;
   flex-direction: column;
-  background-color: #071611;
-  border: 1px solid #0f2a20;
+  background-color: var(--surface, #242424);
+  border: 1px solid var(--border, #292929);
   border-radius: 20px;
   padding: 14px;
   text-decoration: none;
@@ -28,7 +28,7 @@
 
 .basket-card:hover {
   transform: translateY(-2px);
-  border-color: #174232;
+  border-color: var(--border-strong, #383838);
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.7), 0 0 25px rgba(0, 255, 133, 0.05);
 }
 
@@ -37,7 +37,7 @@
   height: 220px;
   object-fit: cover;
   border-radius: 14px;
-  background-color: #05100c;
+  background-color: var(--background, #141414);
   border: 1px solid rgba(15, 42, 32, 0.7);
   display: block;
 }
@@ -120,9 +120,9 @@
   height: 22px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1.5px solid #071611;
+  border: 1.5px solid var(--surface, #242424);
   margin-left: -5px;
-  background-color: #12241d;
+  background-color: var(--surface-elevated, #2a2a2a);
   display: inline-flex;
   align-items: center;
   justify-content: center;

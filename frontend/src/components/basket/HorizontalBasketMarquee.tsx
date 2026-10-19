@@ -38,10 +38,6 @@ function MarqueeCard({ basket }: { basket: Basket }) {
           }}
         />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/15" />
-        <div className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/90 shadow-sm backdrop-blur-md">
-          <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-          {basket.category || "Solana Basket"}
-        </div>
         {basket.pointsMultiplier && (
           <span className="absolute bottom-4 right-4 rounded-md border border-white/15 bg-black/45 px-2 py-1 font-mono text-[10px] font-semibold text-white/80 backdrop-blur-sm">
             {basket.pointsMultiplier}

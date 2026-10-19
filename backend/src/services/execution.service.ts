@@ -12,7 +12,7 @@ import { assertSettled, legSide, recoverySell, retryBuy } from "./execution-reco
 import { saveRecovery, type RecoveryAction } from "../db/recovery";
 import { recoveryRequest } from "./recovery-request";
 import { poolForPair } from "../chain/pool-config";
-import { getConnection, getSignatureStatuses } from "../chain/connection";
+import { getConnection, getSignatureStatuses, withFailover } from "../chain/connection";
 import {
   buildLegSwapTx,
   buildReverseLegTx,
@@ -26,6 +26,7 @@ import { hashExecutionRequest } from "./request-hash";
 import { assertTransactionAllowlisted } from "../chain/allowlist";
 import { assertPrepareHealth, isKillSwitchActive } from "./controls";
 import { KAIROS_ROUTER_PROGRAM_ID, RAYDIUM_CPMM_PROGRAM_ID } from "../chain/programSwap";
+import { verifyRegistryVersion } from "../chain/registry";
 
 /**
  * Execution engine (PRD §4.4): prepare → sign (client) → submit → land.
@@ -163,15 +164,6 @@ async function prepareWithLegs(opts: {
 
   let blockhash: string;
   let lastValidBlockHeight: number;
-  try {
-    ({ blockhash, lastValidBlockHeight } = await getLatestBlockhashWithHeight(conn));
-  } catch (err) {
-    throw new AppError(
-      "ALL_AGGREGATORS_DOWN",
-      `Venue/RPC health is unavailable: ${(err as Error).message}`,
-      503
-    );
-  }
 
   // Verify the selected funding balance for opens only: sells are funded
   // by the assets being sold, and rebalance buys are funded by the sells.
@@ -225,6 +217,45 @@ async function prepareWithLegs(opts: {
   }
   if (publishedVersion && opts.legs.some(leg => !publishedVersion.legs.some(item => item.mint === leg.mint))) {
     throw new AppError("BASKET_VERSION_MISMATCH", "A requested mint is outside the selected basket version", 409);
+  }
+
+  if (config.swapBuilder === "program" && opts.fundingAsset !== "SOL") {
+    const routerProgram = await withFailover((connection) =>
+      connection.getAccountInfo(KAIROS_ROUTER_PROGRAM_ID, "confirmed")
+    );
+    if (!routerProgram?.executable) {
+      throw new AppError(
+        "PROGRAM_NOT_DEPLOYED",
+        "The Kairos router program is not deployed on this Solana cluster. No investment transactions were prepared.",
+        503
+      );
+    }
+
+    const registry = await verifyRegistryVersion(
+      opts.basketId,
+      publishedVersion!.version,
+      publishedVersion!.legs.map(({ mint, weightBps }) => ({ mint, weightBps }))
+    );
+    if (!registry.verified) {
+      throw new AppError(
+        "ROUTER_REGISTRY_NOT_READY",
+        `Basket version ${publishedVersion!.version} is not ready in the on-chain router registry (${registry.reason ?? "unverified"}). No investment transactions were prepared.`,
+        503
+      );
+    }
+  }
+
+  // Fetch the blockhash only after balance and registry reads, immediately
+  // before compiling transactions. The builders partially sign with the
+  // backend relayer, so the message must never be mutated after this point.
+  try {
+    ({ blockhash, lastValidBlockHeight } = await getLatestBlockhashWithHeight(conn));
+  } catch (err) {
+    throw new AppError(
+      "ALL_AGGREGATORS_DOWN",
+      `Venue/RPC health is unavailable: ${(err as Error).message}`,
+      503
+    );
   }
 
   const preparedLegResults = await mapWithConcurrency(opts.legs, 4, async (legIn, i) => {
@@ -369,7 +400,6 @@ async function prepareWithLegs(opts: {
 
     return {
       preparedTx: Buffer.from(built.transaction.serialize()).toString("base64"),
-      messageHash: built.messageHash,
       leg: {
       id: `leg-${i + 1}`,
       executionId: "",
@@ -388,7 +418,7 @@ async function prepareWithLegs(opts: {
     };
   });
   const preparedTxs = preparedLegResults.map(result => result.preparedTx);
-  const messageHashes = preparedLegResults.map(result => result.messageHash);
+  const messageHashes = preparedLegResults.map(result => result.leg.messageHash);
   const legs = preparedLegResults.map(result => result.leg);
 
   const now = new Date();
@@ -624,6 +654,28 @@ export class ExecutionService {
         .findIndex((key) => key.equals(userPk));
       if (userIndex < 0) {
         throw new AppError("INVALID_SIGNATURE", "Wallet is not a required signer on leg " + (i + 1), 400);
+      }
+    }
+
+    // The wallet can take several seconds to approve a multi-transaction
+    // batch. Reject a stale signed batch before creating landing jobs; the
+    // user can then reopen Invest to prepare and sign fresh transactions.
+    if (execution.lastValidBlockHeight) {
+      const currentBlockHeight = await withFailover((connection) => connection.getBlockHeight("confirmed"));
+      if (currentBlockHeight > execution.lastValidBlockHeight) {
+        const expired = await repository.withExecutionLock(execution.id, async (current) => {
+          if (current.status !== "PREPARED") return current;
+          await repository.updateExecutionStatus(current.id, "EXPIRED");
+          return { ...current, status: "EXPIRED" as const };
+        });
+        if (expired.status === "EXPIRED") {
+          throw new AppError(
+            "BLOCKHASH_EXPIRED",
+            "The prepared Devnet transactions expired before submission. No transaction was sent. Reopen Invest to prepare and sign a fresh batch.",
+            410
+          );
+        }
+        return expired;
       }
     }
 

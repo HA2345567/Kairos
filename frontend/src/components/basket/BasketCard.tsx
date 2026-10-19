@@ -79,7 +79,7 @@ export function BasketCard({
   const extraCount = rawIcons.length > 3 ? rawIcons.length - 3 : 0;
 
   const content = (
-    <div className="arc-card-theme" data-theme="dark" data-accent="green">
+    <div className="arc-card-theme" data-theme="dark" data-accent="neutral">
       <ArcCard
         title={
           <div className="flex items-center justify-between gap-2 w-full">

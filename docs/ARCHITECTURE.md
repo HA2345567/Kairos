@@ -1,7 +1,7 @@
 # Kairos Application Architecture
 
-**Status:** Target architecture and current-state map
-**Scope:** Kairos v1.0, Solana devnet release. Mainnet is explicitly out of scope until a separate security, legal, operational, and acceptance review.
+**Status:** Target architecture and current-state map  
+**Scope:** Kairos v1.0, Solana devnet release. Mainnet is explicitly out of scope until a separate security, legal, operational, and acceptance review.  
 **Normative product contract:** [PRD v4](PRD_V4.md). This document explains how to implement and evolve that contract; it does not override it.
 
 ## 1. Executive design
@@ -170,7 +170,7 @@ flowchart LR
 
 ## 3. Component responsibilities
 
-### Web clien
+### Web client
 
 - Public catalog, markets, basket detail, version history, portfolio, position details, execution status, Labs, settings, and admin surfaces.
 - Wallet adapter/provider boundary for SIWS authentication and transaction signing. Keep secrets in wallet/provider; do not send seed phrases or private keys to Kairos.
@@ -212,10 +212,10 @@ Run workers as a separate process/container in production, even though local dev
 
 ```mermaid
 sequenceDiagram
-  participant C as Clien
+  participant C as Client
   participant A as API
   participant D as PostgreSQL
-  participant W as User walle
+  participant W as User wallet
   participant R as Solana RPC / router
   participant L as Landing worker
   C->>A: prepare(quote, idempotency key)
@@ -231,7 +231,7 @@ sequenceDiagram
   L->>D: claim job with lease
   L->>R: send signed bytes; query signature history; confirm
   R-->>L: finalized/confirmed receipt or failure
-  L->>D: leg receipt, fee ledger, position update, outbox even
+  L->>D: leg receipt, fee ledger, position update, outbox event
   C->>A: status or event stream
   A-->>C: durable execution state
 ```
@@ -329,8 +329,8 @@ flowchart TB
 
 ## 10. Repository mapping and code ownership
 
-```tex
-frontend/src/{pages,components,hooks,lib}     SPA, wallet, typed API clien
+```text
+frontend/src/{pages,components,hooks,lib}     SPA, wallet, typed API client
 backend/src/routes                             HTTP controllers
 backend/src/middleware.ts                      auth, CORS, rate/eligibility guards
 backend/src/services                           domain modules and orchestration

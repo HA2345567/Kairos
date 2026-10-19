@@ -78,6 +78,8 @@
   }
 
   html {
+    width: 100%;
+    min-width: 320px;
     scroll-behavior: smooth;
     background-color: var(--background);
     color: var(--text-primary);
@@ -88,6 +90,8 @@
   }
 
   body {
+    width: 100%;
+    overflow-x: clip;
     background-color: var(--background);
     color: var(--text-primary);
     font-family: "Archivo", "Archivo Narrow", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -97,6 +101,19 @@
     -moz-osx-font-smoothing: grayscale;
     position: relative;
     min-height: 100vh;
+  }
+
+  #root {
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: clip;
+  }
+
+  img,
+  video,
+  canvas {
+    max-width: 100%;
   }
 
   /* Display & headings font — Archivo (Condensed & Sleek) */
@@ -141,6 +158,28 @@
   ::selection {
     background: #2A2A2A;
     color: #F5F5F5;
+  }
+}
+
+/* Keep shared overlays inside the visible viewport on phones and tablets. */
+[data-radix-dialog-content] {
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 639px) {
+  [data-radix-dialog-content] {
+    width: calc(100vw - 2rem);
+    max-width: 32rem;
+    padding: 1rem;
+  }
+
+  .wallet-adapter-modal-wrapper {
+    width: calc(100vw - 2rem) !important;
+    max-width: 420px !important;
+    max-height: calc(100dvh - 2rem) !important;
+    overflow-y: auto !important;
   }
 }
 

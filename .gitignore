@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+node_modules.pre-repair/
 target/
 dist/
 build/
@@ -36,3 +37,4 @@ GEMINI.md
 *.pptx
 
 .vercel
+.freebuff/
