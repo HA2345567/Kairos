@@ -10,7 +10,8 @@ import { getBalance } from "../chain/connection";
  * keys are never used to authorize transactions.
  */
 
-const RELAYER_FUNDED_MIN_SOL = 0.01;
+/** Operating floor for the relayer float (PRD §8.1: pause when low). */
+export const RELAYER_FUNDED_MIN_SOL = 0.01;
 
 let cached: Keypair | null = null;
 

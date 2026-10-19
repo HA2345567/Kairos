@@ -11,11 +11,13 @@ import {
 import { withFailover } from "./connection";
 import { KAIROS_ROUTER_PROGRAM_ID } from "./programSwap";
 
-const MAX_LEGS = 10;
+const INLINE_MAX_LEGS = 10;
+const MAX_LEGS = 12;
 const ITEM_BYTES = 34;
 const discriminator = (name: string) => createHash("sha256").update(name).digest().subarray(0, 8);
 const instructionDiscriminator = discriminator("global:publish_version");
 const versionDiscriminator = discriminator("account:BasketVersion");
+const versionExtensionDiscriminator = discriminator("account:BasketVersionExtension");
 const globalDiscriminator = discriminator("account:GlobalConfig");
 const authoritiesDiscriminator = discriminator("account:PublishAuthorities");
 const basketDiscriminator = discriminator("account:BasketConfig");
@@ -31,6 +33,14 @@ export const basketVersionPda = (basketId: string, version: number) => {
   value.writeUInt32LE(version);
   return PublicKey.findProgramAddressSync(
     [Buffer.from("version"), Buffer.from(basketId), value],
+    KAIROS_ROUTER_PROGRAM_ID
+  )[0];
+};
+export const basketVersionExtensionPda = (basketId: string, version: number) => {
+  const value = Buffer.alloc(4);
+  value.writeUInt32LE(version);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("version_extra"), Buffer.from(basketId), value],
     KAIROS_ROUTER_PROGRAM_ID
   )[0];
 };
@@ -85,8 +95,8 @@ function canonicalLegs(legs: RegistryLeg[]): { bytes: Buffer; items: Buffer } {
       weight.writeUInt16LE(weightBps);
       return Buffer.concat([mint.toBuffer(), weight]);
     }));
-  const items = Buffer.alloc(MAX_LEGS * ITEM_BYTES);
-  parsed.forEach(({ mint, weightBps }, index) => {
+  const items = Buffer.alloc(INLINE_MAX_LEGS * ITEM_BYTES);
+  parsed.slice(0, INLINE_MAX_LEGS).forEach(({ mint, weightBps }, index) => {
     const offset = index * ITEM_BYTES;
     mint.toBuffer().copy(items, offset);
     items.writeUInt16LE(weightBps, offset + 32);
@@ -139,27 +149,101 @@ function publishInstruction(
   const versionArg = Buffer.alloc(4);
   versionArg.writeUInt32LE(version);
   const legCount = Buffer.from([legs.length]);
-  const data = Buffer.concat([
-    instructionDiscriminator,
-    borshString(basketId),
-    versionArg,
-    items,
-    legCount,
-    legsHash,
-  ]);
+  const extended = legs.length > INLINE_MAX_LEGS;
+  const encodedItems = extended
+    ? Buffer.concat([Buffer.from([legs.length, 0, 0, 0]), ...legs.map(({ mint, weightBps }) => {
+        const item = Buffer.alloc(ITEM_BYTES);
+        publicKey(mint).toBuffer().copy(item);
+        item.writeUInt16LE(weightBps, 32);
+        return item;
+      })])
+    : items;
+  const data = extended
+    ? Buffer.concat([
+        discriminator("global:publish_version_extended"),
+        borshString(basketId), versionArg, encodedItems, legsHash,
+      ])
+    : Buffer.concat([instructionDiscriminator, borshString(basketId), versionArg, items, legCount, legsHash]);
+  const accountKeys = [
+    { pubkey: admin, isSigner: true, isWritable: true },
+    { pubkey: approval, isSigner: true, isWritable: false },
+    { pubkey: globalConfigPda(), isSigner: false, isWritable: false },
+    { pubkey: publishAuthoritiesPda(), isSigner: false, isWritable: false },
+    { pubkey: basketConfigPda(basketId), isSigner: false, isWritable: false },
+    { pubkey: basketVersionPda(basketId, version), isSigner: false, isWritable: true },
+    ...(extended ? [{ pubkey: basketVersionExtensionPda(basketId, version), isSigner: false, isWritable: true }] : []),
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  ];
   return new TransactionInstruction({
     programId: KAIROS_ROUTER_PROGRAM_ID,
-    keys: [
-      { pubkey: admin, isSigner: true, isWritable: true },
-      { pubkey: approval, isSigner: true, isWritable: false },
-      { pubkey: globalConfigPda(), isSigner: false, isWritable: false },
-      { pubkey: publishAuthoritiesPda(), isSigner: false, isWritable: false },
-      { pubkey: basketConfigPda(basketId), isSigner: false, isWritable: false },
-      { pubkey: basketVersionPda(basketId, version), isSigner: false, isWritable: true },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-    ],
+    keys: accountKeys,
     data,
   });
+}
+
+export interface RegistryVerification {
+  verified: boolean;
+  reason: string | null;
+  /** SHA-256 legs hash computed locally from the displayed composition. */
+  legsHash: string;
+  address: string;
+  /** §4.1 “Verified on-chain” badge: compare this with the published row. */
+  onchainLegsHash: string | null;
+}
+
+/**
+ * FR-24 read side: recompute the legs hash for a version and compare it with
+ * what `publish_version` stored on-chain. Never throws — a missing program or
+ * unpublished version is reported as `verified: false` with a reason so the UI
+ * can show an honest badge instead of an error.
+ */
+export async function verifyRegistryVersion(
+  basketId: string,
+  version: number,
+  legs: RegistryLeg[]
+): Promise<RegistryVerification> {
+  let legsHash = "";
+  const address = basketVersionPda(basketId, version).toBase58();
+  try {
+    legsHash = canonicalLegs(legs).bytes.toString("hex");
+  } catch (err) {
+    return {
+      verified: false,
+      reason: err instanceof Error ? err.message : "INVALID_LEGS",
+      legsHash,
+      address,
+      onchainLegsHash: null,
+    };
+  }
+  try {
+    const { admin } = await registryAuthorities(basketId);
+    const account = await withFailover((connection) =>
+      connection.getAccountInfo(basketVersionPda(basketId, version), "confirmed")
+    );
+    if (!account || !account.owner.equals(KAIROS_ROUTER_PROGRAM_ID)) {
+      return { verified: false, reason: "REGISTRY_VERSION_NOT_PUBLISHED", legsHash, address, onchainLegsHash: null };
+    }
+    const extension = legs.length > INLINE_MAX_LEGS
+      ? await withFailover((connection) =>
+          connection.getAccountInfo(basketVersionExtensionPda(basketId, version), "confirmed")
+        )
+      : null;
+    if (legs.length > INLINE_MAX_LEGS && (!extension || !extension.owner.equals(KAIROS_ROUTER_PROGRAM_ID))) {
+      return { verified: false, reason: "REGISTRY_EXTENSION_NOT_PUBLISHED", legsHash, address, onchainLegsHash: null };
+    }
+    if (!versionMatches(account.data, basketId, version, legs, admin, extension?.data ?? null)) {
+      return { verified: false, reason: "REGISTRY_HASH_MISMATCH", legsHash, address, onchainLegsHash: null };
+    }
+    return { verified: true, reason: null, legsHash, address, onchainLegsHash: legsHash };
+  } catch (err) {
+    return {
+      verified: false,
+      reason: err instanceof Error ? err.message : "REGISTRY_UNAVAILABLE",
+      legsHash,
+      address,
+      onchainLegsHash: null,
+    };
+  }
 }
 
 export async function buildRegistryPublishTransaction(
@@ -190,9 +274,16 @@ export async function buildRegistryPublishTransaction(
   };
 }
 
-function versionMatches(data: Buffer, basketId: string, version: number, legs: RegistryLeg[], admin: PublicKey): boolean {
+function versionMatches(
+  data: Buffer,
+  basketId: string,
+  version: number,
+  legs: RegistryLeg[],
+  admin: PublicKey,
+  extensionData?: Buffer | null,
+): boolean {
   const { bytes: expectedHash } = canonicalLegs(legs);
-  const expectedLength = 8 + 32 + 4 + Buffer.byteLength(basketId) + 4 + 1 + MAX_LEGS * ITEM_BYTES + 32 + 8 + 1;
+  const expectedLength = 8 + 32 + 4 + Buffer.byteLength(basketId) + 4 + 1 + INLINE_MAX_LEGS * ITEM_BYTES + 32 + 8 + 1;
   if (data.length < expectedLength) return false;
   if (!data.subarray(0, 8).equals(versionDiscriminator)) return false;
   let offset = 8;
@@ -205,7 +296,7 @@ function versionMatches(data: Buffer, basketId: string, version: number, legs: R
   if (data.readUInt32LE(offset) !== version) return false;
   offset += 4;
   if (data[offset++] !== legs.length) return false;
-  for (let index = 0; index < MAX_LEGS; index++) {
+  for (let index = 0; index < INLINE_MAX_LEGS; index++) {
     const itemOffset = offset + index * ITEM_BYTES;
     const expected = legs[index];
     if (!expected) {
@@ -215,8 +306,25 @@ function versionMatches(data: Buffer, basketId: string, version: number, legs: R
     if (!data.subarray(itemOffset, itemOffset + 32).equals(publicKey(expected.mint).toBuffer())) return false;
     if (data.readUInt16LE(itemOffset + 32) !== expected.weightBps) return false;
   }
-  offset += MAX_LEGS * ITEM_BYTES;
-  return data.subarray(offset, offset + 32).equals(expectedHash);
+  offset += INLINE_MAX_LEGS * ITEM_BYTES;
+  if (!data.subarray(offset, offset + 32).equals(expectedHash)) return false;
+  if (legs.length <= INLINE_MAX_LEGS) return extensionData == null;
+  if (!extensionData || extensionData.length < 8 + 32 + 1 + 2 * ITEM_BYTES + 1) return false;
+  if (!extensionData.subarray(0, 8).equals(versionExtensionDiscriminator)) return false;
+  if (!extensionData.subarray(8, 40).equals(basketVersionPda(basketId, version).toBuffer())) return false;
+  const extraCount = legs.length - INLINE_MAX_LEGS;
+  if (extensionData[40] !== extraCount) return false;
+  for (let index = 0; index < 2; index++) {
+    const itemOffset = 41 + index * ITEM_BYTES;
+    const expected = legs[INLINE_MAX_LEGS + index];
+    if (!expected) {
+      if (extensionData.subarray(itemOffset, itemOffset + ITEM_BYTES).some((byte) => byte !== 0)) return false;
+      continue;
+    }
+    if (!extensionData.subarray(itemOffset, itemOffset + 32).equals(publicKey(expected.mint).toBuffer())) return false;
+    if (extensionData.readUInt16LE(itemOffset + 32) !== expected.weightBps) return false;
+  }
+  return true;
 }
 
 export async function submitRegistryPublishTransaction(

@@ -7,6 +7,8 @@ import { getSignatureStatuses, sendRawTransaction, withFailover } from "../chain
 import { getLegReceipt } from "../chain/receipt";
 import { resolveUsdcAsset } from "../services/portfolio.service";
 import { rebalanceFunding } from "./rebalance-funding";
+import { publishEvent, executionResource } from "../services/event-stream";
+import { logger, recordLegTerminalLatency } from "../observability";
 
 /**
  * Landing worker (PRD §4.4): DB-backed queue poller that sends submitted leg
@@ -21,6 +23,7 @@ import { rebalanceFunding } from "./rebalance-funding";
 const POLL_INTERVAL_MS = 1_000;
 const CONFIRM_DEADLINE_MS = 90_000;
 const CONFIRM_POLL_MS = 2_000;
+const MAX_CONCURRENT_LEGS = 4;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -89,7 +92,7 @@ async function confirmedReceipt(execution: Execution, leg: ExecutionLeg, signatu
   if (config.simulateLanding) return undefined;
   const usdc = await resolveUsdcAsset();
   const side = leg.side ?? (execution.type === "open" ? "buy" : execution.type === "close" ? "sell" : undefined);
-  return getLegReceipt(signature, execution.walletAddress, leg.mint, usdc.mint, side);
+  return getLegReceipt(signature, execution.walletAddress, leg.mint, usdc.mint, side, "finalized", execution.fundingAsset ?? "USDC");
 }
 
 /** No RPC calls inside this transaction: all outcome records commit together. */
@@ -115,6 +118,15 @@ async function settleLeg(
       await repository.updateExecutionLeg(execution.id, leg.id, { status: "FAILED", error });
       await outbox("execution.leg.failed", { executionId, legId, mint: leg.mint, error });
     }
+    // NFR-07: measure from execution creation to the leg's terminal state.
+    const createdAt = Date.parse(execution.createdAt);
+    if (Number.isFinite(createdAt)) recordLegTerminalLatency(Math.max(0, Date.now() - createdAt));
+    publishEvent(executionResource(executionId), "execution.leg.updated", {
+      executionId,
+      legId,
+      status: signature ? "CONFIRMED" : "FAILED",
+      error: signature ? undefined : error,
+    });
     await recomputeExecutionStatus(execution.id);
     await repository.finishJob(jobId, Boolean(signature), signature ? undefined : error);
   });
@@ -221,6 +233,31 @@ async function landLeg(job: { id: string; payload: string | null }): Promise<voi
   // Submitting the exact same signed bytes is safe: Solana derives the same
   // signature. Keep checking chain history even when send times out, since an
   // RPC can fail after the validator accepted the transaction.
+  // Check chain history and the blockhash window before the first broadcast.
+  // Jobs can sit in the durable queue while the worker is paused or the RPC is
+  // unavailable; retrying an expired signed payload only adds latency and can
+  // never land. This also reconciles a transaction that reached the cluster
+  // before the worker lost its lease.
+  if (!config.simulateLanding) {
+    const priorStatus = (await getSignatureStatuses([signature], true)).value[0];
+    if (priorStatus?.err) {
+      await failLeg(execution, leg, `ONCHAIN_ERROR: ${JSON.stringify(priorStatus.err)}`, job.id);
+      return;
+    }
+    if (priorStatus?.confirmationStatus === "confirmed" || priorStatus?.confirmationStatus === "finalized") {
+      const receipt = await confirmedReceipt(execution, leg, signature);
+      await settleLeg(execution.id, leg.id, job.id, { signature, receipt });
+      return;
+    }
+    if (!priorStatus && execution.lastValidBlockHeight) {
+      const blockHeight = await withFailover((connection) => connection.getBlockHeight());
+      if (blockHeight > execution.lastValidBlockHeight) {
+        await failLeg(execution, leg, "BLOCKHASH_EXPIRED", job.id);
+        return;
+      }
+    }
+  }
+
   const deadline = Date.now() + CONFIRM_DEADLINE_MS;
   let sent = false;
   let retries = 0;
@@ -380,6 +417,20 @@ export async function recomputeExecutionStatus(executionId: string): Promise<str
         });
       }
       await repository.updateExecutionStatus(execution.id, next);
+      // PRD §10 stream contract: one event per status transition, sequence
+      // assigned by the resource, so a client can detect a gap.
+      publishEvent(executionResource(execution.id), `execution.${next.toLowerCase()}`, {
+        executionId: execution.id,
+        status: next,
+        type: execution.type,
+        legs: legs.map((l) => ({ mint: l.mint, status: l.status, error: l.error })),
+      });
+      logger.info("execution_status_changed", {
+        execution_id: execution.id,
+        status: next,
+        type: execution.type,
+        legs: legs.length,
+      });
     }
     if (execution.type === "rebalance" && (next === "COMPLETED" || next === "PARTIALLY_COMPLETED")) {
       await transitionRebalancePosition(execution, next);
@@ -403,20 +454,34 @@ async function processOnce(): Promise<void> {
   if (draining) return;
   draining = true;
   try {
-    // Claim only the work we can start now; queued legs must not burn through
-    // their lease while an earlier transaction waits for confirmation.
-    const jobs = (await repository.claimJobs(1, Date.now()));
-    for (const job of jobs) {
-      try {
-        await landLeg(job);
-      } catch (err) {
-        console.error(`[landing] job ${job.id} crashed:`, err);
-        try {
-          (await repository.requeueJob(job.id, Date.now() + 5_000, (err as Error).message));
-        } catch {
-          /* leave as running; sweeper/re-run handles */
+    // Keep a small number of independent basket legs in flight. Refill a slot
+    // as soon as a leg settles so one slow confirmation cannot block later legs.
+    const active = new Set<Promise<void>>();
+    while (true) {
+      const available = MAX_CONCURRENT_LEGS - active.size;
+      if (available > 0) {
+        const jobs = await repository.claimJobs(available, Date.now());
+        for (const job of jobs) {
+          let task!: Promise<void>;
+          task = (async () => {
+            try {
+              await landLeg(job);
+            } catch (err) {
+              console.error(`[landing] job ${job.id} crashed:`, err);
+              try {
+                await repository.requeueJob(job.id, Date.now() + 5_000, (err as Error).message);
+              } catch {
+                /* leave as running; sweeper/re-run handles */
+              }
+            } finally {
+              active.delete(task);
+            }
+          })();
+          active.add(task);
         }
       }
+      if (active.size === 0) break;
+      await Promise.race(active);
     }
   } finally {
     draining = false;

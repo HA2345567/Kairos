@@ -3,6 +3,8 @@ process.env.KAIROS_DB_PATH = ":memory:";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Keypair } from "@solana/web3.js";
 import type { Position } from "../src/db/schema";
 import { feeBase, usdcBase } from "../src/services/fees";
@@ -56,9 +58,11 @@ test("close plan charges only each sell fee at the close policy rate", async () 
 
 test("program mode requires initialized devnet state instead of falling back to treasury trades", async () => {
   const previous = config.swapBuilder;
+  const previousStatePath = config.devnetStatePath;
   const user = Keypair.generate().publicKey;
   const plan = await computeRebalancePlan(await fixture(), [], true);
   config.swapBuilder = "program";
+  config.devnetStatePath = join(tmpdir(), `kairos-missing-devnet-${randomUUID()}.json`);
   try {
     for (const type of ["close", "rebalance"] as const) {
       await assert.rejects(assembleRebalanceExecution({
@@ -68,5 +72,6 @@ test("program mode requires initialized devnet state instead of falling back to 
     }
   } finally {
     config.swapBuilder = previous;
+    config.devnetStatePath = previousStatePath;
   }
 });

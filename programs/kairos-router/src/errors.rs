@@ -5,7 +5,7 @@ pub enum KairosError {
     #[msg("Basket constituent weights must sum to exactly 10,000 basis points (100%).")]
     InvalidBasketWeights,
 
-    #[msg("leg_count must be between 1 and 10.")]
+    #[msg("leg_count must be between 1 and 12.")]
     InvalidLegCount,
 
     #[msg("Basket contains duplicate mints.")]

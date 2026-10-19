@@ -2,6 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 import type { StatementSync } from "node:sqlite";
 import { AppError } from "../errors";
 import {
+  AnalyticsEventRow,
+  Annotation,
+  AnnotationKind,
   AuditLog,
   Basket,
   BasketLeg,
@@ -11,7 +14,10 @@ import {
   ExecutionLeg,
   FeeRow,
   JobRow,
+  LabsBasket,
+  LabsComment,
   NonceRow,
+  NotificationPreferences,
   OutboxRow,
   ProgramAllowlistRow,
   Position,
@@ -99,6 +105,8 @@ function mapUser(r: Row): User {
     createdAt: str(r.created_at),
     status: str(r.status, "active") as User["status"],
     region: str(r.region, "unknown"),
+    ageVerified: bool(r.age_verified),
+    eligibilityStatus: str(r.eligibility_status, "eligible") as User["eligibilityStatus"],
   };
 }
 
@@ -113,6 +121,15 @@ function mapWallet(r: Row): Wallet {
   };
 }
 
+/** Split ids for an IN (...) clause so parameter counts stay bounded. */
+function chunked<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
 function mapToken(r: Row): Token {
   return {
     mint: str(r.mint),
@@ -124,6 +141,46 @@ function mapToken(r: Row): Token {
     isMarketHoursRestricted: boolU(r.is_market_hours_restricted),
     denylisted: bool(r.denylisted),
     priceUsd: num(r.price_usd),
+    backtestable: r.backtestable === null || r.backtestable === undefined ? true : bool(r.backtestable),
+    liquidityUsd: r.liquidity_usd === null || r.liquidity_usd === undefined ? null : num(r.liquidity_usd),
+    liquiditySource: r.liquidity_source == null ? null : str(r.liquidity_source),
+    liquidityCheckedAt: r.liquidity_checked_at == null ? null : str(r.liquidity_checked_at),
+  };
+}
+
+function mapAnnotation(r: Row): Annotation {
+  return {
+    id: str(r.id),
+    basketId: str(r.basket_id),
+    versionId: r.version_id == null ? null : str(r.version_id),
+    kind: str(r.kind, "news") as AnnotationKind,
+    title: str(r.title),
+    body: str(r.body),
+    sourceUrl: r.source_url == null ? null : str(r.source_url),
+    source: r.source == null ? null : str(r.source),
+    impact: (r.impact == null ? null : str(r.impact)) as Annotation["impact"],
+    publishedAt: str(r.published_at),
+    createdBy: str(r.created_by),
+    createdAt: str(r.created_at),
+  };
+}
+
+function mapLabsBasket(r: Row, votes: number): LabsBasket {
+  return {
+    id: str(r.id),
+    slug: str(r.slug),
+    name: str(r.name),
+    thesis: str(r.thesis),
+    category: str(r.category, "Labs"),
+    coverImageDataUrl: r.cover_image_data_url == null ? null : str(r.cover_image_data_url),
+    allocations: json<LabsBasket["allocations"]>(r.allocations_json, []),
+    createdBy: str(r.created_by),
+    status: str(r.status, "draft") as LabsBasket["status"],
+    moderationNote: r.moderation_note == null ? null : str(r.moderation_note),
+    basketId: r.basket_id == null ? null : str(r.basket_id),
+    createdAt: str(r.created_at),
+    updatedAt: str(r.updated_at),
+    votes,
   };
 }
 
@@ -222,6 +279,9 @@ function mapExecution(r: Row, legs: ExecutionLeg[]): Execution {
     basketId: str(r.basket_id),
     basketVersionId: str(r.basket_version_id),
     type: str(r.type, "open") as Execution["type"],
+    fundingAsset: str(r.funding_asset, "USDC") as Execution["fundingAsset"],
+    solInputAmount: r.sol_input_amount == null ? undefined : num(r.sol_input_amount),
+    solPriceUsd: r.sol_price_usd == null ? undefined : num(r.sol_price_usd),
     status: str(r.status, "PREPARED") as Execution["status"],
     idempotencyKey: str(r.idempotency_key),
     requestHash: r.request_hash == null ? undefined : str(r.request_hash),
@@ -344,21 +404,41 @@ export class Repository {
 
   async saveUser(user: User): Promise<User> {
     (await run(
-      `INSERT INTO users (id, email, auth_provider, created_at, status, region)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO users (id, email, auth_provider, created_at, status, region, age_verified, eligibility_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          email = excluded.email,
          auth_provider = excluded.auth_provider,
          status = excluded.status,
-         region = excluded.region`,
+         region = excluded.region,
+         age_verified = excluded.age_verified,
+         eligibility_status = excluded.eligibility_status`,
       user.id,
       user.email ?? null,
       user.authProvider,
       user.createdAt,
       user.status,
-      user.region
+      user.region,
+      user.ageVerified ? 1 : 0,
+      user.eligibilityStatus
     ));
     return user;
+  }
+
+  /** FR-04: update eligibility state (age attestation / compliance flag). */
+  async updateUserEligibility(
+    id: string,
+    patch: { ageVerified?: boolean; eligibilityStatus?: User["eligibilityStatus"]; region?: string }
+  ): Promise<User | undefined> {
+    const current = (await this.getUser(id));
+    if (!current) return undefined;
+    const next: User = {
+      ...current,
+      ageVerified: patch.ageVerified ?? current.ageVerified,
+      eligibilityStatus: patch.eligibilityStatus ?? current.eligibilityStatus,
+      region: patch.region ?? current.region,
+    };
+    return this.saveUser(next);
   }
 
   // ================= Wallets =================
@@ -390,7 +470,12 @@ export class Repository {
     return wallet;
   }
 
-  async setDelegatedSigning(walletId: string, enabled: boolean, policyJson?: Wallet["policyJson"]): Promise<void> {
+  /** `policyJson: null` clears the stored policy (used by the one-click revoke). */
+  async setDelegatedSigning(
+    walletId: string,
+    enabled: boolean,
+    policyJson?: Wallet["policyJson"] | null
+  ): Promise<void> {
     if (policyJson === undefined) {
       (await run("UPDATE wallets SET delegated_signing = ? WHERE id = ?", enabled, walletId));
     } else {
@@ -409,15 +494,31 @@ export class Repository {
     return row ? mapToken(row) : undefined;
   }
 
+  /**
+   * Registry read including denylisted rows (PRD §10: /tokens filters by
+   * denylist). getAllTokens() stays the safe default that hides denylisted
+   * mints from catalog, portfolio and quote paths.
+   */
+  async getAllTokensIncludingDenylisted(): Promise<Token[]> {
+    return (await all<Row>("SELECT * FROM tokens ORDER BY rowid ASC")).map(mapToken);
+  }
+
   async getAllTokens(): Promise<Token[]> {
     return (await all<Row>("SELECT * FROM tokens WHERE denylisted = 0 ORDER BY rowid ASC")).map(mapToken);
   }
 
+  /**
+   * Batch token read (NFR-02). Catalog composition used to issue one query per
+   * leg, which turned a single `/v1/baskets` read into dozens of round trips on
+   * a networked database. Denylisting is *not* applied here: callers ask for
+   * exact mints and decide visibility themselves, matching getToken().
+   */
   async saveToken(token: Token): Promise<Token> {
     (await run(
       `INSERT INTO tokens (mint, symbol, name, decimals, type, trading_status,
-                           is_market_hours_restricted, denylisted, price_usd, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           is_market_hours_restricted, denylisted, price_usd, updated_at,
+                           backtestable, liquidity_usd, liquidity_source, liquidity_checked_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(mint) DO UPDATE SET
          symbol = excluded.symbol,
          name = excluded.name,
@@ -427,7 +528,11 @@ export class Repository {
          is_market_hours_restricted = excluded.is_market_hours_restricted,
          denylisted = excluded.denylisted,
          price_usd = excluded.price_usd,
-         updated_at = excluded.updated_at`,
+         updated_at = excluded.updated_at,
+         backtestable = excluded.backtestable,
+         liquidity_usd = excluded.liquidity_usd,
+         liquidity_source = excluded.liquidity_source,
+         liquidity_checked_at = excluded.liquidity_checked_at`,
       token.mint,
       token.symbol,
       token.name ?? "",
@@ -437,9 +542,31 @@ export class Repository {
       token.isMarketHoursRestricted === undefined ? null : token.isMarketHoursRestricted ? 1 : 0,
       token.denylisted,
       token.priceUsd,
-      nowIso()
+      nowIso(),
+      token.backtestable === false ? 0 : 1,
+      token.liquidityUsd ?? null,
+      token.liquiditySource ?? null,
+      token.liquidityCheckedAt ?? null
     ));
     return token;
+  }
+
+  /** FR-03: record liquidity evidence for a registry token. */
+  async updateTokenLiquidity(
+    mint: string,
+    liquidity: { liquidityUsd: number | null; source?: string | null; backtestable?: boolean }
+  ): Promise<Token | undefined> {
+    (await run(
+      `UPDATE tokens SET liquidity_usd = ?, liquidity_source = ?, liquidity_checked_at = ?,
+         backtestable = COALESCE(?, backtestable), updated_at = ? WHERE mint = ?`,
+      liquidity.liquidityUsd,
+      liquidity.source ?? null,
+      nowIso(),
+      liquidity.backtestable === undefined ? null : liquidity.backtestable ? 1 : 0,
+      nowIso(),
+      mint
+    ));
+    return this.getToken(mint);
   }
 
   async updateTokenPrice(mint: string, priceUsd: number): Promise<void> {
@@ -521,6 +648,61 @@ export class Repository {
       registryTx: row.registry_tx == null ? undefined : str(row.registry_tx),
       legs: (await loadVersionLegs(str(row.id))),
     };
+  }
+
+  /**
+   * Batch version read (NFR-02): one round trip fetches the versions and their
+   * legs via a LEFT JOIN, instead of one query per table per route.
+   */
+  async getBasketVersions(ids: string[]): Promise<BasketVersion[]> {
+    const unique = [...new Set(ids.filter(Boolean))];
+    if (unique.length === 0) return [];
+    const byVersion = new Map<string, BasketVersion>();
+    for (const chunk of chunked(unique, 300)) {
+      const placeholders = chunk.map(() => "?").join(",");
+      const rows = await all<Row>(
+        `SELECT v.*, l.id AS leg_id, l.version_id AS leg_version_id, l.mint AS leg_mint,
+                l.weight_bps AS leg_weight_bps, l.leg_type AS leg_leg_type,
+                l.venue_hint AS leg_venue_hint, l.slippage_bps AS leg_slippage_bps
+           FROM basket_versions v
+           LEFT JOIN basket_legs l ON l.version_id = v.id
+          WHERE v.id IN (${placeholders})
+          ORDER BY l.rowid ASC`,
+        ...chunk
+      );
+      for (const row of rows) {
+        const id = str(row.id);
+        let version = byVersion.get(id);
+        if (!version) {
+          version = {
+            id,
+            basketId: str(row.basket_id),
+            version: num(row.version),
+            changelog: str(row.changelog),
+            publishedBy: str(row.published_by),
+            publishedAt: str(row.published_at),
+            legsHash: row.legs_hash == null ? undefined : str(row.legs_hash),
+            registryTx: row.registry_tx == null ? undefined : str(row.registry_tx),
+            legs: [],
+          };
+          byVersion.set(id, version);
+        }
+        if (row.leg_id != null) {
+          version.legs.push(
+            mapBasketLeg({
+              id: row.leg_id,
+              version_id: row.leg_version_id,
+              mint: row.leg_mint,
+              weight_bps: row.leg_weight_bps,
+              leg_type: row.leg_leg_type,
+              venue_hint: row.leg_venue_hint,
+              slippage_bps: row.leg_slippage_bps,
+            })
+          );
+        }
+      }
+    }
+    return [...byVersion.values()];
   }
 
   async getVersionsForBasket(basketId: string): Promise<BasketVersion[]> {
@@ -727,16 +909,19 @@ export class Repository {
       (await tx(async () => {
         (await run(
           `INSERT INTO executions (id, wallet_id, wallet_address, basket_id, basket_version_id,
-                                   type, status, idempotency_key, request_hash, total_usdc, total_usdc_base_units, fee_usdc, fee_usdc_base_units,
+                                   type, funding_asset, sol_input_amount, sol_price_usd, status, idempotency_key, request_hash, total_usdc, total_usdc_base_units, fee_usdc, fee_usdc_base_units,
                                    prepared_txs_json, message_hashes_json, blockhash,
                                    last_valid_block_height, expires_at, created_at, updated_at, base_execution_id, recovery_action)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
              wallet_id = excluded.wallet_id,
              wallet_address = excluded.wallet_address,
              basket_id = excluded.basket_id,
              basket_version_id = excluded.basket_version_id,
               type = excluded.type,
+              funding_asset = excluded.funding_asset,
+              sol_input_amount = excluded.sol_input_amount,
+              sol_price_usd = excluded.sol_price_usd,
               status = excluded.status,
               idempotency_key = excluded.idempotency_key,
               request_hash = excluded.request_hash,
@@ -759,6 +944,9 @@ export class Repository {
           execution.basketId,
           execution.basketVersionId,
            execution.type,
+           execution.fundingAsset ?? "USDC",
+           execution.solInputAmount ?? null,
+           execution.solPriceUsd ?? null,
            execution.status,
             execution.idempotencyKey,
             execution.requestHash ?? null,
@@ -1205,6 +1393,57 @@ export class Repository {
     ));
   }
 
+  /**
+   * Delivered notification events for one wallet's executions (FR-18 read
+   * surface). Until a real transport exists these rows are the only place a user
+   * can observe what the outbox produced, so they are read-only and scoped by
+   * wallet — never by a caller-supplied execution id.
+   */
+  async listNotificationsForWallet(
+    walletAddress: string,
+    limit = 100
+  ): Promise<Array<{
+    id: string;
+    event: string;
+    eventType: string | null;
+    executionId: string | null;
+    payload: unknown;
+    createdAt: string;
+    sentAt: string | null;
+  }>> {
+    const capped = Math.min(Math.max(1, Math.floor(limit)), 200);
+    const rows = (await all<Row>(
+      `SELECT o.id, o.event, o.event_type, o.execution_id, o.payload, o.created_at, o.sent_at
+         FROM outbox o
+         JOIN executions e ON e.id = o.execution_id
+        WHERE e.wallet_address = ?
+        ORDER BY o.rowid DESC
+        LIMIT ?`,
+      walletAddress,
+      capped
+    ));
+    return rows.map((row) => {
+      let payload: unknown = null;
+      const raw = row.payload == null ? null : str(row.payload);
+      if (raw) {
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          payload = raw;
+        }
+      }
+      return {
+        id: str(row.id),
+        event: str(row.event),
+        eventType: row.event_type == null ? null : str(row.event_type),
+        executionId: row.execution_id == null ? null : str(row.execution_id),
+        payload,
+        createdAt: str(row.created_at),
+        sentAt: row.sent_at == null ? null : str(row.sent_at),
+      };
+    });
+  }
+
   async listFees(): Promise<FeeRow[]> {
     return (await all<Row>("SELECT * FROM fee_ledger ORDER BY ts ASC, rowid ASC")).map((r) => ({
       id: str(r.id),
@@ -1220,6 +1459,17 @@ export class Repository {
   async enqueueOutbox(event: string, payload: unknown): Promise<void> {
     const serialized = stableOutboxPayload(payload);
     const executionId = executionNotificationId(event, payload);
+    let legId: string | null = null;
+    if (executionId && event.startsWith("execution.leg.")) {
+      let candidate: unknown = payload;
+      if (typeof candidate === "string") {
+        try { candidate = JSON.parse(candidate); } catch { candidate = null; }
+      }
+      if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+        const value = (candidate as Record<string, unknown>).legId ?? (candidate as Record<string, unknown>).leg_id;
+        if (value !== undefined && value !== null && String(value).length > 0) legId = String(value);
+      }
+    }
     // Execution notifications have one durable identity per execution and event
     // type. Other events retain a content-based identity, with separators and
     // canonical JSON so equivalent payloads cannot collide accidentally or
@@ -1228,17 +1478,18 @@ export class Repository {
       .update(executionId ? "execution\0" : "event\0")
       .update(executionId ?? event)
       .update("\0")
-      .update(executionId ? event : serialized)
+      .update(executionId ? `${event}${legId === null ? "" : `\0${legId}`}` : serialized)
       .digest("hex");
     (await run(
       `INSERT INTO outbox
-         (id, event, event_type, execution_id, payload, created_at, sent_at, dedupe_key, attempts, lease_until_ms)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 0, 0)
+         (id, event, event_type, execution_id, leg_id, payload, created_at, sent_at, dedupe_key, attempts, lease_until_ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, 0)
        ON CONFLICT DO NOTHING`,
       "outbox-" + randomUUID(),
       event,
       event,
       executionId,
+      legId,
       serialized,
       nowIso(),
       dedupeKey
@@ -1412,6 +1663,341 @@ export class Repository {
       status: str(r.status, "PENDING"),
       createdAt: str(r.created_at),
     }));
+  }
+
+  // ================= Notification preferences (FR-18) =================
+  async getNotificationPreferences(walletAddress: string): Promise<NotificationPreferences> {
+    const row = (await one<Row>(
+      "SELECT * FROM notification_preferences WHERE wallet_address = ?",
+      walletAddress
+    ));
+    if (!row) {
+      return {
+        walletAddress,
+        inApp: true,
+        email: false,
+        push: false,
+        executionUpdates: true,
+        rebalanceUpdates: true,
+        versionPublish: true,
+        updatedAt: nowIso(),
+      };
+    }
+    return {
+      walletAddress: str(row.wallet_address),
+      inApp: bool(row.in_app),
+      email: bool(row.email),
+      push: bool(row.push),
+      executionUpdates: bool(row.execution_updates),
+      rebalanceUpdates: bool(row.rebalance_updates),
+      versionPublish: bool(row.version_publish),
+      updatedAt: str(row.updated_at),
+    };
+  }
+
+  async saveNotificationPreferences(
+    prefs: Omit<NotificationPreferences, "updatedAt">
+  ): Promise<NotificationPreferences> {
+    const updatedAt = nowIso();
+    (await run(
+      `INSERT INTO notification_preferences (wallet_address, in_app, email, push,
+         execution_updates, rebalance_updates, version_publish, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(wallet_address) DO UPDATE SET
+         in_app = excluded.in_app,
+         email = excluded.email,
+         push = excluded.push,
+         execution_updates = excluded.execution_updates,
+         rebalance_updates = excluded.rebalance_updates,
+         version_publish = excluded.version_publish,
+         updated_at = excluded.updated_at`,
+      prefs.walletAddress,
+      prefs.inApp ? 1 : 0,
+      prefs.email ? 1 : 0,
+      prefs.push ? 1 : 0,
+      prefs.executionUpdates ? 1 : 0,
+      prefs.rebalanceUpdates ? 1 : 0,
+      prefs.versionPublish ? 1 : 0,
+      updatedAt
+    ));
+    return { ...prefs, updatedAt };
+  }
+
+  // ================= Annotations (FR-27) =================
+  async createAnnotation(
+    annotation: Omit<Annotation, "createdAt"> & { createdAt?: string }
+  ): Promise<Annotation> {
+    const entry: Annotation = { ...annotation, createdAt: annotation.createdAt ?? nowIso() };
+    (await run(
+      `INSERT INTO annotations (id, basket_id, version_id, kind, title, body,
+         source_url, source, impact, published_at, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      entry.id,
+      entry.basketId,
+      entry.versionId,
+      entry.kind,
+      entry.title,
+      entry.body,
+      entry.sourceUrl,
+      entry.source,
+      entry.impact,
+      entry.publishedAt,
+      entry.createdBy,
+      entry.createdAt
+    ));
+    return entry;
+  }
+
+  async getAnnotation(id: string): Promise<Annotation | undefined> {
+    const row = (await one<Row>("SELECT * FROM annotations WHERE id = ?", id));
+    return row ? mapAnnotation(row) : undefined;
+  }
+
+  async listAnnotations(basketId: string, versionId?: string): Promise<Annotation[]> {
+    const rows = versionId
+      ? await all<Row>(
+          "SELECT * FROM annotations WHERE basket_id = ? AND (version_id = ? OR version_id IS NULL) ORDER BY published_at DESC",
+          basketId,
+          versionId
+        )
+      : await all<Row>(
+          "SELECT * FROM annotations WHERE basket_id = ? ORDER BY published_at DESC",
+          basketId
+        );
+    return rows.map(mapAnnotation);
+  }
+
+  async deleteAnnotation(id: string): Promise<boolean> {
+    const existing = (await this.getAnnotation(id));
+    if (!existing) return false;
+    (await run("DELETE FROM annotations WHERE id = ?", id));
+    return true;
+  }
+
+  // ================= Labs (FR-25) =================
+  async createLabsBasket(
+    basket: Omit<LabsBasket, "createdAt" | "updatedAt" | "votes" | "moderationNote" | "basketId"> &
+      Partial<Pick<LabsBasket, "moderationNote" | "basketId">>
+  ): Promise<LabsBasket> {
+    const createdAt = nowIso();
+    const entry: LabsBasket = {
+      ...basket,
+      moderationNote: basket.moderationNote ?? null,
+      basketId: basket.basketId ?? null,
+      createdAt,
+      updatedAt: createdAt,
+      votes: 0,
+    };
+    (await run(
+      `INSERT INTO labs_baskets (id, slug, name, thesis, category, cover_image_data_url, allocations_json,
+         created_by, status, moderation_note, basket_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      entry.id,
+      entry.slug,
+      entry.name,
+      entry.thesis,
+      entry.category,
+      entry.coverImageDataUrl ?? null,
+      JSON.stringify(entry.allocations),
+      entry.createdBy,
+      entry.status,
+      entry.moderationNote,
+      entry.basketId,
+      entry.createdAt,
+      entry.updatedAt
+    ));
+    return entry;
+  }
+
+  async getLabsBasket(idOrSlug: string): Promise<LabsBasket | undefined> {
+    const row = (await one<Row>(
+      "SELECT * FROM labs_baskets WHERE id = ? OR slug = ? LIMIT 1",
+      idOrSlug,
+      idOrSlug
+    ));
+    if (!row) return undefined;
+    const votes = await this.countLabsVotes(str(row.id));
+    return mapLabsBasket(row, votes);
+  }
+
+  async listLabsBaskets(status?: string): Promise<LabsBasket[]> {
+    const rows = status
+      ? await all<Row>(
+          "SELECT * FROM labs_baskets WHERE status = ? ORDER BY created_at DESC",
+          status
+        )
+      : await all<Row>("SELECT * FROM labs_baskets ORDER BY created_at DESC");
+    if (rows.length === 0) return [];
+    const counts = (await all<Row>(
+      `SELECT labs_basket_id, COUNT(*) AS votes FROM labs_votes GROUP BY labs_basket_id`
+    ));
+    const voteByBasket = new Map(counts.map((c) => [str(c.labs_basket_id), num(c.votes)]));
+    return rows.map((row) => mapLabsBasket(row, voteByBasket.get(str(row.id)) ?? 0));
+  }
+
+  async updateLabsBasketStatus(
+    id: string,
+    status: LabsBasket["status"],
+    patch: { moderationNote?: string | null; basketId?: string | null } = {}
+  ): Promise<LabsBasket | undefined> {
+    const existing = (await this.getLabsBasket(id));
+    if (!existing) return undefined;
+    const updatedAt = nowIso();
+    (await run(
+      `UPDATE labs_baskets SET status = ?, moderation_note = COALESCE(?, moderation_note),
+         basket_id = COALESCE(?, basket_id), updated_at = ? WHERE id = ?`,
+      status,
+      patch.moderationNote === undefined ? null : patch.moderationNote,
+      patch.basketId === undefined ? null : patch.basketId,
+      updatedAt,
+      existing.id
+    ));
+    return this.getLabsBasket(existing.id);
+  }
+
+  async countLabsVotes(labsBasketId: string): Promise<number> {
+    const row = (await one<Row>(
+      "SELECT COUNT(*) AS votes FROM labs_votes WHERE labs_basket_id = ?",
+      labsBasketId
+    ));
+    return num(row?.votes);
+  }
+
+  async hasLabsVote(labsBasketId: string, walletAddress: string): Promise<boolean> {
+    const row = (await one<Row>(
+      "SELECT id FROM labs_votes WHERE labs_basket_id = ? AND wallet_address = ?",
+      labsBasketId,
+      walletAddress
+    ));
+    return Boolean(row);
+  }
+
+  /** Idempotent: a second vote from the same wallet is a no-op, never a double count. */
+  async addLabsVote(labsBasketId: string, walletAddress: string): Promise<boolean> {
+    const changes = await run(
+      `INSERT INTO labs_votes (id, labs_basket_id, wallet_address, created_at)
+       VALUES (?, ?, ?, ?) ON CONFLICT (labs_basket_id, wallet_address) DO NOTHING`,
+      "lv-" + randomUUID(),
+      labsBasketId,
+      walletAddress,
+      nowIso()
+    );
+    return changes > 0;
+  }
+
+  async removeLabsVote(labsBasketId: string, walletAddress: string): Promise<boolean> {
+    const changes = await run(
+      "DELETE FROM labs_votes WHERE labs_basket_id = ? AND wallet_address = ?",
+      labsBasketId,
+      walletAddress
+    );
+    return changes > 0;
+  }
+
+  async listLabsComments(labsBasketId: string, includeHidden = false): Promise<LabsComment[]> {
+    const rows = await all<Row>(
+      `SELECT * FROM labs_comments WHERE labs_basket_id = ?${
+        includeHidden ? "" : " AND hidden = 0"
+      } ORDER BY created_at ASC`,
+      labsBasketId
+    );
+    return rows.map((row) => ({
+      id: str(row.id),
+      labsBasketId: str(row.labs_basket_id),
+      walletAddress: str(row.wallet_address),
+      body: str(row.body),
+      hidden: bool(row.hidden),
+      createdAt: str(row.created_at),
+    }));
+  }
+
+  async addLabsComment(labsBasketId: string, walletAddress: string, body: string): Promise<LabsComment> {
+    const entry: LabsComment = {
+      id: "lc-" + randomUUID(),
+      labsBasketId,
+      walletAddress,
+      body,
+      hidden: false,
+      createdAt: nowIso(),
+    };
+    (await run(
+      `INSERT INTO labs_comments (id, labs_basket_id, wallet_address, body, hidden, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      entry.id,
+      entry.labsBasketId,
+      entry.walletAddress,
+      entry.body,
+      0,
+      entry.createdAt
+    ));
+    return entry;
+  }
+
+  async setLabsCommentHidden(id: string, hidden: boolean): Promise<boolean> {
+    const row = (await one<Row>("SELECT id FROM labs_comments WHERE id = ?", id));
+    if (!row) return false;
+    (await run("UPDATE labs_comments SET hidden = ? WHERE id = ?", hidden ? 1 : 0, id));
+    return true;
+  }
+
+  // ================= Analytics + retention (FE-09 / NFR-10 / NFR-12) =================
+  async recordAnalyticsEvent(
+    event: Omit<AnalyticsEventRow, "id" | "ts"> & { ts?: string }
+  ): Promise<void> {
+    (await run(
+      `INSERT INTO analytics_events (name, path, region, session_hash, ts) VALUES (?, ?, ?, ?, ?)`,
+      event.name,
+      event.path,
+      event.region,
+      event.sessionHash,
+      event.ts ?? nowIso()
+    ));
+  }
+
+  async countAnalyticsSince(sinceIso: string): Promise<number> {
+    const row = (await one<Row>(
+      "SELECT COUNT(*) AS n FROM analytics_events WHERE ts >= ?",
+      sinceIso
+    ));
+    return num(row?.n);
+  }
+
+  /** NFR-10/NFR-12: analytics rows carry no PII and expire on a 30-day window. */
+  async purgeAnalyticsBefore(cutoffIso: string): Promise<number> {
+    const row = (await one<Row>(
+      "SELECT COUNT(*) AS n FROM analytics_events WHERE ts < ?",
+      cutoffIso
+    ));
+    (await run("DELETE FROM analytics_events WHERE ts < ?", cutoffIso));
+    return num(row?.n);
+  }
+
+  async purgeExpiredNonces(nowMs: number): Promise<number> {
+    const row = (await one<Row>(
+      "SELECT COUNT(*) AS n FROM nonces WHERE expires_at_ms < ?",
+      nowMs
+    ));
+    (await run("DELETE FROM nonces WHERE expires_at_ms < ?", nowMs));
+    return num(row?.n);
+  }
+
+  async purgeExpiredRefreshTokens(nowMs: number): Promise<number> {
+    const row = (await one<Row>(
+      "SELECT COUNT(*) AS n FROM refresh_tokens WHERE expires_at_ms < ?",
+      nowMs
+    ));
+    (await run("DELETE FROM refresh_tokens WHERE expires_at_ms < ?", nowMs));
+    return num(row?.n);
+  }
+
+  /** NFR-10: audit rows older than the configured retention window. */
+  async purgeAuditBefore(cutoffIso: string): Promise<number> {
+    const row = (await one<Row>(
+      "SELECT COUNT(*) AS n FROM audit_log WHERE timestamp < ?",
+      cutoffIso
+    ));
+    (await run("DELETE FROM audit_log WHERE timestamp < ?", cutoffIso));
+    return num(row?.n);
   }
 
   // ================= Audit log =================

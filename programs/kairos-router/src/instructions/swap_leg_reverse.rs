@@ -5,7 +5,7 @@ use anchor_lang::solana_program::{
 };
 use anchor_spl::token::{Token, TokenAccount};
 use crate::errors::KairosError;
-use crate::state::{BasketConfig, BasketVersion, GlobalConfig};
+use crate::state::{version_contains_mint, BasketConfig, BasketVersion, BasketVersionExtension, GlobalConfig};
 use crate::instructions::swap_leg::{RAYDIUM_CPMM_PROGRAM_ID, MEMO_V2_PROGRAM_ID, SWAP_BASE_INPUT_DISCRIMINATOR};
 
 #[event]
@@ -114,6 +114,10 @@ pub struct SwapAndCollectLeg<'info> {
     /// CHECK: The pinned executable SPL Memo program is invoked below.
     #[account(address = MEMO_V2_PROGRAM_ID, executable)]
     pub memo_program: UncheckedAccount<'info>,
+
+    /// Optional overflow entry. Older basket versions omit it using the
+    /// program-id sentinel; 11–12-leg versions must pass their extension PDA.
+    pub basket_version_extension: Option<Account<'info, BasketVersionExtension>>,
 }
 
 pub fn handler<'a, 'b, 'c, 'info>(
@@ -132,11 +136,12 @@ pub fn handler<'a, 'b, 'c, 'info>(
 
     // The sold mint must be one of the basket legs.
     let sold_mint = ctx.accounts.user_src_ata.mint;
-    let is_valid_mint = versioned_basket
-        .items
-        .iter()
-        .take(versioned_basket.leg_count as usize)
-        .any(|item| item.mint == sold_mint);
+    let is_valid_mint = version_contains_mint(
+        versioned_basket.key(),
+        versioned_basket,
+        ctx.accounts.basket_version_extension.as_ref().map(|extension| &**extension),
+        sold_mint,
+    )?;
     require!(is_valid_mint, KairosError::InvalidUserAta);
     require_keys_eq!(ctx.accounts.input_mint.key(), sold_mint, KairosError::InvalidUserAta);
     require_keys_eq!(ctx.accounts.output_mint.key(), global.usdc_mint, KairosError::UsdcMintMismatch);

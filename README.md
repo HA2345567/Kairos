@@ -1,27 +1,43 @@
+<p align="center">
+  <img src="docs/assets/kairos-readme-hero.png" alt="Kairos — Your Taste. Your Investment." width="100%" />
+</p>
+
 <div align="center">
 
-# 🏛️ KAIROS — Non-Custodial Thematic Investment Router on Solana
+# Kairos — Thematic investing on Solana
+
+**Your taste. Your investment.** Build a theme, choose its token allocation, and review a wallet-signed execution on Solana devnet.
 
 [![Solana](https://img.shields.io/badge/Solana-Devnet-9945FF?style=for-the-badge&logo=solana&logoColor=white)](https://solana.com)
-[![Jupiter](https://img.shields.io/badge/Powered_by-Jupiter_CPI-00D182?style=for-the-badge)](https://jup.ag)
+[![React](https://img.shields.io/badge/React-18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React_18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 
 <br />
 
+[Architecture](#architecture) · [Product capabilities](#product-capabilities) · [Baskets](#curated-thematic-baskets) · [Tech stack](#tech-stack) · [Quickstart](#quickstart) · [Security](#security-and-wallet-control)
+
+</div>
+
+## Architecture
+
+Kairos is a React web client backed by a TypeScript API, PostgreSQL, background workers, and a Solana Anchor router. Wallets retain signing authority; execution and recovery state are tracked by the backend.
+
 <p align="center">
-  <img src="docs/assets/kairos-hero.png" alt="Kairos Platform Hero" width="100%" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" />
+  <img src="docs/assets/kairos-architecture-diagram.png" alt="Kairos system architecture: web client, API, domain services, workers, PostgreSQL, providers, and Solana devnet" width="100%" />
 </p>
 
-### *"Your Taste. Your Investment."*
-
-**Curated high-conviction token baskets executed via Jupiter CPI.**  
-**Constituent tokens land directly in your own wallet — zero vaults, zero custody, zero lockups.**
+<p align="center"><em>Current delivery target: Solana devnet. Live routing depends on configured providers, pools, and router deployment.</em></p>
 
 ---
 
-</div>
+## Specification
+
+The normative product contract for this milestone is
+**[docs/PRD_V4.md](docs/PRD_V4.md)** (Kairos PRD v4.0, devnet only). Code, tests,
+UI copy, and audits are measured against it. Current status against that contract
+is tracked in [docs/PRD_V4_COVERAGE_AUDIT.md](docs/PRD_V4_COVERAGE_AUDIT.md).
+The earlier product contract has been superseded by this devnet-scoped PRD v4.
 
 ## Current delivery contract
 
@@ -49,62 +65,18 @@ Navigating decentralized finance and crypto markets requires managing dozens of 
 
 ---
 
-## ⚡ Key Architectural Features
+## Product capabilities
 
-```
-                      ┌───────────────────────────────────────┐
-                      │             KAIROS CLIENT             │
-                      │   (React + Solana Wallet Adapter)     │
-                      └──────────────────┬────────────────────┘
-                                         │ 1. Select Basket & Allocation
-                                         ▼
-                      ┌───────────────────────────────────────┐
-                       │          KAIROS BACKEND API           │
-                       │  (Quotes, signed payloads & workers)  │
-                      └───────┬───────────────────────┬───────┘
-                              │                       │
-            2. Provider snapshots│                       │ 3. Quote construction
-               / registry data  │                       │    and signed payloads
-                              ▼                       ▼
-                      ┌──────────────┐        ┌───────────────┐
-                       │  Price feeds │        │  Tx builders  │
-                      └──────────────┘        └───────┬───────┘
-                                                      │
-                               4. Atomic Transaction Payload
-                                                      ▼
-                      ┌───────────────────────────────────────┐
-                       │         SOLANA ANCHOR PROGRAM         │
-                       │     (kairos-router / devnet only)     │
-                      └──────────────────┬────────────────────┘
-                                         │ 5. Atomic Execution & Token Distribution
-                                         ▼
-                      ┌───────────────────────────────────────┐
-                      │          USER SOLANA WALLET           │
-                      │  Tokens Received Directly & Instantly │
-                      └───────────────────────────────────────┘
-```
+- **Wallet-controlled execution** — investors approve and sign transactions with their connected wallet; Kairos does not store wallet private keys.
+- **Quote-bound trading** — the API builds signed transaction payloads and records execution state for landing, confirmation, and recovery.
+- **Portfolio and market views** — browse baskets, inspect token allocations, and review available price and performance data with its source status.
+- **Kairos Labs** — create and curate thematic baskets, subject to the app's current publishing and moderation controls.
 
-### 1. 🛡️ 100% Non-Custodial Architecture
-Unlike legacy fund managers or synthetic index tokens that mint wrapped derivatives (e.g. Set Protocol), Kairos uses atomic swap splitting. If a basket contains `40% JUP`, `30% JTO`, and `30% PYTH`, your investment is atomically routed and deposited as native SPL tokens into your personal token accounts.
-
-### 2. ⚡ Signed execution builders
-Kairos builds quote-bound, wallet-signed Solana transactions and records their
-hashes before submission. The optional on-chain router path is guarded by the
-configured devnet program and pool state; local tests do not claim live routing.
-
-### 3. 📊 Real-Time Technical Analysis Suite
-Every curated basket features a comprehensive market analysis interface:
-- **Interactive Candlestick & Area Charts**: Powered by TradingView Lightweight Charts with dynamic timeframe resolution (24H, 7D, 30D, 1Y, ALL).
-- **Technical Indicators**: Toggleable Simple Moving Average (SMA 20) and Exponential Moving Average (EMA 50) overlays.
-- **Benchmark Alpha Comparison**: Relative performance tracking against Solana ($SOL) and Bitcoin ($BTC).
-- **Historical Ledger & CSV Export**: Complete historical Net Asset Value (NAV) ledgers with direct CSV export for accounting and tax reporting.
-
-### 4. 🧪 Kairos Labs: Permissionless Basket Creation
-Create, configure, and curate custom thematic indices in minutes. Define custom asset weights, target rebalance thresholds, theme metadata, and publish them to the community explorer.
+The app is devnet-first. Router execution depends on the configured program, RPC, and swap pools; the architecture image describes the system boundary, not a claim that every external integration is live.
 
 ---
 
-## 🎯 Curated Thematic Baskets
+## Curated thematic baskets
 
 | # | Basket Name | Focus Theme | Key Constituents | Target Strategy |
 |---|-------------|-------------|------------------|-----------------|
@@ -121,7 +93,7 @@ Create, configure, and curate custom thematic indices in minutes. Define custom 
 
 ---
 
-## 💻 Tech Stack
+## Tech stack
 
 ### Frontend Client
 - **Framework**: [React 18](https://react.dev/) + [Vite](https://vitejs.dev/)
@@ -145,7 +117,7 @@ Create, configure, and curate custom thematic indices in minutes. Define custom 
 
 ---
 
-## 🚀 Quickstart & Local Development
+## Quickstart
 
 ### Prerequisites
 
@@ -281,7 +253,7 @@ anchor test
 
 ---
 
-## 📂 Repository Structure
+## Repository structure
 
 ```
 kairos/
@@ -311,6 +283,8 @@ kairos/
 │
 ├── docs/                     # Technical documentation & brand assets
 │   ├── assets/               # Screenshots, banners, hero previews
+│   ├── PRD_V4.md             # Normative product contract (devnet scope)
+│   ├── PRD_V4_COVERAGE_AUDIT.md # Current requirement coverage & gaps
 │   ├── BACKEND_DELIVERY.md   # Backend architecture & schema reference
 │   └── KEY_ROTATION.md       # Production key management & operational security
 │
@@ -321,15 +295,16 @@ kairos/
 
 ---
 
-## 🔐 Security & Non-Custodial Guarantee
+## Security and wallet control
 
-1. **No Intermediary Custody**: Kairos smart contracts never hold custody of investor capital. Every swap instruction routes funds through Jupiter and sends output tokens directly to your wallet within the exact same atomic transaction slot.
-2. **Deterministic Slippage**: All transactions specify strict slippage bounds across each constituent asset. If any sub-swap fails slippage checks, the entire transaction reverts safely.
-3. **No Private Key Retention**: Kairos operates completely client-side for signing. Transactions are constructed deterministically and handed over to standard Solana wallet adapters.
+- **Wallet signatures stay with the user.** Kairos builds transactions for the connected wallet to review and sign; wallet private keys are not sent to the API.
+- **Execution is stateful and recoverable.** The backend records transaction and recovery state so workers can track landing and confirmation.
+- **Network scope is explicit.** The supported delivery target is Solana devnet. Mainnet execution is not claimed by this README.
+- **Keep secrets out of Git.** Store RPC credentials, database passwords, relayer keys, admin tokens, and JWT secrets in local environment files or a deployment secret manager.
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the [MIT License](LICENSE).
 

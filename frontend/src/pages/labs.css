@@ -17,7 +17,7 @@
 .labsroot-page {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 48px 32px 72px;
+  padding: 48px 32px;
   color: var(--text-primary);
   background: var(--background);
 }
@@ -66,14 +66,24 @@
   content: "";
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgba(245, 245, 245, 0.045) 1px, transparent 1px);
-  background-size: 22px 22px;
+  background-image:
+    linear-gradient(90deg, rgba(10, 10, 10, 0.78) 0%, rgba(10, 10, 10, 0.58) 52%, rgba(10, 10, 10, 0.18) 100%),
+    linear-gradient(0deg, rgba(10, 10, 10, 0.32), rgba(10, 10, 10, 0.08)),
+    radial-gradient(rgba(245, 245, 245, 0.045) 1px, transparent 1px),
+    url("/ideas-flower-bg.jpg");
+  background-size: auto, auto, 22px 22px, cover;
+  background-position: center, center, center, center 48%;
   pointer-events: none;
 }
 
 /* Keep banner content above the dot texture */
 .labscta-banner > * {
   position: relative;
+}
+
+.labscta-banner p {
+  color: rgba(255, 255, 255, 0.82) !important;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
 }
 
 /* Banner button pair — 36px tall, 8px radius, 14px/600 (arc Button's module
@@ -139,6 +149,13 @@
     linear-gradient(160deg, var(--surface-elevated) 0%, var(--surface-muted) 100%);
 }
 
+.labs-idea-cover {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
 .labs-thumb-stack {
   display: flex;
   align-items: center;
@@ -165,7 +182,7 @@
   white-space: nowrap;
   font-family: var(--font-mono, monospace);
   font-size: 0.5625rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text-muted);
 }

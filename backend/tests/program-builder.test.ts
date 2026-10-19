@@ -18,8 +18,9 @@ async function fixture(side: "buy" | "sell") {
     userAssetAta: await getAssociatedTokenAddress(assetMint, user),
     userUsdcAta: await getAssociatedTokenAddress(usdcMint, user),
     treasuryUsdcAta: await getAssociatedTokenAddress(usdcMint, Keypair.generate().publicKey),
-    globalConfigPda: globalConfigPda(), basketConfigPda: basketConfigPda(devnet.basketId),
+    globalConfigPda: globalConfigPda(), basketId: devnet.basketId, basketConfigPda: basketConfigPda(devnet.basketId),
      basketVersion: 1, basketVersionPda: basketVersionPda(devnet.basketId, 1),
+     basketLegCount: 2,
      feeBps: 20,
     pool: poolForPair(side === "buy" ? usdcMint.toBase58() : assetMint.toBase58(), side === "buy" ? assetMint.toBase58() : usdcMint.toBase58()),
     recentBlockhash: Keypair.generate().publicKey.toBase58(), memo: "kairos:test:leg1",
@@ -41,10 +42,11 @@ for (const side of ["buy", "sell"] as const) {
       assert.equal(ix.data[0], 1, "ATA creation must be idempotent");
     }
     const ix = message.instructions.find(ix => ix.programId.equals(KAIROS_ROUTER_PROGRAM_ID))!;
-    assert.equal(ix.keys.length, 21);
+    assert.equal(ix.keys.length, 22);
     assert.ok(ix.keys[2].isWritable);
     assert.ok(ix.keys[6].pubkey.equals(opts.basketVersionPda));
     assert.ok(ix.keys[20].pubkey.equals(MEMO_PROGRAM_ID));
+    assert.ok(ix.keys[21].pubkey.equals(KAIROS_ROUTER_PROGRAM_ID), "legacy versions use Anchor's optional-account sentinel");
     const pool = devnet.pools.tJUP;
     assert.equal(ix.keys[11].pubkey.toBase58(), side === "buy" ? pool.vault1 : pool.vault0);
     assert.equal(ix.keys[12].pubkey.toBase58(), side === "buy" ? pool.vault0 : pool.vault1);

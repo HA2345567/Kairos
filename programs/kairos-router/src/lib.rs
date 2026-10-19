@@ -19,6 +19,7 @@ pub(crate) use instructions::initialize_basket::__client_accounts_initialize_bas
 pub(crate) use instructions::admin::__client_accounts_set_active;
 pub(crate) use instructions::admin::__client_accounts_set_global_pause;
 pub(crate) use instructions::publish_version::__client_accounts_publish_version;
+pub(crate) use instructions::publish_version_extended::__client_accounts_publish_version_extended;
 pub(crate) use instructions::swap_leg::__client_accounts_swap_and_distribute_leg;
 pub(crate) use instructions::swap_leg_reverse::__client_accounts_swap_and_collect_leg;
 
@@ -76,6 +77,18 @@ pub mod kairos_router {
         legs_hash: [u8; 32],
     ) -> Result<()> {
         instructions::publish_version::handler(ctx, basket_id, version, items, leg_count, legs_hash)
+    }
+
+    /// Publishes an 11–12-leg version using an overflow PDA, preserving the
+    /// serialized layout of existing basket and version accounts.
+    pub fn publish_version_extended(
+        ctx: Context<PublishVersionExtended>,
+        basket_id: String,
+        version: u32,
+        items: Vec<BasketItem>,
+        legs_hash: [u8; 32],
+    ) -> Result<()> {
+        instructions::publish_version_extended::handler(ctx, basket_id, version, items, legs_hash)
     }
 
     /// BUY leg: USDC → asset (fee input-side, memo, atomic).

@@ -18,7 +18,7 @@ const { repository } = await import("../src/db/repository");
 const { quoteService } = await import("../src/services/quote.service");
 const { authService } = await import("../src/services/auth.service");
 const { adminService } = await import("../src/services/admin.service");
-const { executionService, allocateFeeBaseUnits } = await import("../src/services/execution.service");
+const { executionService, allocateFeeBaseUnits, allocateIntegerUnits } = await import("../src/services/execution.service");
 const { AppError } = await import("../src/errors");
 const { config } = await import("../src/config");
 const { buildApp } = await import("../src/index");
@@ -97,6 +97,14 @@ describe("quote engine (PRD §4.3)", () => {
     assert.equal(fees.reduce((sum, fee) => sum + fee, 0), 10_000);
   });
 
+  test("SOL principal and fee allocations preserve every lamport across basket legs", () => {
+    const principal = allocateIntegerUnits(247_500_001, [10_600_000, 10_000_000, 9_000_000, 8_000_000]);
+    const fee = allocateIntegerUnits(500_000, [2_120, 2_000, 1_800, 1_600]);
+    assert.equal(principal.reduce((sum, amount) => sum + amount, 0), 247_500_001);
+    assert.equal(fee.reduce((sum, amount) => sum + amount, 0), 500_000);
+    assert.equal(principal.reduce((sum, amount) => sum + amount, 0) + fee.reduce((sum, amount) => sum + amount, 0), 248_000_001);
+  });
+
   test("confirmed-leg fee ledger writes are idempotent", async () => {
     const id = `fee-test-${Date.now()}`;
     await repository.addFee(id, "leg-1", 0.0025, new Date().toISOString());
@@ -147,7 +155,7 @@ describe("auth (PRD §4.1)", () => {
   test("nonce → sign → verify → refresh rotation → replay rejected", async () => {
     const wallet = Keypair.generate().publicKey.toBase58();
     const nonce = await authService.generateNonce(wallet);
-    assert.match(nonce, /^kairos-auth-[0-9a-f]{32}$/);
+    assert.match(nonce, /^[0-9a-f]{32}$/);
     const message = `kairos-devnet-login:${nonce}`;
     const sig = bs58.encode(nacl.sign.detached(new TextEncoder().encode(message), Keypair.generate().secretKey));
     assert.equal(await authService.verify(wallet, sig, message), null); // wrong key
@@ -276,7 +284,7 @@ describe("execution submit security controls (PRD §4.4)", () => {
 
     await assert.rejects(
       async () => (await executionService.submit({ executionId: "exec-tamper1", signedTxs: [Buffer.from(tx.serialize()).toString("base64")] })),
-      (e: InstanceType<typeof AppError>) => e.code === "TAMPERED_TRANSACTION"
+      (e: InstanceType<typeof AppError>) => e.code === "MESSAGE_TAMPERED"
     );
     assert.equal((await repository.getExecution("exec-tamper1"))!.status, "PREPARED");
   });
@@ -321,7 +329,7 @@ describe("execution submit security controls (PRD §4.4)", () => {
         executionId: execution.id,
         signedTxs: [Buffer.from(tx.serialize()).toString("base64")],
       }),
-      (error: InstanceType<typeof AppError>) => error.code === "TAMPERED_TRANSACTION"
+      (error: InstanceType<typeof AppError>) => error.code === "INVALID_SIGNATURE"
     );
     assert.equal((await repository.getExecution(execution.id))!.status, "PREPARED");
   });

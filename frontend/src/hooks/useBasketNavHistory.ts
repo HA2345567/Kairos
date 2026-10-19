@@ -1,4 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
+import { kairosApi } from "@/lib/api-client";
+import { cacheMarketHistoryResult, readMarketHistoryCache } from "@/lib/market-history-cache";
+import type { BasketMarketNavHistoryResponse } from "@/lib/api-types";
 
 export interface NAVPoint {
   timestamp: number;
@@ -94,5 +97,33 @@ export function useBasketNavHistory(basketId?: string) {
       }
       return failureCount < 2;
     },
+  });
+}
+
+/** Public-pool historical index, distinct from execution/oracle NAV snapshots. */
+export function useMarketBasketNavHistory(slug?: string, window: BasketMarketNavHistoryResponse["window"] = "1Y") {
+  const cacheId = `catalog:${slug ?? ""}:${window}`;
+  return useQuery<BasketMarketNavHistoryResponse>({
+    queryKey: ["basket-market-nav-history", slug, window],
+    queryFn: () => {
+      if (!slug) throw new Error("Basket slug is required");
+      return cacheMarketHistoryResult(cacheId, () => kairosApi.getBasketMarketNavHistory(slug, window));
+    },
+    enabled: Boolean(slug),
+    initialData: () => readMarketHistoryCache(cacheId)?.data,
+    initialDataUpdatedAt: () => readMarketHistoryCache(cacheId)?.savedAt,
+    // Keep the last chart ready when users revisit a basket, then refresh it.
+    staleTime: 60_000,
+    // History backfills are deliberately progressive. Check again soon while
+    // candles are still arriving instead of leaving the chart stale for 20s.
+    refetchInterval: (query) => {
+      if (query.state.status === "error") return false;
+      const progress = query.state.data?.progress;
+      if (!progress) return 10_000;
+      if (progress.pendingSymbols.length) return 15_000;
+      if (progress.publicMarkets === 0 && progress.basketAssets > 0) return 30_000;
+      return 60_000;
+    },
+    refetchOnWindowFocus: true,
   });
 }

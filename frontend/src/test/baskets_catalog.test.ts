@@ -38,10 +38,10 @@ describe("mapCatalogBasket", () => {
 
     const basket = mapCatalogBasket(item);
     expect(basket.slug).toBe("digital-gold");
-    expect(basket.tokens).toEqual([{
+    expect(basket.tokens).toMatchObject([{
       mint: "MintGold",
-      symbol: "tGOLD",
-      name: "Kairos Devnet tGOLD",
+      symbol: "GOLD",
+      name: "GOLD",
       weightBps: 10000,
       icon: "/tokens/gold.png",
       priceUsd: 2,

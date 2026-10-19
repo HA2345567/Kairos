@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import { PublicKey, VersionedTransaction } from "@solana/web3.js";
-import { getAssociatedTokenAddress } from "@solana/spl-token";
+import { VersionedTransaction } from "@solana/web3.js";
 import {
   Dialog,
   DialogContent,
@@ -11,10 +10,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Basket } from "@/lib/baskets-data";
-import { TokenAvatar } from "@/components/common/TokenAvatar";
 import {
   ArrowRight,
-  AlertTriangle,
   CheckCircle2,
   Loader2,
   ShieldCheck,
@@ -35,7 +32,10 @@ interface InvestModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialAmount?: string;
-  onSuccess?: () => void;
+  onSuccess?: (signature: string) => void;
+  onBusyChange?: (busy: boolean) => void;
+  onAttestationRequired?: () => void;
+  onRegisterInvest?: (startInvest: ((amount: string) => void) | null) => void;
 }
 
 const decodeTransaction = (base64: string) =>
@@ -47,46 +47,66 @@ const encodeTransaction = (transaction: VersionedTransaction) => {
   return btoa(binary);
 };
 
-export function InvestModal({ basket, open, onOpenChange, initialAmount, onSuccess }: InvestModalProps) {
+export function InvestModal({
+  basket,
+  open,
+  onOpenChange,
+  initialAmount,
+  onSuccess,
+  onBusyChange,
+  onAttestationRequired,
+  onRegisterInvest,
+}: InvestModalProps) {
   // Solana Wallet Adapter
   const { connected, publicKey, signAllTransactions, signTransaction } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { connection } = useConnection();
   const { ensureAuthenticated } = useWalletAuth();
+  const [attestationRequired, setAttestationRequired] = useState(false);
+  const [attesting, setAttesting] = useState(false);
 
   const isConnected = connected && !!publicKey;
   const activeAddressStr = publicKey?.toBase58() || null;
   const effectivePublicKey = publicKey;
 
-  const [amountUsdc, setAmountUsdc] = useState<string>(initialAmount || "10");
+  const [amountSol, setAmountSol] = useState<string>("0.25");
 
   useEffect(() => {
     if (open) {
-      const requested = Number(initialAmount);
-      setAmountUsdc(String(requested >= (basket?.minUsdc ?? 25) ? requested : basket?.minUsdc ?? 25));
+      setAmountSol(initialAmount || "0.25");
     }
-  }, [open, initialAmount, basket?.minUsdc]);
+  }, [open, initialAmount, basket?.slug]);
   const [isInvesting, setIsInvesting] = useState(false);
-  const [step, setStep] = useState<"input" | "quoting" | "signing" | "success">("input");
+  const [step, setStep] = useState<"input" | "quoting" | "preparing" | "signing" | "confirming" | "success">("input");
   const [txSignature, setTxSignature] = useState<string>("");
-  const [simError, setSimError] = useState<string | null>(null);
   const [liveQuote, setLiveQuote] = useState<QuoteLeg[] | null>(null);
   const [quoteTotals, setQuoteTotals] = useState<{ platformFeeUsdc: number; netInvestUsdc: number } | null>(null);
-  const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
+  const [solBalance, setSolBalance] = useState<number | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceUnavailable, setBalanceUnavailable] = useState(false);
   const [isMintingFaucet, setIsMintingFaucet] = useState(false);
+  const [faucetTxSignature, setFaucetTxSignature] = useState("");
+  const [solPriceUsd, setSolPriceUsd] = useState<number | null>(null);
 
-  const numAmount = parseFloat(amountUsdc) || 0;
+  const numAmount = parseFloat(amountSol) || 0;
 
-  // Refresh USDC Devnet balance
+  // Read native SOL balance from the active Devnet RPC connection.
   const refreshBalance = useCallback(async () => {
-    if (!effectivePublicKey) return;
+    if (!effectivePublicKey) {
+      setSolBalance(null);
+      setBalanceUnavailable(false);
+      return;
+    }
+    setBalanceLoading(true);
+    setBalanceUnavailable(false);
     try {
-      const usdcMint = new PublicKey("An9DFuHeSDYgVBiybraa7Svn1RHjrDb7Ed8YJZCZ4D1Y");
-      const ata = await getAssociatedTokenAddress(usdcMint, effectivePublicKey);
-      const info = await connection.getTokenAccountBalance(ata);
-      setUsdcBalance(info?.value?.uiAmount ?? 0);
+      const lamports = await connection.getBalance(effectivePublicKey, "confirmed");
+      setSolBalance(lamports / 1_000_000_000);
     } catch {
-      setUsdcBalance(0);
+      setSolBalance(null);
+      setBalanceUnavailable(true);
+    } finally {
+      setBalanceLoading(false);
     }
   }, [connection, effectivePublicKey]);
 
@@ -101,8 +121,7 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
     setWalletModalVisible(true);
   };
 
-  // 1-Click Devnet Faucet (USDC + SOL)
-  // 1-Click Devnet Faucet via real backend /v1/faucet/airdrop
+  // 1-Click native Devnet SOL airdrop via the configured backend RPC (Helius primary).
   const handleFaucet = async () => {
     if (!activeAddressStr) {
       toast.error("Please connect your wallet first.");
@@ -111,14 +130,14 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
     setIsMintingFaucet(true);
     try {
       await ensureAuthenticated();
-      const res = await kairosApi.post<{ success: boolean; message?: string; amount?: number }>(
-        API_ENDPOINTS.FAUCET_AIRDROP,
+      const res = await kairosApi.post<{ success: boolean; message?: string; amount?: number; txSignature?: string | null }>(
+        API_ENDPOINTS.FAUCET_SOL_AIRDROP,
         { walletAddress: activeAddressStr }
       );
       if (res && res.success !== false) {
-        toast.success(`Airdropped ${res.amount || 1000} Devnet USDC to your wallet!`);
+        setFaucetTxSignature(res.txSignature ?? "");
+        toast.success(`Added ${res.amount ?? 1} Devnet SOL to your wallet.`);
         await refreshBalance();
-        setSimError(null);
       } else {
         throw new Error(res?.message || "Faucet request failed");
       }
@@ -130,43 +149,63 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
     }
   };
 
-  if (!basket) return null;
-
-  const handleInvest = async () => {
+  const handleInvest = async (amountOverride?: string) => {
+    if (!basket) return;
     if (!isConnected || !effectivePublicKey) {
       handleConnect();
       return;
     }
 
-    if (numAmount < basket.minUsdc) {
-      toast.error(`Minimum investment is $${basket.minUsdc} USDC.`);
+    const amountToInvest = Number(amountOverride ?? amountSol) || 0;
+    if (amountToInvest <= 0) {
+      toast.error("Enter a positive SOL amount.");
       return;
     }
 
-    setSimError(null);
+    setAmountSol(String(amountToInvest));
     setIsInvesting(true);
+    onBusyChange?.(true);
     setLiveQuote(null);
     setQuoteTotals(null);
 
     try {
+      // §13.1 age gate: the backend refuses prepare with ELIGIBILITY_REQUIRED,
+      // so surface the attestation before any transaction is built.
+      await ensureAuthenticated();
+      const eligibility = await kairosApi.getEligibility();
+      if (!eligibility.eligibility.eligible) {
+        setIsInvesting(false);
+        setStep("input");
+        if (eligibility.eligibility.reason === "ELIGIBILITY_REQUIRED") {
+          setAttestationRequired(true);
+          onAttestationRequired?.();
+          return;
+        }
+        throw new Error(
+          eligibility.eligibility.reason === "REGION_BLOCKED"
+            ? "Trading is not available in your region."
+            : "This account is not eligible to trade.",
+        );
+      }
+
       // Step 1: Quote from the backend's configured devnet price source
       setStep("quoting");
-      const quoteRes = await kairosApi.getQuote(basket.slug, numAmount);
+      const quoteRes = await kairosApi.getQuote(basket.slug, amountToInvest, "SOL");
       const quoteLegs = quoteRes?.quote?.legs;
       if (!quoteLegs?.length) throw new Error("The quote did not include any investable basket legs.");
       setLiveQuote(quoteLegs);
+      setSolPriceUsd(quoteRes.funding?.priceUsd ?? null);
       setQuoteTotals({
         platformFeeUsdc: quoteRes.quote.platformFeeUsdc,
         netInvestUsdc: quoteRes.quote.netInvestUsdc,
       });
 
       // Step 2: Prepare position with real VersionedTransactions
-      setStep("signing");
-      await ensureAuthenticated();
+      setStep("preparing");
       const idempotencyKey = `inv-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const prepRes = await kairosApi.preparePosition({
         basket: basket.slug,
-        usdc: numAmount,
+        solAmount: amountToInvest,
         walletAddress: effectivePublicKey.toBase58(),
         idempotencyKey,
       });
@@ -179,12 +218,18 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
       let sig = "";
 
       const txObjects = preparedTxs.map(decodeTransaction);
-      if (!signAllTransactions && !signTransaction) {
-        throw new Error("This wallet cannot return signed transactions for Kairos verification.");
+      setStep("signing");
+      // Each basket leg is a separate Solana transaction, but request all
+      // signatures in one wallet batch so the user approves the basket once
+      // instead of confirming the same flow once per asset.
+      if (!signAllTransactions) {
+        if (txObjects.length !== 1 || !signTransaction) {
+          throw new Error("This wallet does not support batch signing required for multi-asset baskets. Connect Phantom and try again.");
+        }
       }
       const signedTxs: VersionedTransaction[] = signAllTransactions
         ? await signAllTransactions(txObjects)
-        : await Promise.all(txObjects.map((tx) => signTransaction!(tx)));
+        : [await signTransaction!(txObjects[0])];
       if (signedTxs.length !== txObjects.length) {
         throw new Error("The wallet did not sign every prepared basket leg.");
       }
@@ -194,6 +239,7 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
         signedTxs: signedTxs.map(encodeTransaction),
         idempotencyKey,
       });
+      setStep("confirming");
       let curExec = await kairosApi.getExecution(execId);
       for (let i = 0; i < 30 && ["SUBMITTED", "LANDING"].includes(curExec.status); i++) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -209,45 +255,37 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
       sig = curExec.legs.find((leg) => leg.txSignature)?.txSignature ?? "";
       if (!sig) throw new Error(`Execution ${execId} completed without a recorded transaction signature.`);
 
-      // Step 5: Persist in local wallet ledger
-      try {
-        const storageKey = `kairos_invest_${effectivePublicKey.toBase58()}`;
-        const prev = JSON.parse(localStorage.getItem(storageKey) || "[]");
-        prev.unshift({
-          action: "Invest",
-          basketId: basket.id,
-          basketName: basket.name,
-          amountUsdc: numAmount,
-          txSignature: sig,
-          executionId: execId,
-          tokensDescription: quoteLegs
-            .map((leg) => `~${Number(leg.expectedOutTokens).toFixed(3)} ${leg.symbol}`)
-            .join(" + "),
-          timestamp: new Date().toISOString(),
-        });
-        localStorage.setItem(storageKey, JSON.stringify(prev));
-      } catch (e) {}
+      // Step 5: nothing is persisted locally. The execution is already durable
+      // server-side (outbox + execution rows), and a browser-side ledger was the
+      // only reason the UI could disagree with the backend about a position.
 
       setTxSignature(sig);
       setStep("success");
       refreshBalance();
-      onSuccess?.();
-      toast.success(`Invested $${numAmount.toFixed(2)} USDC into ${basket.name}!`);
+      onSuccess?.(sig);
+      toast.success(`Invested ${amountToInvest.toFixed(4)} SOL into ${basket.name}!`);
     } catch (err: any) {
       console.error(err);
       const msg = err?.message || "Failed to execute investment.";
       toast.error(msg);
-      setSimError(msg);
       setStep("input");
     } finally {
       setIsInvesting(false);
+      onBusyChange?.(false);
     }
   };
+
+  useLayoutEffect(() => {
+    if (!onRegisterInvest) return;
+    onRegisterInvest((amount) => void handleInvest(amount));
+    return () => onRegisterInvest(null);
+  }, [onRegisterInvest, handleInvest]);
+
+  if (!basket) return null;
 
   const handleReset = () => {
     setStep("input");
     setTxSignature("");
-    setSimError(null);
     setLiveQuote(null);
     setQuoteTotals(null);
     onOpenChange(false);
@@ -256,9 +294,11 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
   const stepLabel =
     step === "quoting"
       ? "Fetching basket quote..."
+      : step === "preparing"
+      ? "Preparing basket transactions..."
       : step === "signing"
-      ? "Waiting for wallet signature..."
-      : "Confirming on-chain...";
+      ? `Waiting for wallet signatures (${liveQuote?.length ?? basket.tokens.length} asset transactions)...`
+      : "Confirming every Devnet transaction...";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -270,7 +310,26 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
           <DialogDescription className="text-text-secondary text-xs leading-relaxed">
             Review the backend quote, sign the prepared devnet transactions, and receive basket assets in your wallet.
           </DialogDescription>
+        {quoteTotals && solPriceUsd && (
+          <div className="mt-2 flex items-center justify-between rounded-xl border border-border-subtle bg-surface-hover/60 px-3.5 py-3 text-xs">
+            <span className="text-text-secondary">Platform fee</span>
+            <strong className="font-mono font-semibold text-foreground">
+              {(quoteTotals.platformFeeUsdc / solPriceUsd).toFixed(6)} SOL
+            </strong>
+          </div>
+        )}
         </DialogHeader>
+
+        {isInvesting && step !== "success" && (
+          <div role="status" aria-live="polite" className="rounded-xl border border-border-subtle bg-surface-hover/60 px-3.5 py-3 text-xs text-text-secondary space-y-1">
+            <p className="font-semibold text-foreground">{stepLabel}</p>
+            {step === "signing" && (
+              <p>
+                Kairos sends the complete transaction batch to your wallet. Phantom may show a separate review for each asset leg; Devnet test tokens can appear as “Unknown” because they have no wallet metadata.
+              </p>
+            )}
+          </div>
+        )}
 
         {step === "success" ? (
           <div className="py-6 flex flex-col items-center text-center space-y-4">
@@ -294,9 +353,9 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
                 </span>
               </div>
               <div className="flex justify-between text-text-secondary">
-                <span>Invested USDC:</span>
+                <span>Invested:</span>
                 <span className="text-foreground font-semibold font-mono">
-                  ${numAmount.toFixed(2)} USDC
+                  {numAmount.toFixed(4)} SOL{solPriceUsd ? ` (≈$${(numAmount * solPriceUsd).toFixed(2)})` : ""}
                 </span>
               </div>
               {liveQuote?.map((leg) => (
@@ -349,40 +408,20 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
           </div>
         ) : (
           <div className="space-y-4 pt-2">
-            {/* Simulation error banner */}
-            {simError && (
-              <div className="flex flex-col gap-2 text-xs text-rose-400 bg-rose-500/10 p-3 rounded-xl border border-rose-500/30">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="size-4 shrink-0 mt-0.5 text-rose-400" />
-                  <span className="leading-relaxed">{simError}</span>
-                </div>
-                {isConnected && (
-                  <button
-                    onClick={handleFaucet}
-                    disabled={isMintingFaucet}
-                    className="self-start mt-1 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1.5 cursor-pointer hover:bg-neutral-200 transition-colors"
-                  >
-                    <Coins className="size-3" />
-                    <span>Airdrop 50 Devnet USDC to Wallet</span>
-                  </button>
-                )}
-              </div>
-            )}
-
             {/* Amount input */}
             <div>
               <div className="flex justify-between items-center text-xs text-text-secondary mb-1.5 font-medium">
-                <span>Deposit Amount</span>
-                <span className="text-text-muted">Currency: USDC (Devnet)</span>
+                <span>Amount to invest</span>
+                <span className="text-text-muted">Currency: SOL (Devnet)</span>
               </div>
               <div className="relative flex items-center">
                 <input
                   type="number"
-                min={basket.minUsdc}
-                  step="1"
-                  value={amountUsdc}
+                  min="0.0001"
+                  step="0.01"
+                  value={amountSol}
                   onChange={(e) => {
-                    setAmountUsdc(e.target.value);
+                    setAmountSol(e.target.value);
                     setLiveQuote(null);
                     setQuoteTotals(null);
                   }}
@@ -391,124 +430,122 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
                   className="w-full bg-background border border-border rounded-[14px] px-4 py-3 text-xl font-mono font-bold text-foreground placeholder:text-text-muted focus:outline-none focus:border-text-primary disabled:opacity-50"
                 />
                 <div className="absolute right-3 px-2 py-1 rounded-[8px] bg-surface-hover border border-border text-xs font-semibold text-text-secondary">
-                  USDC
+                  SOL
                 </div>
               </div>
 
               {/* Quick Presets */}
               <div className="flex items-center gap-1.5 mt-2">
-                {[...new Set([basket.minUsdc, 50, 100].filter((value) => value >= basket.minUsdc))].map((preset) => (
+                {[0.25, 0.5, 1].map((preset) => (
                   <button
                     key={preset}
                     onClick={() => {
-                      setAmountUsdc(String(preset));
+                      setAmountSol(String(preset));
                       setLiveQuote(null);
                       setQuoteTotals(null);
                     }}
                     disabled={isInvesting}
                     className={`flex-1 py-1.5 text-xs rounded-[10px] border font-mono transition-colors cursor-pointer ${
-                      amountUsdc === String(preset)
+                      amountSol === String(preset)
                         ? "border-foreground bg-primary text-primary-foreground font-bold shadow-sm"
                         : "border-border bg-surface hover:bg-surface-hover text-text-secondary hover:text-foreground"
                     }`}
                   >
-                    ${preset}
+                    {preset} SOL
                   </button>
                 ))}
               </div>
 
               {/* Balance & 1-click Faucet Helper */}
               {isConnected && (
-                <div className="flex items-center justify-between text-[11px] text-text-secondary mt-2 px-0.5">
-                  <span>
-                    Balance:{" "}
-                    <strong className="text-foreground font-mono">
-                      {usdcBalance !== null ? `$${usdcBalance.toFixed(2)} USDC` : "Checking..."}
-                    </strong>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleFaucet}
-                    disabled={isMintingFaucet}
-                    className="text-foreground font-semibold underline flex items-center gap-1 cursor-pointer disabled:opacity-50 hover:text-text-primary"
-                  >
-                    {isMintingFaucet ? (
-                      <>
-                        <Loader2 className="size-3 animate-spin" />
-                        <span>Minting USDC...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Coins className="size-3" />
-                        <span>+ Get 50 Devnet USDC</span>
-                      </>
-                    )}
-                  </button>
+                <div className="mt-2 px-0.5">
+                  <div className="flex items-center justify-between text-[11px] text-text-secondary">
+                    <span>
+                      SOL balance:{" "}
+                      <strong className="text-foreground font-mono">
+                        {solBalance !== null
+                          ? `${solBalance.toFixed(4)} SOL`
+                          : balanceLoading
+                            ? "Checking..."
+                            : balanceUnavailable
+                              ? "Unavailable"
+                              : "Waiting for config..."}
+                      </strong>
+                    </span>
+                    {(solBalance === null || solBalance < numAmount + 0.02) && <button
+                      type="button"
+                      onClick={handleFaucet}
+                      disabled={isMintingFaucet}
+                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-foreground font-semibold cursor-pointer transition-colors hover:bg-surface-hover disabled:opacity-50"
+                    >
+                      {isMintingFaucet ? (
+                        <>
+                          <Loader2 className="size-3 animate-spin" />
+                          <span>Requesting SOL...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Coins className="size-3" />
+                          <span>Get 1 Devnet SOL</span>
+                        </>
+                      )}
+                    </button>}
+                  </div>
+                  {faucetTxSignature && (
+                    <a
+                      href={`https://explorer.solana.com/tx/${faucetTxSignature}?cluster=devnet`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-text-secondary underline-offset-2 hover:text-foreground hover:underline"
+                    >
+                      View confirmed faucet transaction on Solana Devnet
+                      <ExternalLink className="size-3" />
+                    </a>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Backend allocation quote */}
-            <div className="space-y-2">
-              <span className="text-xs text-text-secondary font-medium">Basket allocation:</span>
-              {liveQuote && (
-                <p className="text-[10px] text-text-muted">
-                  Rate source: {[...new Set(liveQuote.map((leg) => leg.priceSource ?? "unknown"))].join(", ")}. Devnet test values may not track market prices.
+            {/* §13.1 age gate — the user must attest before the first invest. */}
+            {attestationRequired && (
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-3 space-y-2 text-xs text-amber-200"
+              >
+                <p className="font-semibold">This devnet build still requires an eligibility attestation.</p>
+                <p className="leading-relaxed">
+                  Confirm you are 18 or older and accept that devnet assets have no monetary value. Kairos stays
+                  non-custodial throughout.
                 </p>
-              )}
-              {liveQuote && liveQuote.some((leg) => leg.priceImpactPct === null) && (
-                <p className="text-[10px] text-text-muted">Price impact is unavailable for this fixed-rate devnet route.</p>
-              )}
-              {quoteTotals && (
-                <div className="flex justify-between text-[11px] text-text-secondary">
-                  <span>Platform fee: ${quoteTotals.platformFeeUsdc.toFixed(2)} USDC</span>
-                  <span>Net allocation: ${quoteTotals.netInvestUsdc.toFixed(2)} USDC</span>
-                </div>
-              )}
-              <div className="space-y-1.5 bg-background border border-border-subtle rounded-[16px] p-3.5">
-                {basket.tokens.map((token) => {
-                  const weightPct = token.weightBps / 100;
-                  const quotedLeg = liveQuote?.find((leg) => leg.mint === token.mint);
-                  const quotedAmount = quotedLeg?.inUsdcAmount;
-
-                  return (
-                    <div key={token.symbol} className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <TokenAvatar
-                          symbol={token.symbol}
-                          src={token.icon}
-                          name={token.name}
-                          size="xs"
-                        />
-                        <span className="font-semibold text-foreground">{token.symbol}</span>
-                        <span className="text-text-muted">({weightPct}%)</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-mono text-foreground font-semibold">
-                          {quotedAmount === undefined ? "—" : `$${quotedAmount.toFixed(2)}`}
-                        </span>
-                        <span className="block text-text-muted text-[10px]">
-                          {quotedAmount === undefined
-                            ? "get quote to preview"
-                            : `~${Number(quotedLeg?.expectedOutTokens).toFixed(4)} ${token.symbol} · min ${Number(quotedLeg?.minOutTokens).toFixed(4)} · impact ${quotedLeg?.priceImpactPct ?? "unavailable"}`}
-                        </span>
-                        {quotedLeg?.priceSource && <span className="block text-text-muted text-[10px]">
-                          {quotedLeg.priceSource}
-                          {quotedLeg.priceSourceRef ? ` · ${quotedLeg.priceSourceRef.slice(0, 10)}` : ""}
-                          {quotedLeg.priceAsOf ? ` · ${new Date(quotedLeg.priceAsOf).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}
-                        </span>}
-                      </div>
-                    </div>
-                  );
-                })}
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={attesting}
+                  onClick={async () => {
+                    setAttesting(true);
+                    try {
+                      await kairosApi.confirmEligibility(true);
+                      setAttestationRequired(false);
+                      toast.success("Eligibility confirmed.");
+                      await handleInvest(initialAmount);
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : "Could not confirm eligibility.");
+                    } finally {
+                      setAttesting(false);
+                    }
+                  }}
+                >
+                  I am 18+ and accept
+                </Button>
               </div>
-            </div>
+            )}
 
             {/* Security Guarantee */}
             <div className="flex items-center gap-2 text-[11px] text-text-secondary bg-surface-hover/50 p-2.5 rounded-xl border border-border-subtle">
               <ShieldCheck className="size-4 text-emerald-400 shrink-0" />
               <span>
-                Non-custodial. Your wallet signs each leg and receives the basket assets directly.
+                Your Phantom wallet signs each Devnet leg. SOL is sent to the basket treasury for fixed-rate test-asset delivery; this is not a Jupiter market swap.
               </span>
             </div>
 
@@ -527,12 +564,12 @@ export function InvestModal({ basket, open, onOpenChange, initialAmount, onSucce
               <Button
                 variant="primary"
                 size="lg"
-                onClick={handleInvest}
-                disabled={isInvesting || numAmount < basket.minUsdc}
+                onClick={() => void handleInvest()}
+                disabled={isInvesting || numAmount <= 0}
                 loading={isInvesting}
                 className="w-full font-bold shadow-md"
               >
-                <span>Invest ${numAmount.toFixed(2)} USDC in {basket.tokens.length} assets</span>
+                <span>Invest {numAmount.toFixed(4)} SOL in {basket.tokens.length} assets</span>
                 <ArrowRight className="size-4" />
               </Button>
             )}

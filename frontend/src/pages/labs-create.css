@@ -110,7 +110,7 @@
 
 .labs-create-header h1 {
   font-size: 1.5rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--text-primary);
   margin: 0;
@@ -246,7 +246,7 @@
   gap: 0.25rem;
   font-size: 0.6875rem;
   font-family: var(--font-mono, monospace);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -307,7 +307,7 @@
 }
 
 .labs-create-token-symbol {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
   font-size: 0.8125rem;
   display: block;
@@ -339,7 +339,7 @@
   text-align: right;
   font-family: var(--font-mono, monospace);
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -386,12 +386,12 @@
 /* Total: green when valid, red when not */
 .labs-create-alloc-footer .total-val.valid {
   color: #34d399;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .labs-create-alloc-footer .total-val.invalid {
   color: #fb7185;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 /* Dashed Add Asset Container: ~170px min-height, centered content */
@@ -432,7 +432,7 @@
   border: 1px solid var(--border);
   color: var(--text-primary);
   font-size: 0.8125rem;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -484,7 +484,7 @@
   background: var(--primary);
   color: var(--primary-foreground);
   font-size: 0.8125rem;
-  font-weight: 700;
+  font-weight: 600;
   border: none;
   cursor: pointer;
   transition: opacity 0.15s ease, transform 0.1s ease;
@@ -537,7 +537,7 @@
   gap: 0.5rem;
   font-size: 0.75rem;
   font-family: var(--font-display, "Archivo", sans-serif);
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-secondary);
@@ -742,14 +742,59 @@
   text-align: left;
 }
 
-.labs-create-modal-item:hover:not(:disabled) {
+.labs-create-modal-item:hover {
   background: var(--surface-hover);
   border-color: var(--border);
 }
 
-.labs-create-modal-item:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+.labs-create-modal-item.selected {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+
+.labs-create-selection-check {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.375rem;
+  color: var(--background);
+  background: transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.labs-create-selection-check.checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.labs-create-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.labs-create-modal-footer button {
+  border: 1px solid var(--border-strong);
+  border-radius: 0.5rem;
+  padding: 0.375rem 0.875rem;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.labs-create-modal-footer button:hover {
+  background: var(--surface-hover);
 }
 
 .labs-create-category-badge {
@@ -771,6 +816,7 @@
 .labs-create-publish-btn:focus-visible,
 .labs-create-pill-btn:focus-visible,
 .labs-create-modal-close:focus-visible,
+.labs-create-modal-footer button:focus-visible,
 .labs-create-modal-item:focus-visible,
 .labs-create-breadcrumbs a:focus-visible {
   outline: 2px solid var(--text-primary);

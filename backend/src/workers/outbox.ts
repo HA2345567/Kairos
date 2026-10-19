@@ -1,5 +1,6 @@
 import { config } from "../config";
 import { repository } from "../db/repository";
+import { notificationsService } from "../services/notifications.service";
 
 /**
  * Outbox worker (PRD §4.9): claims durable rows, hands them to an explicit
@@ -50,11 +51,45 @@ function acknowledged(result: OutboxTransportAck): boolean {
   return result === true || (typeof result === "object" && result.acknowledged === true);
 }
 
+/** Best-effort wallet extraction from an outbox payload (execution status events). */
+function executionWalletOf(payload: unknown): string | null {
+  let candidate = payload;
+  if (typeof candidate === "string") {
+    try {
+      candidate = JSON.parse(candidate);
+    } catch {
+      return null;
+    }
+  }
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
+  const record = candidate as Record<string, unknown>;
+  const wallet = record.walletAddress ?? record.wallet_address ?? record.wallet;
+  return typeof wallet === "string" && wallet.length > 0 ? wallet : null;
+}
+
 async function drainOnce(): Promise<number> {
   const events = await repository.claimOutbox(20);
   for (const event of events) {
     if (!transport) continue;
     try {
+      // FR-18 preferences: a wallet that muted in-app/execution updates keeps
+      // the exactly-once ledger row but is not interrupted. Delivery failure
+      // here must never block the queue, so preference lookup is best-effort.
+      try {
+        const walletAddress = executionWalletOf(event.payload);
+        if (walletAddress) {
+          const prefs = await repository.getNotificationPreferences(walletAddress);
+          if (
+            !prefs.inApp ||
+            !notificationsService.interestedInClass(prefs, notificationsService.classifyEvent(event.event))
+          ) {
+            await repository.acknowledgeOutbox(event.id, event.leaseToken);
+            continue;
+          }
+        }
+      } catch (err) {
+        console.warn(`[outbox] preference lookup failed id=${event.id}:`, err);
+      }
       const result = await transport.deliver(event);
       if (!acknowledged(result)) {
         console.warn(`[outbox] transport did not acknowledge id=${event.id}; leaving pending`);

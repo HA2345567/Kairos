@@ -51,7 +51,10 @@ describe("E2E Transaction Flow: Quote → Prepare → Sign → Submit → Land �
     // Setup fresh test fixtures
     wallet = Keypair.generate();
     walletAddress = wallet.publicKey.toBase58();
-    USDC_MINT = generateValidPubkey();
+    // The execution builder uses the initialized devnet USDC mint. Reuse it
+    // when the local devnet state exists so the persisted mint allowlist and
+    // the transaction inputs describe the same asset.
+    USDC_MINT = loadDevnetState()?.usdc.mint ?? generateValidPubkey();
     JUP_MINT = generateValidPubkey();
     GOLD_MINT = generateValidPubkey();
 

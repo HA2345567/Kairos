@@ -19,6 +19,8 @@ export interface Config {
   fallbackRpcUrl: string;
   pythHermesUrl: string;
   pythApiKey: string;
+  nvidiaNimApiKey: string;
+  nvidiaNimModel: string;
   pythFeeds: Record<string, string>;
   pythPollMs: number;
   pythMaxAgeSec: number;
@@ -40,13 +42,32 @@ export interface Config {
     forceQuoteExpirySec?: number;
     stalePriceSec?: number;
     forceSimulationFail?: boolean;
+    /** §14.3 "stop the indexer for 5 min": the reconciler is paused this long. */
+    pauseReconcilerMs?: number;
   };
+  /** SIMULATION_BENCHMARK_MINT: mint with verified snapshot history used as the
+   *  FR-26 simulation benchmark (e.g. a devnet SOL feed). Empty → the simulation
+   *  endpoint reports the benchmark as unavailable rather than inventing one. */
+  simulationBenchmarkMint: string;
+  /** FR-03: minimum verified on-chain liquidity (USD) for a publishable leg.
+   *  0 disables the threshold while still recording evidence per token. */
+  minLiquidityUsd: number;
+  /** FR-04: sanctioned regions blocked at the edge (ISO 3166-1 alpha-2). */
+  restrictedRegions: string[];
+  /** NFR-10: audit-log retention window in days (7 years per counsel note). */
+  auditRetentionDays: number;
+  /** FE-03: origins allowed to send credentialed requests (pinned, never `*`). */
+  corsOrigins: string[];
   isDevnet(): boolean;
   /** KAIROS_SIMULATE_LANDING=1: control-plane simulation mode (PRD §11.2 "test
    *  data" labelling). Real transactions are built + byte-verified, but
    *  send/confirm/balance/faucet are stubbed — for when no validator/faucet
    *  is reachable (no-AVX CPU, dry faucet). NEVER enable on mainnet. */
   simulateLanding: boolean;
+  /** Serve read APIs without starting execution workers or accepting mutations. */
+  readOnlyApi: boolean;
+  /** Broadcast submitted wallet-signed transactions through the landing worker. */
+  landingWorkerEnabled: boolean;
   /** SWAP_BUILDER=treasury (default, devnet) | program (on-chain kairos_router
    *  via Raydium CPMM — activates once the program is deployed + funded). */
   swapBuilder: "treasury" | "program";
@@ -151,6 +172,8 @@ export const config: Config = {
     : "https://api.devnet.solana.com"),
   pythHermesUrl,
   pythApiKey: process.env.PYTH_API_KEY || "",
+  nvidiaNimApiKey: process.env.NVIDIA_NIM_API_KEY || "",
+  nvidiaNimModel: process.env.NVIDIA_NIM_MODEL || "openai/gpt-oss-20b",
   pythFeeds,
   pythPollMs: Math.max(5_000, Math.floor(numEnv("PYTH_POLL_MS") ?? 15_000)),
   pythMaxAgeSec: Math.max(1, Math.floor(numEnv("PYTH_MAX_AGE_SEC") ?? 60)),
@@ -177,11 +200,53 @@ export const config: Config = {
     forceQuoteExpirySec: numEnv("KAIROS_CHAOS_FORCE_QUOTE_EXPIRY_SEC"),
     stalePriceSec: numEnv("KAIROS_CHAOS_STALE_PRICE_SEC"),
     forceSimulationFail: boolEnv("KAIROS_CHAOS_FORCE_SIMULATION_FAIL"),
+    pauseReconcilerMs: numEnv("KAIROS_CHAOS_PAUSE_RECONCILER_MS"),
   },
+  simulationBenchmarkMint: (() => {
+    const raw = (process.env.SIMULATION_BENCHMARK_MINT || "").trim();
+    if (!raw) return "";
+    try {
+      new PublicKey(raw);
+    } catch {
+      throw new Error("SIMULATION_BENCHMARK_MINT must be a base58 Solana mint address.");
+    }
+    return raw;
+  })(),
+  minLiquidityUsd: Math.max(0, numEnv("MIN_LIQUIDITY_USD") ?? 0),
+  restrictedRegions: (process.env.RESTRICTED_REGIONS || "KP,IR,CU,SY")
+    .split(",")
+    .map((region) => region.trim().toUpperCase())
+    .filter(Boolean),
+  auditRetentionDays: Math.max(1, Math.floor(numEnv("AUDIT_RETENTION_DAYS") ?? 2555)),
+  corsOrigins: (() => {
+    const configured = (process.env.CORS_ORIGINS || "")
+      .split(",")
+      .map((origin) => origin.trim().replace(/\/$/, ""))
+      .filter(Boolean);
+    const appOrigin = (process.env.APP_ORIGIN || "").trim().replace(/\/$/, "");
+    const defaults = [
+      "http://localhost:3000",
+      "http://localhost:4173", // vite preview default
+      "http://localhost:5173",
+      "http://localhost:8080",
+      "http://localhost:8081",
+      "http://127.0.0.1:3000",
+      "http://127.0.0.1:4173",
+      "http://127.0.0.1:5173",
+      "http://127.0.0.1:8080",
+      "http://127.0.0.1:8081",
+    ];
+    return [...new Set([...(appOrigin ? [appOrigin] : []), ...configured, ...defaults])];
+  })(),
   isDevnet() {
     return config.cluster === "devnet";
   },
   simulateLanding: boolEnv("KAIROS_SIMULATE_LANDING") === true,
+  readOnlyApi: boolEnv("KAIROS_READ_ONLY_API") === true,
+  // Can be paused independently from API writes so deployments can enable
+  // normal reads/mutations without unexpectedly broadcasting queued signatures.
+  landingWorkerEnabled:
+    boolEnv("KAIROS_ENABLE_LANDING_WORKER") ?? boolEnv("KAIROS_READ_ONLY_API") !== true,
   /** SWAP_BUILDER=treasury (default, devnet) | program (on-chain kairos_router
    *  via Raydium CPMM — activates once the program is deployed + funded). */
   swapBuilder: (process.env.SWAP_BUILDER as "treasury" | "program") || "treasury",

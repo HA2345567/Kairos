@@ -8,6 +8,7 @@ import { executionService } from "./execution.service";
 import { computeRebalancePlan, type RebalancePlan } from "./rebalance-plan";
 import { assembleRebalanceExecution, type PreparedExecution } from "./rebalance-build";
 import { hashExecutionRequest } from "./request-hash";
+import { assertTradingOpen, isKillSwitchActive } from "./controls";
 export type { PreparedExecution, RebalancePreview } from "./rebalance-build";
 
 /**
@@ -116,6 +117,9 @@ export class RebalanceService {
     }
 
     const plan = (await computeRebalancePlan(live, version.legs, false));
+    // FR-17 / X11: a paused system must not prepare new buy-side exposure, while
+    // sell-only rebalances remain available. (Close is never gated.)
+    await assertTradingOpen(plan.buys.length > 0, "Rebalance preparation");
     this.assertRebalancePlanIsExecutable(plan);
 
     const execution = await assembleRebalanceExecution({
@@ -258,6 +262,22 @@ export class RebalanceService {
         p.autoRebalance === true &&
         p.basketVersionId !== newVersionId
     );
+
+    // FR-17: an auto-rebalance run opens new exposure, so a paused system must
+    // skip every candidate instead of preparing buys behind the pause.
+    if (await isKillSwitchActive()) {
+      for (const pos of candidates) {
+        await this.auditSkip(pos, newVersionId, "KILL_SWITCH_ACTIVE");
+      }
+      await enqueueOutboxSafe("autorebalance.skipped", {
+        reason: "KILL_SWITCH_ACTIVE",
+        basketId,
+        newVersionId,
+        candidates: candidates.length,
+        ts: new Date().toISOString(),
+      });
+      return;
+    }
 
     (await enqueueOutboxSafe("autorebalance.run", {
       phase: "batch_start",

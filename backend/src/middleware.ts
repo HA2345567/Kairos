@@ -14,6 +14,8 @@
 //   });
 
 import { checkRateLimit, type RateLimitOptions } from "./services/ratelimit";
+import { authService } from "./services/auth.service";
+import { config } from "./config";
 
 // Structural types matching the custom server's req/reply (server.ts RouteHandler).
 // Kept local + minimal so this module has no runtime dependency on the server.
@@ -28,8 +30,9 @@ export interface MiddlewareReply {
 
 export type RateLimitGuard = (req: MiddlewareRequest, reply: MiddlewareReply) => boolean;
 
-/** Sanctioned regions blocked at the edge (PRD §10) — ISO 3166-1 alpha-2. */
-export const RESTRICTED_REGIONS: readonly string[] = ["KP", "IR", "CU", "SY"];
+/** Sanctioned regions blocked at the edge (PRD §10) — ISO 3166-1 alpha-2.
+ *  Configurable so the list can be widened without a code change. */
+export const RESTRICTED_REGIONS: readonly string[] = config.restrictedRegions;
 
 function headerValue(req: MiddlewareRequest, name: string): string | undefined {
   const raw =
@@ -60,6 +63,26 @@ export function clientIp(req: MiddlewareRequest): string {
  *
  * Keyed by `routeId + client IP`; in-memory sliding window (single process).
  */
+/**
+ * Per-wallet budget guard (PRD §10: prepares are budgeted per wallet, not per IP).
+ *
+ * The wallet comes from the authenticated session, so an unauthenticated request
+ * passes through and is answered by the handler's own 401/400 — the guard never
+ * becomes a way to probe which wallets exist.
+ */
+export function walletRateLimit(routeId: string, opts: RateLimitOptions): RateLimitGuard {
+  return (req, reply) => {
+    const walletAddress = authService.requireAuth(req)?.walletAddress;
+    if (!walletAddress) return true;
+    const decision = checkRateLimit(`wallet:${routeId}:${walletAddress}`, opts.max, opts.windowMs);
+    if (!decision.allowed) {
+      reply.status(429).send({ error: "RATE_LIMITED" });
+      return false;
+    }
+    return true;
+  };
+}
+
 export function rateLimit(routeId: string, opts: RateLimitOptions): RateLimitGuard {
   return (req, reply) => {
     const ip = clientIp(req);

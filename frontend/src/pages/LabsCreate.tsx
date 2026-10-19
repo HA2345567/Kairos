@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useMemo, useEffect, useRef, type ChangeEvent, type FormEvent } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { PageShell } from "@/components/layout/PageShell";
 import {
   ChevronLeft,
@@ -12,12 +12,15 @@ import {
   Check,
   X,
   Equal,
+  ImagePlus,
 } from "lucide-react";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { kairosApi } from "@/lib/api-client";
-import type { TokenRegistryItem } from "@/lib/api-types";
+import type { BasketCompositionDraft, TokenRegistryItem } from "@/lib/api-types";
+import { useWalletAuth } from "@/components/auth/WalletAuthProvider";
+import { TokenAvatar } from "@/components/common/TokenAvatar";
 import "./labs-create.css";
 
 export interface LabTokenAllocation {
@@ -34,6 +37,98 @@ interface LabRegistryToken extends TokenRegistryItem {
   category: string;
 }
 
+const MAX_COVER_UPLOAD_BYTES = 15 * 1024 * 1024;
+const MAX_COVER_OUTPUT_BYTES = 550 * 1024;
+
+async function optimizeCoverImage(file: File): Promise<string> {
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
+    throw new Error("Choose a JPG, PNG, or WebP image.");
+  }
+  if (file.size > MAX_COVER_UPLOAD_BYTES) {
+    throw new Error("Image must be smaller than 15 MB.");
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = objectUrl;
+    await image.decode();
+    if (image.naturalWidth > 12000 || image.naturalHeight > 12000) {
+      throw new Error("Image dimensions are too large.");
+    }
+
+    const scale = Math.min(1, 1600 / image.naturalWidth, 900 / image.naturalHeight);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Could not prepare this image.");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    let blob: Blob | null = null;
+    for (const quality of [0.84, 0.76, 0.68, 0.6]) {
+      blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", quality));
+      if (blob && blob.size <= MAX_COVER_OUTPUT_BYTES) break;
+    }
+    if (!blob || blob.size > MAX_COVER_OUTPUT_BYTES) {
+      throw new Error("This image could not be compressed to a suitable size.");
+    }
+
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Could not read this image."));
+      reader.onerror = () => reject(new Error("Could not read this image."));
+      reader.readAsDataURL(blob);
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+const TOKEN_ICON_PATHS: Record<string, string> = {
+  ARX: "/tokens/arx.png",
+  BP: "/tokens/bp.png",
+  CLOUD: "/tokens/cloud.png",
+  NVDA: "/tokens/nvda.svg",
+  GOLD: "/tokens/gold.svg",
+  TSLA: "/tokens/tesla.svg",
+  JUP: "/tokens/jup.png",
+  JTO: "/tokens/jto.png",
+  BONK: "/tokens/bonk.jpg",
+  RENDER: "/tokens/render.png",
+  HNT: "/tokens/hnt.png",
+  PYTH: "/tokens/pyth.svg",
+  KMNO: "/tokens/kmno.png",
+  FARTCOIN: "/tokens/fartcoin.svg",
+  GOAT: "/tokens/goat.svg",
+  IOT: "/tokens/iot.svg",
+  JITOSOL: "/tokens/jitosol.png",
+  MET: "/tokens/met.png",
+  MOBILE: "/tokens/mobile.svg",
+  MSOL: "/tokens/msol.png",
+  ORCA: "/tokens/orca.png",
+  PENGU: "/tokens/pengu.svg",
+  PIPPIN: "/tokens/pippin.svg",
+  RAY: "/tokens/ray.png",
+  SOL: "/tokens/sol.png",
+  TRUMP: "/tokens/trump.svg",
+  WIF: "/tokens/wif.jpg",
+};
+
+function tokenIconPath(symbol: string): string {
+  // Devnet registry symbols use a lowercase `t` prefix (tNVDA). Keep normal
+  // symbols such as TRUMP intact while mapping synthetic mints to real logos.
+  const underlyingSymbol = symbol.replace(/^t(?=[A-Z])/, "").toUpperCase();
+  return TOKEN_ICON_PATHS[underlyingSymbol] ?? `/tokens/${underlyingSymbol.toLowerCase()}.png`;
+}
+
+function isMarketAsset(token: TokenRegistryItem): boolean {
+  const underlyingSymbol = token.symbol.replace(/^t(?=[A-Z])/, "").toUpperCase();
+  const isFixtureSymbol = underlyingSymbol === "TEST" || underlyingSymbol === "A" || underlyingSymbol === "B";
+  const isFixtureName = /\b(test|fixture|mock)\b/i.test(token.name);
+  return !isFixtureSymbol && !isFixtureName;
+}
+
 // Sleek high-contrast palette with ZERO green
 const DONUT_COLORS = [
   "#38bdf8", // sky cyan
@@ -48,11 +143,20 @@ const DONUT_COLORS = [
 
 export default function LabsCreate() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialIdea = searchParams.get("idea")?.trim() ?? "";
+  const { ensureAuthenticated } = useWalletAuth();
+  const [submitting, setSubmitting] = useState(false);
+  const submissionInFlight = useRef(false);
+  const [composing, setComposing] = useState(false);
+  const [agentDraft, setAgentDraft] = useState<BasketCompositionDraft | null>(null);
+  const requestedIdea = useRef("");
 
   // Form states
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [customCoverUrl, setCustomCoverUrl] = useState("");
+  const [customCoverImage, setCustomCoverImage] = useState("");
+  const coverImageInputRef = useRef<HTMLInputElement>(null);
   const [allocations, setAllocations] = useState<LabTokenAllocation[]>([]);
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -64,12 +168,18 @@ export default function LabsCreate() {
   });
   const availableTokens = useMemo<LabRegistryToken[]>(
     () => (tokenResponse?.tokens ?? [])
-      .filter((token) => !token.denylisted && token.tradingStatus === "active" && token.type !== "stablecoin")
+      .filter((token) =>
+        !token.denylisted &&
+        token.tradingStatus === "active" &&
+        token.type !== "stablecoin" &&
+        isMarketAsset(token)
+      )
       .map((token) => ({
         ...token,
-        icon: `/tokens/${token.symbol.replace(/^t/, "").toLowerCase()}.png`,
+        icon: tokenIconPath(token.symbol),
         category: token.type === "xstock" || token.type === "ondo" ? "Tokenized assets" : "Devnet assets",
-      })),
+      }))
+      .sort((a, b) => a.symbol.localeCompare(b.symbol)),
     [tokenResponse]
   );
 
@@ -79,6 +189,20 @@ export default function LabsCreate() {
   }, [allocations]);
 
   const isValidWeight = totalWeight === 100;
+
+  async function handleCoverImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      setCustomCoverImage(await optimizeCoverImage(file));
+      toast.success("Cover image added");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load this image.");
+    } finally {
+      input.value = "";
+    }
+  }
 
   // Shortcut Ctrl+K
   useEffect(() => {
@@ -114,7 +238,6 @@ export default function LabsCreate() {
   // Add token handler
   function handleAddToken(token: LabRegistryToken) {
     if (allocations.some((a) => a.mint === token.mint)) {
-      toast.info(`${token.symbol} is already added`);
       return;
     }
 
@@ -134,8 +257,14 @@ export default function LabsCreate() {
     ].map((item, index) => ({ ...item, weightPct: baseWeight + (index === 0 ? remainder : 0) }));
 
     setAllocations(updated);
-    setIsAssetModalOpen(false);
-    toast.success(`Added ${token.symbol}`);
+  }
+
+  function handleToggleToken(token: LabRegistryToken) {
+    if (allocations.some((allocation) => allocation.mint === token.mint)) {
+      handleRemoveToken(token.mint);
+      return;
+    }
+    handleAddToken(token);
   }
 
   // Remove token handler
@@ -155,9 +284,10 @@ export default function LabsCreate() {
     }
   }
 
-  // Publish Basket Handler
-  function handlePublish(e: FormEvent) {
+  // Publish Basket Handler — submits to the durable Labs API (FR-25).
+  async function handlePublish(e: FormEvent) {
     e.preventDefault();
+    if (submissionInFlight.current) return;
 
     if (!title.trim()) {
       toast.error("Please enter a basket title");
@@ -174,30 +304,28 @@ export default function LabsCreate() {
       return;
     }
 
-    const newIdea = {
-      id: `lab-${Date.now()}`,
-      title: title.trim(),
-      description: description.trim() || "Community curated thematic narrative basket on Solana.",
-      author: "You",
-      votes: 0,
-      date: "Just now",
-      image: customCoverUrl || "/baskets/solana-infrastructure.jpg",
-      tags: Array.from(new Set(allocations.map((a) => a.category))),
-      tokens: allocations.map((a) => ({
-        symbol: a.symbol,
-        name: a.name,
-        mint: a.mint,
-        icon: a.icon,
-        weightBps: Math.round(a.weightPct * 100),
-      })),
-    };
-
-    // Save to localStorage
-    const saved = JSON.parse(localStorage.getItem("kairos_community_lab_ideas") || "[]");
-    localStorage.setItem("kairos_community_lab_ideas", JSON.stringify([newIdea, ...saved]));
-
-    toast.success("Saved in this browser. Community publishing is not connected yet.");
-    navigate("/labs");
+    submissionInFlight.current = true;
+    setSubmitting(true);
+    try {
+      await ensureAuthenticated();
+      await kairosApi.createLabsBasket({
+        name: title.trim(),
+        thesis: description.trim() || "Community curated thematic narrative basket on Solana.",
+        category: Array.from(new Set(allocations.map((a) => a.category)))[0] || "Labs",
+        coverImageDataUrl: customCoverImage || undefined,
+        allocations: allocations.map((a) => ({
+          mint: a.mint,
+          weightBps: Math.round(a.weightPct * 100),
+        })),
+      });
+      toast.success("Submitted for moderation. An admin reviews it before it can be promoted.");
+      navigate("/labs");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not submit this basket.");
+    } finally {
+      submissionInFlight.current = false;
+      setSubmitting(false);
+    }
   }
 
   // Filtered tokens in modal
@@ -212,6 +340,36 @@ export default function LabsCreate() {
   }, [availableTokens, searchQuery, activeCategory]);
   const categories = ["All", ...new Set(availableTokens.map((token) => token.category))];
 
+  async function composeIdea(idea: string) {
+    setComposing(true);
+    setAgentDraft(null);
+    setDescription(idea);
+    try {
+      const { draft } = await kairosApi.composeBasket(idea);
+      setAgentDraft(draft);
+      setTitle(draft.name);
+      setAllocations(draft.allocations.map((allocation) => ({
+        symbol: allocation.symbol,
+        name: allocation.name,
+        mint: allocation.mint,
+        icon: tokenIconPath(allocation.symbol),
+        weightPct: allocation.weightBps / 100,
+        category: draft.category,
+      })));
+      if (draft.needsClarification) toast.info(draft.message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Kairos could not map that idea. You can still build the basket manually.");
+    } finally {
+      setComposing(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!initialIdea || requestedIdea.current === initialIdea) return;
+    requestedIdea.current = initialIdea;
+    void composeIdea(initialIdea);
+  }, [initialIdea]);
+
   return (
     <PageShell>
       <div className="labs-create-container">
@@ -225,7 +383,7 @@ export default function LabsCreate() {
           >
             <ChevronLeft className="size-4" />
           </button>
-          <Link to="/labs">Labs</Link>
+          <Link to="/ideas">Ideas</Link>
           <span className="separator">›</span>
           <span className="current">Create Basket</span>
         </nav>
@@ -243,6 +401,46 @@ export default function LabsCreate() {
           </div>
 
         </div>
+
+        {(initialIdea || agentDraft || composing) && (
+          <section className="mb-6 rounded-xl border border-border bg-surface p-4 sm:p-5" aria-live="polite">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Build with Kairos agents</p>
+                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                  {composing
+                    ? "Reading your idea and matching it to active registry assets..."
+                    : agentDraft?.message ?? "Your idea is ready. Review the draft, then adjust the assets and weights yourself."}
+                </p>
+              </div>
+              {initialIdea && (
+                <button
+                  type="button"
+                  onClick={() => void composeIdea(initialIdea)}
+                  disabled={composing}
+                  className="rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-muted disabled:opacity-50"
+                >
+                  {composing ? "Mapping idea..." : "Regenerate draft"}
+                </button>
+              )}
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              {(agentDraft?.agents ?? [
+                { name: "Idea reader", summary: "Identify your basket theme." },
+                { name: "Asset mapper", summary: "Match active registry tokens." },
+                { name: "Allocation planner", summary: "Create editable target weights." },
+              ]).map((agent) => (
+                <div key={agent.name} className="rounded-lg bg-background/60 px-3 py-2">
+                  <p className="text-xs font-medium text-foreground">{agent.name}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{agent.summary}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Agent suggestions are a starting point. Every asset and weight stays editable; saving submits the idea for moderation.
+            </p>
+          </section>
+        )}
 
         {/* Two-Column Form & Preview Layout */}
         <form onSubmit={handlePublish} className="labs-create-grid">
@@ -287,12 +485,51 @@ export default function LabsCreate() {
                 <label className="labs-create-label">Cover Image (optional)</label>
               </div>
               <input
-                type="url"
-                value={customCoverUrl}
-                onChange={(e) => setCustomCoverUrl(e.target.value)}
-                placeholder="https://example.com/cover.png"
-                className="labs-create-input"
+                ref={coverImageInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleCoverImageChange}
+                className="sr-only"
+                aria-label="Upload a basket cover image"
               />
+              {customCoverImage ? (
+                <div className="overflow-hidden rounded-xl border border-border bg-surface-muted">
+                  <img
+                    src={customCoverImage}
+                    alt="Basket cover preview"
+                    className="block max-h-72 w-full object-contain"
+                  />
+                  <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2">
+                    <span className="text-xs text-muted-foreground">Preview · optimized for sharing</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => coverImageInputRef.current?.click()}
+                        className="rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-surface-hover"
+                      >
+                        Replace
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCustomCoverImage("")}
+                        className="rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => coverImageInputRef.current?.click()}
+                  className="flex min-h-28 w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-surface-muted/60 px-4 py-5 text-center transition-colors hover:border-foreground/40 hover:bg-surface-muted"
+                >
+                  <ImagePlus className="size-5 text-muted-foreground" aria-hidden="true" />
+                  <span className="text-sm font-medium text-foreground">Choose a cover photo</span>
+                  <span className="text-xs text-muted-foreground">JPG, PNG or WebP · up to 15 MB</span>
+                </button>
+              )}
             </div>
 
             {/* Allocation Section */}
@@ -324,17 +561,20 @@ export default function LabsCreate() {
                     return (
                       <div key={item.mint} className="labs-create-allocation-row">
                         <div className="labs-create-token-info">
-                          <img
+                          <TokenAvatar
+                            symbol={item.symbol.replace(/^t(?=[A-Z])/, "")}
+                            name={item.name}
                             src={item.icon}
-                            alt={item.symbol}
                             className="labs-create-token-icon"
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = "none";
-                            }}
                           />
                           <div className="labs-create-token-texts">
                             <span className="labs-create-token-symbol">{item.symbol}</span>
                             <span className="labs-create-token-name">{item.name}</span>
+                            {agentDraft?.allocations.find((suggestion) => suggestion.mint === item.mint)?.reason && (
+                              <span className="text-xs text-muted-foreground">
+                                {agentDraft.allocations.find((suggestion) => suggestion.mint === item.mint)?.reason}
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -405,11 +645,11 @@ export default function LabsCreate() {
 
               <button
                 type="submit"
-                disabled={!title.trim() || allocations.length === 0 || !isValidWeight}
+                disabled={submitting || !title.trim() || allocations.length === 0 || !isValidWeight}
                 className="labs-create-publish-btn"
               >
                 <Send className="size-3.5" />
-                <span>Save Idea</span>
+                <span>{submitting ? "Saving…" : "Save Idea"}</span>
               </button>
             </div>
           </div>
@@ -460,7 +700,7 @@ export default function LabsCreate() {
                             const d = payload[0].payload as LabTokenAllocation;
                             return (
                               <div style={{ borderRadius: "0.5rem", border: "1px solid var(--border)", background: "var(--background)", padding: "0.5rem", fontSize: "0.75rem", fontFamily: "var(--font-mono, monospace)" }}>
-                                <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>{d.symbol}</span>: {d.weightPct}%
+                                <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{d.symbol}</span>: {d.weightPct}%
                               </div>
                             );
                           }}
@@ -549,33 +789,40 @@ export default function LabsCreate() {
                       <button
                         key={t.mint}
                         type="button"
-                        onClick={() => handleAddToken(t)}
-                        disabled={isSelected}
+                        onClick={() => handleToggleToken(t)}
+                        aria-pressed={isSelected}
+                        aria-label={`${isSelected ? "Remove" : "Add"} ${t.symbol} ${isSelected ? "from" : "to"} basket`}
                         className={`labs-create-modal-item ${isSelected ? "selected" : ""}`}
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                          <img
+                          <TokenAvatar
+                            symbol={t.symbol.replace(/^t(?=[A-Z])/, "")}
+                            name={t.name}
                             src={t.icon}
-                            alt={t.symbol}
-                            style={{ width: "2rem", height: "2rem", borderRadius: "9999px", objectFit: "cover", border: "1px solid var(--border)" }}
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = "none";
-                            }}
+                            className="size-8 border border-[var(--border)]"
                           />
                           <div>
-                            <span style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "0.875rem", display: "block" }}>{t.symbol}</span>
+                            <span style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "0.875rem", display: "block" }}>{t.symbol}</span>
                             <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block" }}>{t.name}</span>
                           </div>
                         </div>
 
                         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                           <span className="labs-create-category-badge">{t.category}</span>
-                          {isSelected && <Check className="size-4" style={{ color: "#38bdf8" }} />}
+                          <span className={`labs-create-selection-check ${isSelected ? "checked" : ""}`} aria-hidden="true">
+                            {isSelected && <Check className="size-3.5" />}
+                          </span>
                         </div>
                       </button>
                     );
                   })
                 )}
+              </div>
+              <div className="labs-create-modal-footer">
+                <span>{allocations.length} {allocations.length === 1 ? "asset" : "assets"} selected</span>
+                <button type="button" onClick={() => setIsAssetModalOpen(false)}>
+                  Done
+                </button>
               </div>
             </div>
           </div>

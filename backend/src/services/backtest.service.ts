@@ -11,7 +11,7 @@ import { repository } from "../db/repository";
 
 export type BacktestWindow = "1W" | "1M" | "6M" | "1Y" | "3Y";
 
-const WINDOW_DAYS: Record<BacktestWindow, number> = { "1W": 7, "1M": 30, "6M": 182, "1Y": 365, "3Y": 1095 };
+export const WINDOW_DAYS: Record<BacktestWindow, number> = { "1W": 7, "1M": 30, "6M": 182, "1Y": 365, "3Y": 1095 };
 export const WINDOWS: BacktestWindow[] = ["1W", "1M", "6M", "1Y", "3Y"];
 
 const BENCHMARK_LABEL = "Unavailable: no verified benchmark price history";

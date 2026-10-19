@@ -3,6 +3,7 @@ import "@/components/arc/foundation.css";
 import "@/components/arc/basket-card.css";
 import { Link } from "react-router-dom";
 import type { Basket } from "@/lib/baskets-data";
+import { HistoricalMiniChart } from "@/components/basket/HistoricalMiniChart";
 
 export interface BasketCardProps {
   /** The human-readable name of the basket (e.g. "Nancy Pelosi Tracker") */
@@ -42,8 +43,6 @@ export interface BasketCardProps {
  *
  * Styled exclusively with Tailwind CSS matching Kairos dark theme (#0A0B0D).
  */
-import { useBasketNavHistory } from "@/hooks/useBasketNavHistory";
-
 export function BasketCard({
   basketName,
   description,
@@ -58,8 +57,6 @@ export function BasketCard({
   basket,
   className = "",
 }: BasketCardProps) {
-  const { data: navSummary, isLoading: isNavLoading } = useBasketNavHistory(basket?.id);
-
   // Resolve data from direct props or fallback to basket object
   const name = basketName || basket?.name || "Untitled Basket";
   const desc = description || basket?.description || "";
@@ -69,21 +66,9 @@ export function BasketCard({
     tokenIcons ||
     (basket?.tokens ? basket.tokens.map((t) => t.icon) : []);
 
-  // Only show a return when the backend has an observed snapshot series.
-  const hasHistory = Boolean(navSummary?.history.length);
-  const computedReturnPct = returnPercent !== undefined 
+  const computedReturnPct = returnPercent !== undefined
     ? (typeof returnPercent === "number" ? returnPercent : parseFloat(String(returnPercent).replace(/[+\-%]/g, "")))
-    : (hasHistory ? navSummary!.allTimeReturnPct : null);
-
-  const hasReturnData = computedReturnPct !== null;
-  const isPositive = computedReturnPct !== null ? computedReturnPct >= 0 : true;
-  const returnString = computedReturnPct !== null
-    ? `${computedReturnPct >= 0 ? "+" : ""}${computedReturnPct.toFixed(2)}%`
     : null;
-
-  const returnAriaLabel = returnString
-    ? `${isPositive ? "up" : "down"} ${returnString.replace(/[+\-%]/g, "").trim()} percent`
-    : "no data yet";
 
   const targetHref = disableLink
     ? undefined
@@ -130,18 +115,16 @@ export function BasketCard({
           ) : null
         }
         action={
-          <div className="kairos-card-return">
-            <small>{returnPeriodLabel}</small>
-            {isNavLoading ? (
-              <span className="inline-block h-3 w-12 animate-pulse rounded bg-white/10" />
-            ) : hasReturnData ? (
-              <strong className={isPositive ? "positive" : "negative"} aria-label={returnAriaLabel}>
-                {returnString}
+          basket ? (
+            <HistoricalMiniChart slug={basket.slug || basket.id} />
+          ) : (
+            <div className="kairos-card-return">
+              <small>{returnPeriodLabel}</small>
+              <strong className={computedReturnPct === null ? "" : computedReturnPct >= 0 ? "positive" : "negative"}>
+                {computedReturnPct === null ? "—" : `${computedReturnPct >= 0 ? "+" : ""}${computedReturnPct.toFixed(2)}%`}
               </strong>
-            ) : (
-              <small>No data yet</small>
-            )}
-          </div>
+            </div>
+          )
         }
         onClick={() => onTradeClick?.()}
         className={`kairos-market-card ${className}`}

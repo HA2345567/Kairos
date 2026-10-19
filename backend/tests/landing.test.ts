@@ -292,6 +292,22 @@ test("execution notifications dedupe by execution id and event type", async () =
   );
 });
 
+test("per-leg execution events dedupe by execution id, event type, and leg id", async () => {
+  await clearPendingOutbox();
+  const executionId = `outbox-legs-${randomUUID()}`;
+  await repository.enqueueOutbox("execution.leg.confirmed", { executionId, legId: "leg-a", signature: "sig-a" });
+  await repository.enqueueOutbox("execution.leg.confirmed", { executionId, legId: "leg-a", signature: "sig-a-retry" });
+  await repository.enqueueOutbox("execution.leg.confirmed", { executionId, legId: "leg-b", signature: "sig-b" });
+
+  const rows = await all<{ event: string; execution_id: string; payload: string }>(
+    "SELECT event, execution_id, payload FROM outbox WHERE execution_id = ? ORDER BY rowid ASC",
+    executionId
+  );
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every((row) => row.event === "execution.leg.confirmed" && row.execution_id === executionId));
+  assert.deepEqual(rows.map((row) => JSON.parse(row.payload).legId), ["leg-a", "leg-b"]);
+});
+
 test("outbox claims persist attempts, recover after lease expiry, and reject stale acknowledgements", async () => {
   await clearPendingOutbox();
   const event = `execution.lease-${randomUUID()}`;

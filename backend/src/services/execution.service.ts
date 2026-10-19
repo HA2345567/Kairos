@@ -6,6 +6,7 @@ import { Execution, ExecutionLeg } from "../db/schema";
 import { AppError } from "../errors";
 import { config } from "../config";
 import { quoteService } from "./quote.service";
+import { getQuotePrice } from "./pricing.service";
 import { relayerService } from "./relayer.service";
 import { assertSettled, legSide, recoverySell, retryBuy } from "./execution-recovery";
 import { saveRecovery, type RecoveryAction } from "../db/recovery";
@@ -23,6 +24,7 @@ import { DEVNET_LABELS, deterministicKeypair, loadDevnetState } from "../chain/d
 import { usdcToBaseUnits } from "./money";
 import { hashExecutionRequest } from "./request-hash";
 import { assertTransactionAllowlisted } from "../chain/allowlist";
+import { assertPrepareHealth, isKillSwitchActive } from "./controls";
 import { KAIROS_ROUTER_PROGRAM_ID, RAYDIUM_CPMM_PROGRAM_ID } from "../chain/programSwap";
 
 /**
@@ -37,14 +39,15 @@ import { KAIROS_ROUTER_PROGRAM_ID, RAYDIUM_CPMM_PROGRAM_ID } from "../chain/prog
  * Landing  lives in workers/landing.ts (send → confirm → per-leg status →
  *            position/fee/outbox updates → execution state machine).
  *
- * Fees: input-side for opens/rebalances (separate USDC transfer per leg),
+ * Fees: input-side for opens/rebalances (separate USDC or SOL transfer per leg),
  * output-side (deducted from proceeds) for close/unwind —
  * never both (PRD §4.4 rule 5).
  */
 
 export interface PrepareParams {
   basketSlug: string;
-  usdcAmount: number;
+  usdcAmount?: number;
+  solAmount?: number;
   walletAddress: string;
   idempotencyKey: string;
 }
@@ -69,6 +72,22 @@ export interface PrepareLegInput {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const usdToBase = usdcToBaseUnits;
 
+async function mapWithConcurrency<T, R>(
+  items: T[], limit: number, fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await fn(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 function requireDevnet() {
   const state = loadDevnetState();
   if (!state) {
@@ -78,7 +97,7 @@ function requireDevnet() {
 }
 
 async function killSwitchActive(): Promise<boolean> {
-  return (await repository.getSetting("global_kill_switch")) === "true";
+  return isKillSwitchActive();
 }
 
 export function allocateFeeBaseUnits(totalFee: number, legs: PrepareLegInput[]): number[] {
@@ -93,6 +112,21 @@ export function allocateFeeBaseUnits(totalFee: number, legs: PrepareLegInput[]):
   return fees;
 }
 
+/** Split an integer amount without losing remainder units to per-leg rounding. */
+export function allocateIntegerUnits(total: number, weights: number[]): number[] {
+  if (!Number.isSafeInteger(total) || total < 0 || weights.some(weight => !Number.isSafeInteger(weight) || weight < 0)) {
+    throw new AppError("INVALID_INPUT", "Integer allocation values must be non-negative safe integers", 422);
+  }
+  const weightSum = weights.reduce((sum, weight) => sum + BigInt(weight), 0n);
+  if (total === 0 || weightSum === 0n) return weights.map(() => 0);
+  const totalBig = BigInt(total);
+  const allocated = weights.map(weight => Number((totalBig * BigInt(weight)) / weightSum));
+  const remainder = total - allocated.reduce((sum, amount) => sum + amount, 0);
+  const largest = weights.indexOf(Math.max(...weights));
+  allocated[largest] += remainder;
+  return allocated;
+}
+
 /** Shared prepare pipeline: builds + simulates per-leg txs and persists a PREPARED execution. */
 async function prepareWithLegs(opts: {
   walletAddress: string;
@@ -102,6 +136,9 @@ async function prepareWithLegs(opts: {
   basketVersionId: string;
   totalUsdc: number;
   feeUsdc: number;
+  fundingAsset?: "USDC" | "SOL";
+  solInputAmount?: number;
+  solPriceUsd?: number;
   legs: PrepareLegInput[];
   auditAction: string;
   baseExecutionId?: string;
@@ -114,22 +151,45 @@ async function prepareWithLegs(opts: {
   const treasury = deterministicKeypair(DEVNET_LABELS.treasury);
   const usdcMint = new PublicKey(state.usdc.mint);
   const conn = getConnection();
+  // PRD X11: exits (close, unwind, sell-only work) must stay available while
+  // trading is paused or degraded, so only buy-side work is gated below.
+  const hasBuys = opts.legs.some(
+    (leg) => (leg.side ?? (opts.type === "close" ? "sell" : "buy")) === "buy"
+  );
 
-  const { blockhash, lastValidBlockHeight } = await getLatestBlockhashWithHeight(conn);
+  // NFR-05 degrade closed: refuse a buy-side prepare while relayer/RPC health is
+  // unknown. Sell-only work never reaches this gate.
+  await assertPrepareHealth(hasBuys);
 
-  // Best-effort USDC balance guard for opens only (PRD §4.4): sells are funded
+  let blockhash: string;
+  let lastValidBlockHeight: number;
+  try {
+    ({ blockhash, lastValidBlockHeight } = await getLatestBlockhashWithHeight(conn));
+  } catch (err) {
+    throw new AppError(
+      "ALL_AGGREGATORS_DOWN",
+      `Venue/RPC health is unavailable: ${(err as Error).message}`,
+      503
+    );
+  }
+
+  // Verify the selected funding balance for opens only: sells are funded
   // by the assets being sold, and rebalance buys are funded by the sells.
   // Skipped in simulation mode (no live faucet/balances on this host).
   if (opts.type === "open" && !config.simulateLanding) {
     try {
-      const balances = await getTokenBalances(conn, user, [usdcMint]);
-      const usdcRaw = Number(balances[usdcMint.toBase58()] ?? 0);
-      if (usdcRaw < usdToBase(opts.totalUsdc)) {
-        throw new AppError(
-          "INSUFFICIENT_BALANCE",
-          `Wallet holds ${(usdcRaw / 1e6).toFixed(2)} USDC, needs ${opts.totalUsdc.toFixed(2)}`,
-          422
-        );
+      if (opts.fundingAsset === "SOL") {
+        const lamports = await conn.getBalance(user, "confirmed");
+        const neededLamports = Math.round((opts.solInputAmount ?? 0) * 1e9);
+        if (lamports < neededLamports) {
+          throw new AppError("INSUFFICIENT_BALANCE", `Wallet holds ${(lamports / 1e9).toFixed(4)} SOL, needs ${(neededLamports / 1e9).toFixed(4)} SOL`, 422);
+        }
+      } else {
+        const balances = await getTokenBalances(conn, user, [usdcMint]);
+        const usdcRaw = Number(balances[usdcMint.toBase58()] ?? 0);
+        if (usdcRaw < usdToBase(opts.totalUsdc)) {
+          throw new AppError("INSUFFICIENT_BALANCE", `Wallet holds ${(usdcRaw / 1e6).toFixed(2)} USDC, needs ${opts.totalUsdc.toFixed(2)}`, 422);
+        }
       }
     } catch (err) {
       if (err instanceof AppError) throw err;
@@ -137,14 +197,28 @@ async function prepareWithLegs(opts: {
     }
   }
 
-  const preparedTxs: string[] = [];
-  const messageHashes: string[] = [];
-  const legs: ExecutionLeg[] = [];
   const feeByLeg = allocateFeeBaseUnits(opts.feeUsdc, opts.legs);
-  const publishedVersion = config.swapBuilder === "program"
+  const solPrincipalByLeg: number[] = [];
+  const solFeeByLeg: number[] = [];
+  if (opts.fundingAsset === "SOL") {
+    if (!opts.solPriceUsd || !Number.isFinite(opts.solPriceUsd) || opts.solPriceUsd <= 0 ||
+        !Number.isFinite(opts.solInputAmount) || (opts.solInputAmount ?? 0) <= 0) {
+      throw new AppError("INVALID_INPUT", "SOL funding requires a valid amount and price", 422);
+    }
+    const totalSolLamports = Math.round(opts.solInputAmount! * 1_000_000_000);
+    const feeSolLamports = Math.round((opts.feeUsdc / opts.solPriceUsd) * 1_000_000_000);
+    if (!Number.isSafeInteger(totalSolLamports) || totalSolLamports <= 0 || !Number.isSafeInteger(feeSolLamports) ||
+        feeSolLamports < 0 || feeSolLamports > totalSolLamports) {
+      throw new AppError("INVALID_INPUT", "SOL amount cannot cover the quoted platform fee", 422);
+    }
+    const principalWeights = opts.legs.map(leg => usdToBase(leg.inUsdcAmount));
+    solPrincipalByLeg.push(...allocateIntegerUnits(totalSolLamports - feeSolLamports, principalWeights));
+    solFeeByLeg.push(...allocateIntegerUnits(feeSolLamports, feeByLeg));
+  }
+  const publishedVersion = config.swapBuilder === "program" && opts.fundingAsset !== "SOL"
     ? await repository.getBasketVersion(opts.basketVersionId)
     : undefined;
-  if (config.swapBuilder === "program" &&
+  if (config.swapBuilder === "program" && opts.fundingAsset !== "SOL" &&
       (!publishedVersion || publishedVersion.basketId !== opts.basketId ||
        !Number.isInteger(publishedVersion.version) || publishedVersion.version < 1 || publishedVersion.version > 0xffff_ffff)) {
     throw new AppError("BASKET_VERSION_NOT_FOUND", "The selected immutable basket version is unavailable", 409);
@@ -153,8 +227,7 @@ async function prepareWithLegs(opts: {
     throw new AppError("BASKET_VERSION_MISMATCH", "A requested mint is outside the selected basket version", 409);
   }
 
-  for (let i = 0; i < opts.legs.length; i++) {
-    const legIn = opts.legs[i];
+  const preparedLegResults = await mapWithConcurrency(opts.legs, 4, async (legIn, i) => {
     const token = (await repository.getToken(legIn.mint));
     if (!token) throw new AppError("BASKET_NOT_FOUND", `Leg mint ${legIn.mint} is not in the token registry`, 422);
     const decimals = token.decimals;
@@ -174,7 +247,7 @@ async function prepareWithLegs(opts: {
     }
 
     const built =
-      config.swapBuilder === "program"
+      config.swapBuilder === "program" && opts.fundingAsset !== "SOL"
         ? await (async () => {
             // On-chain kairos_router path (user's build order: program → backend).
             // Fee + memo live INSIDE the program instruction; min-out slippage
@@ -185,9 +258,11 @@ async function prepareWithLegs(opts: {
               user,
               usdcMint,
               assetMint: new PublicKey(legIn.mint),
+              basketId: opts.basketId,
               relayer,
               recentBlockhash: blockhash,
               basketVersion: publishedVersion!.version,
+              basketLegCount: publishedVersion!.legs.length,
               basketVersionPda: basketVersionPda(opts.basketId, publishedVersion!.version),
               feeBps: opts.type === "rebalance" ? config.rebalanceFeeBps : config.platformFeeBps,
               memo: `kairos:${opts.basketId}:${opts.basketVersionId}:leg${i + 1}`,
@@ -262,14 +337,20 @@ async function prepareWithLegs(opts: {
             expectedOutBaseUnits: expectedOutBase,
             treasury,
             relayer,
-            includeFeeUsdcBaseUnits,
+            includeFeeUsdcBaseUnits: opts.fundingAsset === "SOL" ? 0 : includeFeeUsdcBaseUnits,
+            ...(opts.fundingAsset === "SOL" && opts.solPriceUsd
+              ? {
+                  inputSolLamports: solPrincipalByLeg[i] ?? 0,
+                  includeFeeSolLamports: solFeeByLeg[i] ?? 0,
+                }
+              : {}),
             recentBlockhash: blockhash,
           });
 
     await assertTransactionAllowlisted(
       built.transaction,
-      [state.usdc.mint, legIn.mint],
-      config.swapBuilder === "program" ? [KAIROS_ROUTER_PROGRAM_ID, RAYDIUM_CPMM_PROGRAM_ID] : []
+      opts.fundingAsset === "SOL" ? [legIn.mint] : [state.usdc.mint, legIn.mint],
+      config.swapBuilder === "program" && opts.fundingAsset !== "SOL" ? [KAIROS_ROUTER_PROGRAM_ID, RAYDIUM_CPMM_PROGRAM_ID] : []
     );
 
     if (config.simulateLanding) {
@@ -286,9 +367,10 @@ async function prepareWithLegs(opts: {
       }
     }
 
-    preparedTxs.push(Buffer.from(built.transaction.serialize()).toString("base64"));
-    messageHashes.push(built.messageHash);
-    legs.push({
+    return {
+      preparedTx: Buffer.from(built.transaction.serialize()).toString("base64"),
+      messageHash: built.messageHash,
+      leg: {
       id: `leg-${i + 1}`,
       executionId: "",
       mint: legIn.mint,
@@ -302,8 +384,12 @@ async function prepareWithLegs(opts: {
       expectedOut: String(expectedOutBase),
       messageHash: built.messageHash,
       status: "PENDING",
-    });
-  }
+      } satisfies ExecutionLeg,
+    };
+  });
+  const preparedTxs = preparedLegResults.map(result => result.preparedTx);
+  const messageHashes = preparedLegResults.map(result => result.messageHash);
+  const legs = preparedLegResults.map(result => result.leg);
 
   const now = new Date();
   const wallet = (await repository.getWalletByAddress(opts.walletAddress));
@@ -316,6 +402,9 @@ async function prepareWithLegs(opts: {
     basketId: opts.basketId,
     basketVersionId: opts.basketVersionId,
     type: opts.type,
+    fundingAsset: opts.fundingAsset ?? "USDC",
+    solInputAmount: opts.solInputAmount,
+    solPriceUsd: opts.solPriceUsd,
     status: "PREPARED",
     idempotencyKey: opts.idempotencyKey,
     requestHash: hashExecutionRequest({
@@ -393,6 +482,23 @@ export class ExecutionService {
       throw new AppError("KILL_SWITCH_ACTIVE", "New investments are halted by the kill switch", 503);
     }
 
+    let usdcAmount = params.usdcAmount;
+    let solPriceUsd: number | undefined;
+    if (params.solAmount !== undefined) {
+      if (!Number.isFinite(params.solAmount) || params.solAmount <= 0) {
+        throw new AppError("MIN_INVESTMENT", "Enter a valid positive SOL amount", 400);
+      }
+      const solPrice = await getQuotePrice("So11111111111111111111111111111111111111112");
+      if (solPrice.stale || !Number.isFinite(solPrice.priceUsd) || solPrice.priceUsd <= 0) {
+        throw new AppError("PRICE_STALE", "SOL/USD price is unavailable for this Devnet quote", 503);
+      }
+      solPriceUsd = solPrice.priceUsd;
+      usdcAmount = params.solAmount * solPriceUsd;
+    }
+    if (usdcAmount === undefined || !Number.isFinite(usdcAmount) || usdcAmount <= 0) {
+      throw new AppError("MIN_INVESTMENT", "Enter a valid investment amount", 400);
+    }
+
     // Idempotency keys are wallet-scoped and can only replay the same request.
     const existing = (await repository.getExecutionByIdempotency(params.idempotencyKey, params.walletAddress));
     if (existing) {
@@ -400,7 +506,7 @@ export class ExecutionService {
       if (
         existing.baseExecutionId !== undefined || existing.type !== "open" ||
         existing.basketId !== basket?.id ||
-        existing.totalUsdc !== params.usdcAmount
+        existing.totalUsdc !== usdcAmount
       ) {
         throw new AppError("IDEMPOTENCY_CONFLICT", "Idempotency key already used for a different request", 409);
       }
@@ -409,15 +515,21 @@ export class ExecutionService {
 
     const basket = (await repository.getBasketBySlug(params.basketSlug));
     if (!basket) throw new AppError("BASKET_NOT_FOUND", `Basket ${params.basketSlug} not found`, 404);
-    if (basket.status !== "active") throw new AppError("BASKET_NOT_ACTIVE", undefined, 422);
-    if (params.usdcAmount < basket.minUsdc) {
+    if (basket.status !== "active") {
+      throw new AppError(
+        "BASKET_NOT_ACTIVE",
+        "This basket is paused because its Devnet assets are not initialized and funded.",
+        422,
+      );
+    }
+    if (usdcAmount < basket.minUsdc) {
       throw new AppError("MIN_INVESTMENT", `Minimum investment is ${basket.minUsdc} USDC`, 422);
     }
 
-    const quote = await quoteService.getQuote(params.basketSlug, params.usdcAmount);
+    const quote = await quoteService.getQuote(params.basketSlug, usdcAmount);
     const investable = quote.legs.filter((l) => l.inUsdcAmount >= config.dustThresholdUsdc);
     if (investable.length === 0) {
-      throw new AppError("DUST_LEG_FORBIDDEN", "Amount too small — every leg would be dust", 422);
+      throw new AppError("DUST_LEG", "Amount too small — every leg would be dust");
     }
 
     return (await prepareWithLegs({
@@ -426,8 +538,11 @@ export class ExecutionService {
       type: "open",
       basketId: basket.id,
       basketVersionId: quote.basketVersionId,
-      totalUsdc: params.usdcAmount,
+      totalUsdc: usdcAmount,
       feeUsdc: quote.platformFeeUsdc,
+      ...(params.solAmount !== undefined
+        ? { fundingAsset: "SOL" as const, solInputAmount: params.solAmount, solPriceUsd }
+        : { fundingAsset: "USDC" as const }),
       legs: investable.map((l) => ({
         mint: l.mint,
         symbol: l.symbol,
@@ -471,7 +586,7 @@ export class ExecutionService {
       try {
         signedTx = VersionedTransaction.deserialize(Buffer.from(params.signedTxs[i], "base64"));
       } catch {
-        throw new AppError("TAMPERED_TRANSACTION", "Malformed transaction bytes", 400);
+        throw new AppError("MESSAGE_TAMPERED", "Malformed transaction bytes", 400);
       }
 
       // Byte verification (critical security control, PRD §4.4).
@@ -487,7 +602,7 @@ export class ExecutionService {
           before: { leg: i, expectedHash: execution.messageHashes[i] },
           after: { incomingHash },
         }));
-        throw new AppError("TAMPERED_TRANSACTION", "Signed message differs from the prepared message", 400);
+        throw new AppError("MESSAGE_TAMPERED", "Signed message differs from the prepared message", 400);
       }
 
       const msg = signedTx.message as MessageV0;
@@ -501,14 +616,14 @@ export class ExecutionService {
           signature.every((byte) => byte === 0) ||
           !nacl.sign.detached.verify(messageBytes, signature, signer.toBytes())
         ) {
-          throw new AppError("TAMPERED_TRANSACTION", `Invalid required signature on leg ${i + 1}`, 400);
+          throw new AppError("INVALID_SIGNATURE", `Invalid required signature on leg ${i + 1}`, 400);
         }
       }
       const userIndex = msg.staticAccountKeys
         .slice(0, signerCount)
         .findIndex((key) => key.equals(userPk));
       if (userIndex < 0) {
-        throw new AppError("TAMPERED_TRANSACTION", "Wallet is not a required signer on leg " + (i + 1), 400);
+        throw new AppError("INVALID_SIGNATURE", "Wallet is not a required signer on leg " + (i + 1), 400);
       }
     }
 
@@ -608,7 +723,7 @@ export class ExecutionService {
     if (recovery.existing) return recovery.existing;
     const landed = base.legs.filter((l) => l.status === "CONFIRMED" && legSide(base, l) === "buy" && Number(l.actualOut ?? 0) > 0);
     if (landed.length === 0) {
-      throw new AppError("DUST_LEG_FORBIDDEN", "No landed legs to unwind", 422);
+      throw new AppError("DUST_LEG", "No landed legs to unwind");
     }
 
     // Sell-leg fee model: OUTPUT-side (deducted from USDC proceeds) — the

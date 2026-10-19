@@ -236,11 +236,17 @@ export function DonutChart({ data, label, unit = "", formatValue = value => grou
   const geometry = useRef({ c, outer, inner, corner });
   const segments = useRef(new Map<string, Segment>());
   const paths = useRef(new Map<string, SVGPathElement>());
-  const registerPath = useCallback((node: SVGPathElement | null) => {
-    const key = node?.dataset.key;
-    if (!node || !key) return;
-    paths.current.set(key, node);
-    return () => { if (paths.current.get(key) === node) paths.current.delete(key); };
+  const pathRefs = useRef(new Map<string, (node: SVGPathElement | null) => void>());
+  const registerPath = useCallback((key: string) => {
+    let ref = pathRefs.current.get(key);
+    if (!ref) {
+      ref = (node) => {
+        if (node) paths.current.set(key, node);
+        else paths.current.delete(key);
+      };
+      pathRefs.current.set(key, ref);
+    }
+    return ref;
   }, []);
 
   // One paint per frame, whatever moved: every path's shape and lift are written straight to the DOM.
@@ -383,7 +389,7 @@ export function DonutChart({ data, label, unit = "", formatValue = value => grou
       tabIndex={legend ? undefined : 0} role={legend ? undefined : "group"} aria-label={legend ? undefined : ringLabel} onKeyDown={legend ? undefined : onRingKey} onBlur={legend ? undefined : () => setPreview(null)}>
       <svg ref={svg} className={styles.svg} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" focusable="false" onPointerMove={onRingMove} onPointerLeave={() => setPreview(null)} onClick={onRingClick} data-hovering={current !== null || undefined}>
         <circle className={styles.track} cx={c} cy={c} r={(outer + inner) / 2} strokeWidth={outer - inner} data-idle={(!shown || !total) || undefined} />
-        {drawn.map(item => <path key={item.key} ref={registerPath} data-key={item.key} className={styles.segment} data-active={item.key === current || undefined} data-dim={(current !== null && item.key !== current) || undefined} style={{ "--slice": colorFor(item) } as CSSProperties} />)}
+        {drawn.map(item => <path key={item.key} ref={registerPath(item.key)} data-key={item.key} className={styles.segment} data-active={item.key === current || undefined} data-dim={(current !== null && item.key !== current) || undefined} style={{ "--slice": colorFor(item) } as CSSProperties} />)}
       </svg>
       <div className={styles.center} aria-hidden="true">
         {readouts.map((item, index) => <motion.span key={item.key} className={styles.readout} initial={false} {...drum(index - activeIndex, reduced)}>

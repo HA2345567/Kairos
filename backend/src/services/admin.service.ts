@@ -68,8 +68,8 @@ export class AdminService {
     if (versionData.version !== currentVersion + 1) {
       throw new Error(`BASKET_VERSION_MUST_BE_NEXT: Expected ${currentVersion + 1}`);
     }
-    if (versionData.legs.length < 1 || versionData.legs.length > 10) {
-      throw new Error("INVALID_BASKET_LEG_COUNT: Must contain 1 to 10 legs");
+    if (versionData.legs.length < 1 || versionData.legs.length > 12) {
+      throw new Error("INVALID_BASKET_LEG_COUNT: Must contain 1 to 12 legs");
     }
     if (versionData.legs.some((leg) => !Number.isInteger(leg.weightBps) || leg.weightBps < 1 || leg.weightBps > 10_000)) {
       throw new Error("INVALID_WEIGHT_BPS: Each leg must be 1 to 10,000 integer basis points");
@@ -91,6 +91,15 @@ export class AdminService {
       }
       if (token.tradingStatus !== "active") {
         throw new Error(`TOKEN_NOT_TRADABLE: ${leg.mint}`);
+      }
+      // FR-03: publish requires liquidity evidence once a threshold is set.
+      if (config.minLiquidityUsd > 0) {
+        if (token.liquidityUsd === null || token.liquidityUsd === undefined) {
+          throw new Error(`TOKEN_LIQUIDITY_UNVERIFIED: ${leg.mint}`);
+        }
+        if (token.liquidityUsd < config.minLiquidityUsd) {
+          throw new Error(`TOKEN_ILLIQUID: ${leg.mint} has ${token.liquidityUsd} USD < ${config.minLiquidityUsd}`);
+        }
       }
     }
 

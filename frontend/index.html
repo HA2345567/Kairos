@@ -7,9 +7,20 @@
     <meta name="description" content="Non-custodial platform to invest in curated crypto narrative baskets on Solana with 1-click directly into your own wallet." />
     <meta name="author" content="Kairos" />
 
+    <style>
+      html, body { margin: 0; min-width: 320px; min-height: 100%; background: #141414; color: #f5f5f5; color-scheme: dark; }
+      body, #root { min-height: 100vh; min-height: 100svh; }
+      #root { background: #141414; }
+      .app-loading { position: fixed; inset: 0; z-index: 9999; min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: #141414; }
+      .app-loading__logo { width: 52px; height: 52px; object-fit: contain; }
+      .app-loading__spinner { width: 22px; height: 22px; border: 2px solid #303030; border-top-color: #c5ff4a; border-radius: 50%; animation: app-loading-spin .8s linear infinite; }
+      @keyframes app-loading-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .app-loading__spinner { animation-duration: 2s; } }
+    </style>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62.5..125,100..900;1,62.5..125,100..900&family=Archivo+Narrow:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet" />
     <link rel="icon" type="image/svg+xml" href="/kairos-logo.svg" />
     <link rel="alternate icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -27,7 +38,12 @@
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="app-loading" role="status" aria-live="polite">
+        <img class="app-loading__logo" src="/kairos-logo-white.png" alt="" />
+        <span class="app-loading__spinner" aria-hidden="true"></span>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

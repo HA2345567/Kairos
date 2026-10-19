@@ -1,5 +1,5 @@
 import { Connection, PublicKey, type Commitment } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { withFailover } from "./connection";
 
 /**
@@ -39,21 +39,22 @@ export async function getTokenBalances(
   const balances: Record<string, number> = {};
   for (const mint of mints) balances[mint.toBase58()] = 0;
 
-  const res = await withFailover(
-    (c) =>
-      c.getParsedTokenAccountsByOwner(owner, {
-        programId: TOKEN_PROGRAM_ID,
-      }, commitment) as unknown as Promise<ParsedTokenAccountResponse>
-  );
+  const responses = await withFailover((c) => Promise.all(
+    [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID].map((programId) =>
+      c.getParsedTokenAccountsByOwner(owner, { programId }, commitment) as unknown as Promise<ParsedTokenAccountResponse>
+    )
+  ));
 
   const wanted = new Set(Object.keys(balances));
-  for (const { account } of res.value) {
-    const info = account.data.parsed?.info;
-    if (!info?.mint || !wanted.has(info.mint)) continue;
-    const amount = info.tokenAmount?.amount;
-    if (amount === undefined) continue;
-    const raw = Number(amount);
-    if (Number.isFinite(raw)) balances[info.mint] = raw;
+  for (const response of responses) {
+    for (const { account } of response.value) {
+      const info = account.data.parsed?.info;
+      if (!info?.mint || !wanted.has(info.mint)) continue;
+      const amount = info.tokenAmount?.amount;
+      if (amount === undefined) continue;
+      const raw = Number(amount);
+      if (Number.isFinite(raw)) balances[info.mint] = (balances[info.mint] ?? 0) + raw;
+    }
   }
   return balances;
 }

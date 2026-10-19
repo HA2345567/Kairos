@@ -179,6 +179,9 @@ CREATE TABLE IF NOT EXISTS executions (
   basket_id            TEXT NOT NULL,
   basket_version_id    TEXT NOT NULL,
   type                 TEXT NOT NULL CHECK (type IN ('open', 'rebalance', 'close')),
+  funding_asset        TEXT NOT NULL DEFAULT 'USDC',
+  sol_input_amount     DOUBLE PRECISION,
+  sol_price_usd        DOUBLE PRECISION,
   status               TEXT NOT NULL,
   idempotency_key      TEXT NOT NULL,
   request_hash         TEXT,
@@ -202,6 +205,9 @@ CREATE INDEX IF NOT EXISTS idx_executions_request_hash ON executions(request_has
 CREATE INDEX IF NOT EXISTS idx_executions_wallet_created ON executions(wallet_address, created_at DESC);
 ALTER TABLE executions ADD COLUMN IF NOT EXISTS base_execution_id TEXT REFERENCES executions(id);
 ALTER TABLE executions ADD COLUMN IF NOT EXISTS recovery_action TEXT CHECK (recovery_action IN ('retry', 'unwind'));
+ALTER TABLE executions ADD COLUMN IF NOT EXISTS funding_asset TEXT NOT NULL DEFAULT 'USDC';
+ALTER TABLE executions ADD COLUMN IF NOT EXISTS sol_input_amount DOUBLE PRECISION;
+ALTER TABLE executions ADD COLUMN IF NOT EXISTS sol_price_usd DOUBLE PRECISION;
 CREATE TABLE IF NOT EXISTS execution_recoveries (
   base_execution_id TEXT NOT NULL REFERENCES executions(id),
   action TEXT NOT NULL CHECK (action IN ('retry', 'unwind')),
@@ -323,6 +329,7 @@ CREATE TABLE IF NOT EXISTS outbox (
   event      TEXT NOT NULL,
   event_type TEXT,
   execution_id TEXT,
+  leg_id     TEXT,
   payload    TEXT,
   created_at TEXT NOT NULL,
   sent_at    TEXT,
@@ -333,15 +340,20 @@ CREATE TABLE IF NOT EXISTS outbox (
 );
 ALTER TABLE outbox ADD COLUMN IF NOT EXISTS event_type TEXT;
 ALTER TABLE outbox ADD COLUMN IF NOT EXISTS execution_id TEXT;
+ALTER TABLE outbox ADD COLUMN IF NOT EXISTS leg_id TEXT;
 ALTER TABLE outbox ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE outbox ADD COLUMN IF NOT EXISTS lease_until_ms BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE outbox ADD COLUMN IF NOT EXISTS lease_token TEXT;
 UPDATE outbox SET event_type = event WHERE event_type IS NULL;
 CREATE INDEX IF NOT EXISTS idx_outbox_sent ON outbox(sent_at);
 CREATE INDEX IF NOT EXISTS idx_outbox_pending_lease ON outbox(sent_at, lease_until_ms);
+DROP INDEX IF EXISTS idx_outbox_execution_event;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_outbox_execution_event
   ON outbox(execution_id, event_type)
-  WHERE execution_id IS NOT NULL;
+  WHERE execution_id IS NOT NULL AND leg_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_outbox_execution_event_leg
+  ON outbox(execution_id, event_type, leg_id)
+  WHERE execution_id IS NOT NULL AND leg_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS fee_ledger (
   rowid BIGSERIAL UNIQUE,
@@ -369,6 +381,16 @@ CREATE TABLE IF NOT EXISTS price_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_price_snapshots_mint_ts ON price_snapshots(mint, ts);
 
+-- Public market-history responses are safe to cache across API restarts. The
+-- composition hash prevents a prior allocation from being shown for a new one.
+CREATE TABLE IF NOT EXISTS basket_market_nav_history_cache (
+  cache_key TEXT PRIMARY KEY,
+  payload_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_basket_market_nav_history_updated
+  ON basket_market_nav_history_cache(updated_at);
+
 CREATE TABLE IF NOT EXISTS rebalance_events (
   rowid BIGSERIAL UNIQUE,
   id          TEXT PRIMARY KEY,
@@ -392,4 +414,101 @@ CREATE TABLE IF NOT EXISTS audit_log (
   timestamp   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);
+
+-- ============ PRD v4.0 completion (Slice F) ============
+
+-- FR-04 / §13.1: eligibility + age gate state (region lives on users).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS age_verified INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS eligibility_status TEXT NOT NULL DEFAULT 'eligible';
+
+-- FR-03: registry liquidity evidence + backtestability.
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS backtestable INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS liquidity_usd DOUBLE PRECISION;
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS liquidity_source TEXT;
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS liquidity_checked_at TEXT;
+
+-- FR-18: notification preferences per wallet (channels + event classes).
+CREATE TABLE IF NOT EXISTS notification_preferences (
+  wallet_address     TEXT PRIMARY KEY,
+  in_app             INTEGER NOT NULL DEFAULT 1,
+  email              INTEGER NOT NULL DEFAULT 0,
+  push               INTEGER NOT NULL DEFAULT 0,
+  execution_updates  INTEGER NOT NULL DEFAULT 1,
+  rebalance_updates  INTEGER NOT NULL DEFAULT 1,
+  version_publish    INTEGER NOT NULL DEFAULT 1,
+  updated_at         TEXT NOT NULL
+);
+
+-- FR-27: annotation layer (news/events) + checkpoints, incentives and
+-- liquidation info from the §19 glossary, all attachable to a basket version.
+CREATE TABLE IF NOT EXISTS annotations (
+  rowid       BIGSERIAL UNIQUE,
+  id          TEXT PRIMARY KEY,
+  basket_id   TEXT NOT NULL REFERENCES baskets(id),
+  version_id  TEXT REFERENCES basket_versions(id),
+  kind        TEXT NOT NULL DEFAULT 'news',
+  title       TEXT NOT NULL,
+  body        TEXT NOT NULL DEFAULT '',
+  source_url  TEXT,
+  source      TEXT,
+  impact      TEXT,
+  published_at TEXT NOT NULL,
+  created_by  TEXT NOT NULL DEFAULT '',
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_annotations_basket ON annotations(basket_id, published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_annotations_version ON annotations(version_id);
+
+-- FR-25: durable Labs basket creation, moderation and community voting.
+CREATE TABLE IF NOT EXISTS labs_baskets (
+  rowid            BIGSERIAL UNIQUE,
+  id               TEXT PRIMARY KEY,
+  slug             TEXT NOT NULL,
+  name             TEXT NOT NULL,
+  thesis           TEXT NOT NULL DEFAULT '',
+  category         TEXT NOT NULL DEFAULT 'Labs',
+  cover_image_data_url TEXT,
+  allocations_json TEXT NOT NULL,
+  created_by       TEXT NOT NULL,
+  status           TEXT NOT NULL DEFAULT 'draft',
+  moderation_note  TEXT,
+  basket_id        TEXT,
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL
+);
+ALTER TABLE labs_baskets ADD COLUMN IF NOT EXISTS cover_image_data_url TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_labs_baskets_slug ON labs_baskets(slug);
+CREATE INDEX IF NOT EXISTS idx_labs_baskets_status ON labs_baskets(status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS labs_votes (
+  rowid          BIGSERIAL UNIQUE,
+  id             TEXT PRIMARY KEY,
+  labs_basket_id TEXT NOT NULL REFERENCES labs_baskets(id),
+  wallet_address TEXT NOT NULL,
+  created_at     TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_labs_votes_unique ON labs_votes(labs_basket_id, wallet_address);
+
+CREATE TABLE IF NOT EXISTS labs_comments (
+  rowid          BIGSERIAL UNIQUE,
+  id             TEXT PRIMARY KEY,
+  labs_basket_id TEXT NOT NULL REFERENCES labs_baskets(id),
+  wallet_address TEXT NOT NULL,
+  body           TEXT NOT NULL,
+  hidden         INTEGER NOT NULL DEFAULT 0,
+  created_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_labs_comments_basket ON labs_comments(labs_basket_id, created_at ASC);
+
+-- FE-09 / NFR-12: anonymized page-view analytics (no IP, no PII).
+CREATE TABLE IF NOT EXISTS analytics_events (
+  id           BIGSERIAL PRIMARY KEY,
+  name         TEXT NOT NULL,
+  path         TEXT NOT NULL,
+  region       TEXT,
+  session_hash TEXT NOT NULL,
+  ts           TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_ts ON analytics_events(ts);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_name ON analytics_events(name, ts);
 `;

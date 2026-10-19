@@ -30,11 +30,11 @@ export function recoverySell(
   leg: ExecutionLeg, rawAmount: string | undefined,
   token: { decimals: number; priceUsd: number } | null | undefined, feeBps: number
 ): PrepareLegInput {
-  if (!token || token.priceUsd <= 0) throw new AppError("QUOTE_STALE", "A current asset price is required", 409);
+  if (!token || token.priceUsd <= 0) throw new AppError("PRICE_STALE", "A current asset price is required");
   const inAssetBaseUnits = safeAmount(rawAmount);
   const grossBase = Math.floor(inAssetBaseUnits / 10 ** token.decimals * token.priceUsd * 1_000_000);
   if (!Number.isSafeInteger(grossBase) || grossBase <= 0) {
-    throw new AppError("DUST_LEG_FORBIDDEN", "Sell proceeds are below one USDC base unit", 422);
+    throw new AppError("DUST_LEG", "Sell proceeds are below one USDC base unit");
   }
   return {
     mint: leg.mint, symbol: leg.symbol, side: "sell", inAssetBaseUnits,

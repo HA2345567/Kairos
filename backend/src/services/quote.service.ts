@@ -18,7 +18,13 @@ export class QuoteService {
     }
     const basket = (await repository.getBasketBySlug(basketSlug));
     if (!basket) throw new AppError("BASKET_NOT_FOUND", `Basket ${basketSlug} not found`, 404);
-    if (basket.status !== "active") throw new AppError("BASKET_NOT_ACTIVE", undefined, 422);
+    if (basket.status !== "active") {
+      throw new AppError(
+        "BASKET_NOT_ACTIVE",
+        "This basket is paused because its Devnet assets are not initialized and funded.",
+        422,
+      );
+    }
     if (usdcAmount < basket.minUsdc) {
       throw new AppError("MIN_INVESTMENT", `Minimum investment is ${basket.minUsdc} USDC`, 422);
     }
@@ -50,7 +56,7 @@ export class QuoteService {
       const leg = version.legs[idx];
       const token = (await repository.getToken(leg.mint));
       if (!token || token.denylisted) {
-        throw new AppError("TOKEN_HALTED", `Leg ${leg.mint} is not tradable`, 422);
+        throw new AppError("TOKEN_HALTED", `Leg ${leg.mint} is not tradable`);
       }
       if (token.tradingStatus === "halted") {
         throw new AppError("TOKEN_HALTED", `${token.symbol} trading is halted`, 422);
@@ -73,7 +79,7 @@ export class QuoteService {
         const reason = live.ageSec === null
           ? "verified price feed is unavailable"
           : `price feed is stale (${live.ageSec}s old)`;
-        throw new AppError("QUOTE_STALE", `${token.symbol} ${reason}`, 409);
+        throw new AppError("PRICE_STALE", `${token.symbol} ${reason}`);
       }
 
       const legUsdc = rawLegBaseUnits[idx] / USDC_BASE_UNITS;

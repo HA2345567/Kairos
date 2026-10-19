@@ -9,7 +9,7 @@ export interface PromptBarProps {
 }
 
 export default function PromptBar({
-  placeholder = "Ask Kairos to build a basket…",
+  placeholder = "Describe a basket idea to build with Kairos agents...",
   onSend,
 }: PromptBarProps) {
   const [draft, setDraft] = useState("");
@@ -24,7 +24,7 @@ export default function PromptBar({
     if (onSend) {
       onSend(query);
     } else {
-      navigate(`/markets?q=${encodeURIComponent(query)}`);
+      navigate(`/labs/create?idea=${encodeURIComponent(query)}`);
     }
     setDraft("");
     inputRef.current?.focus();
@@ -39,10 +39,7 @@ export default function PromptBar({
 
   return (
     <div className="kairos-promptbar-wrapper" data-promptbar>
-      {/* Main Single-Capsule Prompt Input */}
       <div className="kairos-promptbar-container">
-
-        {/* Input Field */}
         <input
           ref={inputRef}
           type="text"
@@ -50,21 +47,16 @@ export default function PromptBar({
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          aria-label="Prompt Input"
+          aria-label="Describe a basket idea"
           className="kairos-promptbar-input"
         />
-
-        {/* Trailing Actions */}
         <div className="kairos-promptbar-actions">
-          {/* Keyboard Hint */}
           <span className="kairos-promptbar-kbd" title="Press Enter to submit">
-            ↵
+            Enter
           </span>
-
-          {/* Submit Button */}
           <button
             type="button"
-            aria-label="Submit Prompt"
+            aria-label="Build basket from idea"
             disabled={!canSend}
             onClick={handleSend}
             className="kairos-promptbar-button"

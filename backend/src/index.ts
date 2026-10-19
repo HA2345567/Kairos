@@ -28,6 +28,8 @@ export function buildApp(): KairosHttpServer {
     simulateLanding: config.simulateLanding,
     pythFeedsConfigured: Object.keys(config.pythFeeds).length,
     pythIngestionEnabled: Boolean(config.pythApiKey && Object.keys(config.pythFeeds).length),
+    readOnlyApi: config.readOnlyApi,
+    landingWorkerEnabled: config.landingWorkerEnabled,
     killSwitchActive: (await repository.getSetting("global_kill_switch")) === "true",
     devnetInitialized: loadDevnetState() !== null,
     timestamp: new Date().toISOString(),
@@ -63,13 +65,21 @@ export function buildApp(): KairosHttpServer {
 }
 
 async function startWorkers(): Promise<void> {
+  if (config.readOnlyApi) {
+    console.log("[boot] read-only API mode enabled; background workers are disabled");
+    return;
+  }
   startOutboxWorker();
   (await startPriceSnapshotWorker());
-  try {
-    const { startLandingWorker } = await import("./workers/landing");
-    startLandingWorker();
-  } catch (err) {
-    console.error("[boot] landing worker failed to start:", err);
+  if (config.landingWorkerEnabled) {
+    try {
+      const { startLandingWorker } = await import("./workers/landing");
+      startLandingWorker();
+    } catch (err) {
+      console.error("[boot] landing worker failed to start:", err);
+    }
+  } else {
+    console.log("[boot] landing worker disabled; submitted transactions will remain queued");
   }
   try {
     const { startReconciler } = await import("./workers/reconciler");

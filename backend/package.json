@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "setup": "bun scripts/devnet-setup.ts",
     "seed": "bun scripts/seed.ts",
-    "test": "bun test tests"
+    "test": "bun test tests --parallel=1 --max-concurrency=1",
+    "nfr": "bun scripts/nfr-probe.ts",
+    "acceptance": "bun scripts/acceptance-devnet.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.31.1",

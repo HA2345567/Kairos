@@ -19,9 +19,11 @@ export interface ProgramBuildOpts {
   userUsdcAta: PublicKey;
   treasuryUsdcAta: PublicKey;
   globalConfigPda: PublicKey;
+  basketId: string;
   basketConfigPda: PublicKey;
   basketVersion: number;
   basketVersionPda: PublicKey;
+  basketLegCount: number;
   feeBps: number;
   pool: {
     authority: PublicKey; ammConfig: PublicKey; poolState: PublicKey;
@@ -81,6 +83,9 @@ async function build(opts: ProgramBuildOpts, side: "buy" | "sell", amount: numbe
       readonly(side === "buy" ? opts.usdcMint : opts.assetMint),
       readonly(side === "buy" ? opts.assetMint : opts.usdcMint), writable(opts.pool.observation),
       readonly(TOKEN_PROGRAM_ID), readonly(SystemProgram.programId), readonly(MEMO_PROGRAM_ID),
+      readonly(opts.basketLegCount > 10
+        ? basketVersionExtensionPda(opts.basketId, opts.basketVersion)
+        : KAIROS_ROUTER_PROGRAM_ID),
     ],
   }));
   const message = new TransactionMessage({
@@ -104,6 +109,14 @@ export const basketVersionPda = (basketId: string, version: number) => {
   value.writeUInt32LE(version);
   return PublicKey.findProgramAddressSync(
     [Buffer.from("version"), Buffer.from(basketId), value],
+    KAIROS_ROUTER_PROGRAM_ID
+  )[0];
+};
+export const basketVersionExtensionPda = (basketId: string, version: number) => {
+  const value = Buffer.alloc(4);
+  value.writeUInt32LE(version);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("version_extra"), Buffer.from(basketId), value],
     KAIROS_ROUTER_PROGRAM_ID
   )[0];
 };

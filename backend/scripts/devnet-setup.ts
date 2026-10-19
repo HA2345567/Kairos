@@ -138,7 +138,7 @@ async function main(): Promise<void> {
     );
     log(
       "mint",
-      `${spec.symbol.padEnd(8)} ${mintKp.publicKey.toBase58()} treasury ATA ${ata.toBase58()} funded ${TREASURY_ASSET_UI.toLocaleString()} UI`
+      `${spec.symbol.padEnd(8)} ${mintKp.publicKey.toBase58()} treasury ATA ${ata.ata.toBase58()} funded ${TREASURY_ASSET_UI.toLocaleString()} UI`
     );
     assetEntries.push({
       symbol: spec.symbol,
@@ -159,7 +159,7 @@ async function main(): Promise<void> {
     usdcKp,
     TREASURY_USDC_UI
   );
-  log("treasury", `USDC ATA ${treasuryUsdcAta.toBase58()} funded ${TREASURY_USDC_UI.toLocaleString()} UI`);
+  log("treasury", `USDC ATA ${treasuryUsdcAta.ata.toBase58()} funded ${TREASURY_USDC_UI.toLocaleString()} UI`);
 
   // ---- 5. write devnet-state.json ----
   const state: DevnetState = {

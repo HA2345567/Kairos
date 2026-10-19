@@ -16,8 +16,8 @@ const common = {
   userUsdcAta: await getAssociatedTokenAddress(usdcMint, user),
   userAssetAta: await getAssociatedTokenAddress(assetMint, user),
   treasuryUsdcAta: await getAssociatedTokenAddress(usdcMint, Keypair.generate().publicKey),
-  globalConfigPda: globalConfigPda(), basketConfigPda: basketConfigPda(devnet.basketId),
-  basketVersion: 2, basketVersionPda: basketVersionPda(devnet.basketId, 2), feeBps: 20,
+  globalConfigPda: globalConfigPda(), basketId: devnet.basketId, basketConfigPda: basketConfigPda(devnet.basketId),
+  basketVersion: 2, basketVersionPda: basketVersionPda(devnet.basketId, 2), basketLegCount: 2, feeBps: 20,
   recentBlockhash: Keypair.generate().publicKey.toBase58(), memo: "kairos:interface-check",
 };
 for (const side of ["buy", "sell"] as const) {
@@ -30,6 +30,8 @@ for (const side of ["buy", "sell"] as const) {
   const definition = idl.instructions.find(ix => ix.name === name)!;
   assert.equal(definition.accounts.length, ix.keys.length);
   assert.equal(definition.accounts[6].name, "basket_version");
+  assert.equal(definition.accounts[21].name, "basket_version_extension");
+  assert.equal(definition.accounts[21].optional, true);
   const args = side === "buy"
      ? { fee_bps: 20, amount_in_usdc: new BN(1_000_000), min_amount_out: new BN(900_000) }
      : { fee_bps: 20, amount_in_asset: new BN(1_000_000), min_usdc_out: new BN(900_000) };

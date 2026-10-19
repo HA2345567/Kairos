@@ -16,6 +16,10 @@ export interface User {
   createdAt: string;
   status: "active" | "suspended";
   region: string;
+  /** §13.1 age gate: recorded once the user accepts the 18+ attestation. */
+  ageVerified: boolean;
+  /** §13.1 region/eligibility plumbing, activatable for mainnet (§5 FR-04). */
+  eligibilityStatus: "eligible" | "requires_action" | "restricted";
 }
 
 export interface Wallet {
@@ -43,6 +47,77 @@ export interface Token {
   isMarketHoursRestricted?: boolean;
   denylisted: boolean;
   priceUsd: number;
+  /** FR-03: a leg without verified liquidity evidence cannot be published.
+   *  Optional on write paths (defaults apply); always present on reads. */
+  backtestable?: boolean;
+  liquidityUsd?: number | null;
+  liquiditySource?: string | null;
+  liquidityCheckedAt?: string | null;
+}
+
+export interface NotificationPreferences {
+  walletAddress: string;
+  inApp: boolean;
+  email: boolean;
+  push: boolean;
+  executionUpdates: boolean;
+  rebalanceUpdates: boolean;
+  versionPublish: boolean;
+  updatedAt: string;
+}
+
+/** FR-27 annotation layer + glossary checkpoints / incentives / liquidation info. */
+export type AnnotationKind = "news" | "event" | "checkpoint" | "incentive" | "liquidation";
+
+export interface Annotation {
+  id: string;
+  basketId: string;
+  versionId: string | null;
+  kind: AnnotationKind;
+  title: string;
+  body: string;
+  sourceUrl: string | null;
+  source: string | null;
+  impact: "positive" | "negative" | "neutral" | null;
+  publishedAt: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+/** FR-25 Labs / UGC basket creation, voting and moderation. */
+export interface LabsBasket {
+  id: string;
+  slug: string;
+  name: string;
+  thesis: string;
+  category: string;
+  coverImageDataUrl?: string | null;
+  allocations: Array<{ mint: string; weightBps: number }>;
+  createdBy: string;
+  status: "draft" | "submitted" | "approved" | "rejected" | "promoted";
+  moderationNote: string | null;
+  basketId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  votes: number;
+}
+
+export interface LabsComment {
+  id: string;
+  labsBasketId: string;
+  walletAddress: string;
+  body: string;
+  hidden: boolean;
+  createdAt: string;
+}
+
+export interface AnalyticsEventRow {
+  id: number;
+  name: string;
+  path: string;
+  region: string | null;
+  sessionHash: string;
+  ts: string;
 }
 
 export interface ProgramAllowlistRow {
@@ -176,6 +251,9 @@ export interface Execution {
   basketId: string;
   basketVersionId: string;
   type: ExecutionType;
+  fundingAsset?: "USDC" | "SOL";
+  solInputAmount?: number;
+  solPriceUsd?: number;
   status: ExecutionStatus;
   idempotencyKey: string;
   requestHash?: string;

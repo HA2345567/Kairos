@@ -11,11 +11,15 @@ import {
 import { PublicKey, Transaction } from "@solana/web3.js";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { DEVNET_USDC_MINT, parseUsdcBaseUnits } from "@/lib/usdc";
+import { parseUsdcBaseUnits, resolveUsdcMint } from "@/lib/usdc";
+import { useAppConfig } from "@/hooks/useAppConfig";
 
 export function WithdrawUsdc() {
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
+  const { data: appConfig } = useAppConfig();
+  // FR-16: the mint is the one the API is configured with, never a constant.
+  const usdcMint = resolveUsdcMint(appConfig?.usdcMint);
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
   const [balance, setBalance] = useState<bigint>(0n);
@@ -23,13 +27,13 @@ export function WithdrawUsdc() {
 
   useEffect(() => {
     let active = true;
-    if (!publicKey) {
+    if (!publicKey || !usdcMint) {
       setBalance(0n);
       return () => { active = false; };
     }
     void (async () => {
       try {
-        const ata = await getAssociatedTokenAddress(new PublicKey(DEVNET_USDC_MINT), publicKey);
+        const ata = await getAssociatedTokenAddress(new PublicKey(usdcMint), publicKey);
         const account = await getAccount(connection, ata, "confirmed", TOKEN_PROGRAM_ID);
         if (active) setBalance(account.amount);
       } catch {
@@ -37,11 +41,12 @@ export function WithdrawUsdc() {
       }
     })();
     return () => { active = false; };
-  }, [connection, publicKey]);
+  }, [connection, publicKey, usdcMint]);
 
   async function withdraw(event: FormEvent) {
     event.preventDefault();
     if (!publicKey) return toast.error("Connect a wallet to withdraw USDC");
+    if (!usdcMint) return toast.error("The USDC mint is not configured by the API yet");
     const units = parseUsdcBaseUnits(amount);
     if (!units) return toast.error("Enter an amount with up to 6 decimal places");
     if (units > balance) return toast.error("Amount exceeds your USDC balance");
@@ -52,7 +57,7 @@ export function WithdrawUsdc() {
 
     setBusy(true);
     try {
-      const mint = new PublicKey(DEVNET_USDC_MINT);
+      const mint = new PublicKey(usdcMint);
       const sourceAta = await getAssociatedTokenAddress(mint, publicKey);
       const destinationAta = await getAssociatedTokenAddress(mint, destination, true);
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
@@ -93,7 +98,7 @@ export function WithdrawUsdc() {
     <label className="block text-sm">Amount (USDC)
       <input className="mt-1 block w-full rounded border border-border bg-background p-2" value={amount} onChange={event => setAmount(event.target.value)} inputMode="decimal" placeholder="0.00" required />
     </label>
-    <Button type="submit" variant="outline" disabled={busy || !publicKey || balance === 0n}>
+    <Button type="submit" variant="outline" disabled={busy || !publicKey || !usdcMint || balance === 0n}>
       {busy ? "Waiting for wallet…" : "Withdraw USDC"}
     </Button>
   </form>;

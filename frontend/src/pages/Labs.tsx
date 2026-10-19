@@ -1,5 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import { kairosApi } from "@/lib/api-client";
+import type { LabsBasket } from "@/lib/api-types";
+import { useWalletAuth } from "@/components/auth/WalletAuthProvider";
 import {
   ArrowDown,
   ArrowUp,
@@ -8,11 +13,9 @@ import {
   Boxes,
   ChevronDown,
   Clock,
-  FlaskConical,
-  Info,
+  Lightbulb,
   Layers,
   Medal,
-  MoreHorizontal,
   Plus,
   Search,
   Sparkles,
@@ -20,7 +23,6 @@ import {
 } from "lucide-react";
 import { PageShell } from "@/components/layout/PageShell";
 import { useBaskets } from "@/lib/baskets-data";
-import { useAllBasketsNav } from "@/hooks/useAllBasketsNav";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { HistoricalMiniChart } from "@/components/basket/HistoricalMiniChart";
 import "./labs.css";
 
 export type LabIdeaToken = {
@@ -40,26 +43,52 @@ export type LabIdeaToken = {
 
 export type LabIdea = {
   id: string;
+  slug: string;
   title: string;
   description: string;
   author: string;
   votes: number;
   date: string;
+  /** Server timestamp used for the "New" sort; absent for curated rows. */
+  createdAt?: string;
+  status?: string;
+  coverImageDataUrl?: string | null;
   tags: string[];
   tokens?: LabIdeaToken[];
 };
 
-const KEY = "cesto-labs-ideas-v1";
-const COMMUNITY_KEY = "kairos_community_lab_ideas";
-
-function loadIdeas(): LabIdea[] {
-  try {
-    const rawCommunity = JSON.parse(localStorage.getItem(COMMUNITY_KEY) || "[]");
-    const rawSaved = JSON.parse(localStorage.getItem(KEY) || "[]");
-    return [rawCommunity, rawSaved].flatMap((value) => Array.isArray(value) ? value : []);
-  } catch {
-    return [];
-  }
+/**
+ * FR-25: Labs ideas are durable server rows now. The previous implementation
+ * kept them in `localStorage`, which meant a second visitor saw nothing and a
+ * cleared cache lost the basket. Votes are per-wallet and idempotent server-side.
+ */
+function toLabIdea(
+  row: LabsBasket,
+  tokensByMint: Map<string, { symbol: string; name: string; icon: string }>,
+): LabIdea {
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.name,
+    description: row.thesis,
+    author: row.createdBy ? `${row.createdBy.slice(0, 4)}…${row.createdBy.slice(-4)}` : "anonymous",
+    votes: row.votes,
+    date: row.createdAt,
+    createdAt: row.createdAt,
+    status: row.status,
+    coverImageDataUrl: row.coverImageDataUrl,
+    tags: [row.category],
+    tokens: row.allocations.map((allocation) => {
+      const token = tokensByMint.get(allocation.mint);
+      const symbol = token?.symbol ?? `${allocation.mint.slice(0, 4)}…`;
+      return {
+        symbol,
+        name: token?.name,
+        icon: token?.icon ?? `/tokens/${symbol.toLowerCase()}.png`,
+        weightPct: allocation.weightBps / 100,
+      };
+    }),
+  };
 }
 
 type SortKey = "Top" | "New" | "Trending";
@@ -72,6 +101,10 @@ const SORT_OPTIONS: SortKey[] = ["Top", "New", "Trending"];
  * by feed position.
  */
 function recencyHours(idea: LabIdea, feedIndex: number): number {
+  if (idea.createdAt) {
+    const hours = (Date.now() - Date.parse(idea.createdAt)) / 3_600_000;
+    if (Number.isFinite(hours)) return Math.max(0, hours);
+  }
   const label = idea.date.trim().toLowerCase();
   if (label === "just now" || label === "now") return 0;
   const hours = /^(\d+)\s*h/.exec(label);
@@ -87,25 +120,61 @@ const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 export default function Labs() {
-  const [ideas, setIdeas] = useState<LabIdea[]>(loadIdeas);
-  const [voted, setVoted] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(`${KEY}-votes`) || "[]");
-    } catch {
-      return [];
-    }
-  });
+  const [ideas, setIdeas] = useState<LabIdea[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadIdeas, setReloadIdeas] = useState(0);
+  // Votes are server-owned; this only remembers what this session already cast
+  // so the button can reflect it without a second round trip.
+  const [voted, setVoted] = useState<string[]>([]);
+  const [voting, setVoting] = useState<string[]>([]);
   const [sort, setSort] = useState<SortKey>("Trending");
   const [query, setQuery] = useState("");
   const { data: catalogBaskets = [] } = useBaskets();
+  const { data: tokenResponse } = useQuery({
+    queryKey: ["token-registry"],
+    queryFn: () => kairosApi.getTokens(),
+    staleTime: 60_000,
+  });
+  const { ensureAuthenticated } = useWalletAuth();
 
-  // Live NAV map from the Kairos backend (polled every 60s) — powers the hero
-  // status line. Degrades gracefully when the backend is offline.
-  const { data: navMap } = useAllBasketsNav();
-  const liveNavCount = useMemo(() => {
-    if (!navMap) return null; // still syncing
-    return Object.values(navMap).filter(Boolean).length;
-  }, [navMap]);
+  const tokensByMint = useMemo(() => {
+    const result = new Map<string, { symbol: string; name: string; icon: string }>();
+    for (const basket of catalogBaskets) {
+      for (const token of basket.tokens) {
+        result.set(token.mint, { symbol: token.symbol, name: token.name, icon: token.icon });
+      }
+    }
+    for (const token of tokenResponse?.tokens ?? []) {
+      const symbol = token.symbol.replace(/^t(?=[A-Z])/, "");
+      result.set(token.mint, {
+        symbol: token.symbol,
+        name: token.name,
+        icon: `/tokens/${symbol.toLowerCase()}.png`,
+      });
+    }
+    return result;
+  }, [catalogBaskets, tokenResponse]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await kairosApi.getLabsBaskets();
+        if (cancelled) return;
+        setIdeas(response.labsBaskets.map((row) => toLabIdea(row, tokensByMint)));
+        setLoadError(null);
+      } catch (error) {
+        if (cancelled) return;
+        setLoadError(error instanceof Error ? error.message : "Labs ideas are unavailable right now.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tokensByMint, reloadIdeas]);
 
   // No verified performance ranking is available yet; keep the catalog order.
   const topBaskets = useMemo(() => catalogBaskets.slice(0, 5), [catalogBaskets]);
@@ -135,66 +204,89 @@ export default function Labs() {
           recencyHours(a, feedIndex.get(a.id) ?? 0) - recencyHours(b, feedIndex.get(b.id) ?? 0)
       );
     }
+    if (sort === "Trending") {
+      return [...result].sort((a, b) => {
+        const aAge = a.createdAt ? Math.max(0, (Date.now() - Date.parse(a.createdAt)) / 3_600_000) : 24 * 365;
+        const bAge = b.createdAt ? Math.max(0, (Date.now() - Date.parse(b.createdAt)) / 3_600_000) : 24 * 365;
+        const aScore = a.votes + 1 / (1 + aAge / 24);
+        const bScore = b.votes + 1 / (1 + bAge / 24);
+        return bScore - aScore;
+      });
+    }
     return result;
   }, [ideas, query, sort]);
 
-  const vote = (idea: LabIdea) => {
-    const already = voted.includes(idea.id);
-    const nextVotes = already ? voted.filter((id) => id !== idea.id) : [...voted, idea.id];
-    setVoted(nextVotes);
-    localStorage.setItem(`${KEY}-votes`, JSON.stringify(nextVotes));
+  const vote = (idea: LabIdea, remove = false) => {
+    if (voting.includes(idea.id) || (remove && !voted.includes(idea.id))) return;
+    setVoting((previous) => [...previous, idea.id]);
+    if (remove) {
+      setVoted((previous) => previous.filter((id) => id !== idea.id));
+    } else {
+      setVoted((previous) => previous.includes(idea.id) ? previous : [...previous, idea.id]);
+    }
     setIdeas((previous) =>
-      previous.map((item) => (item.id === idea.id ? { ...item, votes: item.votes + (already ? -1 : 1) } : item))
+      previous.map((item) => item.id === idea.id
+        ? { ...item, votes: Math.max(0, item.votes + (remove ? -1 : 1)) }
+        : item),
     );
+    void (async () => {
+      try {
+        await ensureAuthenticated();
+        let serverBasket: LabsBasket;
+        if (remove) {
+          const result = await kairosApi.removeLabsVote(idea.id);
+          serverBasket = result.labsBasket;
+          if (!result.removed) setVoted((previous) => previous.filter((id) => id !== idea.id));
+        } else {
+          const result = await kairosApi.voteLabsBasket(idea.id);
+          serverBasket = result.labsBasket;
+          if (!result.counted) {
+            // A previous session may already have voted. Reflect the server's
+            // idempotent no-op so the user can remove that vote from this page.
+            setVoted((previous) => previous.includes(idea.id) ? previous : [...previous, idea.id]);
+          }
+        }
+        setIdeas((previous) =>
+          previous.map((item) =>
+            item.id === idea.id ? { ...item, votes: serverBasket.votes } : item,
+          ),
+        );
+      } catch (error) {
+        setVoted((previous) => remove
+          ? (previous.includes(idea.id) ? previous : [...previous, idea.id])
+          : previous.filter((id) => id !== idea.id));
+        setIdeas((previous) =>
+          previous.map((item) =>
+            item.id === idea.id ? { ...item, votes: Math.max(0, item.votes + (remove ? 1 : -1)) } : item,
+          ),
+        );
+        toast.error(error instanceof Error ? error.message : "Could not record the vote.");
+      } finally {
+        setVoting((previous) => previous.filter((id) => id !== idea.id));
+      }
+    })();
   };
 
   return (
-    <PageShell>
-      <div className="labsroot-page">
-        {/* Hero — 30px/600 display title with inline flask icon + BETA pill */}
+    <PageShell hideFooter contentTag="div">
+      <main className="labsroot-page">
+          {/* Ideas page heading */}
         <header className="space-y-2">
           <div className="flex items-center gap-2.5">
-            <FlaskConical className="size-6 shrink-0 text-foreground" aria-hidden="true" />
+              <Lightbulb className="size-6 shrink-0 text-foreground" aria-hidden="true" />
             <h1 className="font-display text-[30px] font-semibold leading-9 tracking-tight text-foreground">
-              Labs
+              Ideas
             </h1>
-            <span className="rounded-full border border-border bg-surface px-2 py-0.5 font-mono text-[10px] font-extrabold tracking-widest text-muted-foreground">
-              BETA
-            </span>
           </div>
           <p className="max-w-[672px] text-base leading-relaxed text-foreground/70">
             Community-driven basket ideas. Share your alpha, upvote the best baskets, and build
             community around it.
           </p>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Info className="size-3.5" aria-hidden="true" />
-            Ideas and votes are stored in this browser; community publishing is not connected yet.
-          </p>
-
-          {/* Live backend status — Kairos NAV feed, polled every 60s */}
-          <p className="flex items-center gap-1.5 pt-0.5 text-[11px] font-mono text-muted-foreground">
-            {liveNavCount === null ? (
-              <>
-                <span className="size-1.5 rounded-full bg-foreground/30 animate-pulse" aria-hidden="true" />
-                Syncing live NAV…
-              </>
-            ) : liveNavCount > 0 ? (
-              <>
-                <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
-                Live NAV · {liveNavCount} basket{liveNavCount === 1 ? "" : "s"} reporting
-              </>
-            ) : (
-              <>
-                <span className="size-1.5 rounded-full bg-foreground/30 animate-pulse" aria-hidden="true" />
-                Live NAV · awaiting first sync
-              </>
-            )}
-          </p>
         </header>
 
         {/* Two-column layout: ~830px feed + 355px sticky sidebar */}
         <div className="labsgrid-layout mt-5">
-          <main className="min-w-0">
+          <div className="min-w-0">
             {/* Banner CTA — 176px tall: heading top-left, copy below, button row bottom-left */}
             <section
               className="labscta-banner flex min-h-44 flex-col gap-3 p-5"
@@ -294,30 +386,40 @@ export default function Labs() {
                     >
                       {/* Landscape token-collage thumbnail (house style — no AI images) */}
                       <div className="labs-idea-thumb" aria-hidden="true">
-                        <div className="labs-thumb-stack">
-                          {tokens.slice(0, 3).map((token, idx) => (
-                            <img
-                              key={`${token.symbol}-${idx}`}
-                              src={token.icon}
-                              alt=""
-                              className="relative"
-                              style={{ zIndex: 10 - idx }}
-                              onError={(event) => {
-                                event.currentTarget.style.display = "none";
-                              }}
-                            />
-                          ))}
-                        </div>
-                        <span className="labs-thumb-symbols">
-                          {tokens.map((t) => t.symbol).slice(0, 3).join(" / ")}
-                        </span>
+                        {idea.coverImageDataUrl ? (
+                          <img src={idea.coverImageDataUrl} alt="" className="labs-idea-cover" />
+                        ) : (
+                          <>
+                            <div className="labs-thumb-stack">
+                              {tokens.slice(0, 3).map((token, idx) => (
+                                <img
+                                  key={`${token.symbol}-${idx}`}
+                                  src={token.icon}
+                                  alt=""
+                                  className="relative"
+                                  style={{ zIndex: 10 - idx }}
+                                  onError={(event) => {
+                                    event.currentTarget.style.display = "none";
+                                  }}
+                                />
+                              ))}
+                            </div>
+                            <span className="labs-thumb-symbols">
+                              {tokens.slice(0, 3).map((token) =>
+                                `${token.symbol}${token.weightPct === undefined ? "" : ` ${token.weightPct}%`}`,
+                              ).join(" / ")}
+                            </span>
+                          </>
+                        )}
                       </div>
 
                       <div className="flex min-w-0 flex-1 flex-col">
                         {/* Idea title */}
                         <div className="flex items-start justify-between gap-3">
                           <h3 className="font-display text-base font-semibold leading-snug text-foreground">
-                            {idea.title}
+                            <Link to={`/labs/${encodeURIComponent(idea.slug || idea.id)}`} className="hover:underline focus-visible:underline">
+                              {idea.title}
+                            </Link>
                           </h3>
                         </div>
 
@@ -325,8 +427,12 @@ export default function Labs() {
                           {idea.description}
                         </p>
 
+                        <div className="flex justify-end pt-2">
+                          <HistoricalMiniChart source="labs" slug={idea.slug || idea.id} compact />
+                        </div>
+
                         {/* Footer: author + bare ghost vote controls */}
-                        <div className="mt-auto flex items-center justify-between gap-2 pt-2.5">
+                        <div className="mt-auto flex items-center justify-between gap-2 pt-2">
                           <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                             <span className="grid size-5 shrink-0 place-items-center rounded-full border border-border-strong bg-surface-elevated font-mono text-[8px] font-extrabold text-foreground">
                               {idea.author.slice(0, 2).toUpperCase()}
@@ -349,6 +455,7 @@ export default function Labs() {
                                   : "text-muted-foreground hover:text-foreground",
                                 FOCUS_RING
                               )}
+                              disabled={voting.includes(idea.id)}
                               onClick={() => vote(idea)}
                             >
                               <ArrowUp className="size-3.5" aria-hidden="true" />
@@ -361,26 +468,16 @@ export default function Labs() {
                             </span>
                             <button
                               type="button"
-                              aria-pressed={hasVoted}
-                              aria-label={hasVoted ? "Remove upvote" : "Downvote"}
+                              aria-pressed={false}
+                              aria-label="Remove upvote"
                               className={cn(
-                                "grid size-[26px] place-items-center rounded-full text-muted-foreground transition-colors hover:text-foreground cursor-pointer",
+                                "grid size-[26px] place-items-center rounded-full text-muted-foreground transition-colors hover:text-foreground cursor-pointer disabled:cursor-not-allowed disabled:opacity-35",
                                 FOCUS_RING
                               )}
-                              onClick={() => hasVoted && vote(idea)}
+                              disabled={!hasVoted || voting.includes(idea.id)}
+                              onClick={() => vote(idea, true)}
                             >
                               <ArrowDown className="size-3.5" aria-hidden="true" />
-                            </button>
-                            <button
-                              type="button"
-                              aria-label="More actions"
-                              title="More actions (coming soon)"
-                              className={cn(
-                                "ml-0.5 grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground cursor-pointer",
-                                FOCUS_RING
-                              )}
-                            >
-                              <MoreHorizontal className="size-4" aria-hidden="true" />
                             </button>
                           </span>
                         </div>
@@ -388,14 +485,37 @@ export default function Labs() {
                     </article>
                   );
                 })}
-                {visible.length === 0 && (
+                {loading && (
+                  <div className="rounded-xl border border-dashed border-border p-8 text-center" role="status">
+                    <p className="text-sm text-muted-foreground">Loading community ideas…</p>
+                  </div>
+                )}
+                {!loading && loadError && (
+                  <div className="rounded-xl border border-dashed border-border p-8 text-center" role="alert">
+                    <p className="font-medium text-foreground">Labs ideas are unavailable</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{loadError}</p>
+                    <button
+                      type="button"
+                      className="mt-3 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover"
+                      onClick={() => {
+                        setLoading(true);
+                        setReloadIdeas((previous) => previous + 1);
+                      }}
+                    >
+                      Try again
+                    </button>
+                  </div>
+                )}
+                {!loading && !loadError && ideas.length === 0 && (
                   <div className="rounded-xl border border-dashed border-border p-8 text-center">
                     <p className="font-medium text-foreground">No basket ideas yet</p>
-                    <p className="mt-1 text-sm text-muted-foreground">Create an idea to save it in this browser.</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Submit an idea — it is stored server-side and reviewed by a moderator before promotion.
+                    </p>
                   </div>
                 )}
 
-                {visible.length === 0 && (
+                {!loading && !loadError && ideas.length > 0 && visible.length === 0 && (
                   <div className="rounded-xl border border-border bg-surface px-6 py-14 text-center">
                     <p className="text-sm text-muted-foreground">
                       No ideas match “{query}”. Try another search.
@@ -404,10 +524,10 @@ export default function Labs() {
                 )}
               </div>
             </section>
-          </main>
+          </div>
 
           {/* Sidebar — one sticky wrapper (top: 32px) holding all panels */}
-          <aside className="labsaside-sidebar flex flex-col gap-4" aria-label="Labs highlights">
+          <aside className="labsaside-sidebar flex flex-col gap-4" aria-label="Ideas highlights">
             {/* Top Contributors — derived live from the ideas state */}
             <section
               className="rounded-xl border border-border bg-surface p-4"
@@ -453,16 +573,15 @@ export default function Labs() {
                   </li>
                 ))}
               </ul>
-              <button
-                type="button"
+              <Link
+                to="/ideas/leaderboard"
                 className={cn(
                   "-mx-4 -mb-4 mt-2 flex w-full items-center justify-center gap-1 rounded-b-xl border-t border-border py-3 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground cursor-pointer",
                   FOCUS_RING
                 )}
-                onClick={() => setSort("Top")}
               >
                 View All Rankings <ArrowUpRight className="size-3" aria-hidden="true" />
-              </button>
+              </Link>
             </section>
 
             {/* Top Baskets — catalog baskets ranked by 7-day return */}
@@ -474,7 +593,7 @@ export default function Labs() {
                 id="labs-top-baskets-heading"
                 className="flex items-center gap-1.5 font-display text-[11px] font-bold uppercase tracking-wider text-foreground"
               >
-                <Boxes className="size-3.5" aria-hidden="true" /> Top Baskets
+                <Boxes className="size-3.5" aria-hidden="true" /> Featured Baskets
               </h2>
               <ul className="mt-2">
                 {topBaskets.map((basket, index) => {
@@ -511,11 +630,7 @@ export default function Labs() {
                         <span className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
                           {basket.name}
                         </span>
-                        <span
-                          className="shrink-0 font-mono text-[11px] text-muted-foreground"
-                        >
-                          No history
-                        </span>
+                        <HistoricalMiniChart slug={basket.slug || basket.id} compact className="ml-auto" />
                       </Link>
                     </li>
                   );
@@ -544,7 +659,7 @@ export default function Labs() {
             </section>
           </aside>
         </div>
-      </div>
+      </main>
     </PageShell>
   );
 }

@@ -1,5 +1,6 @@
 import { config } from "../config";
 import { repository } from "../db/repository";
+import { priceResource, publishEvent } from "../services/event-stream";
 
 type HermesResponse = {
   parsed?: Array<{
@@ -54,6 +55,13 @@ async function ingest(): Promise<void> {
         const latestPrice = (await repository.latestPrice(mint));
         if ((await repository.addSnapshot(mint, ts, priceUsd, "pyth", update.id, confidenceUsd))) {
           if (!latestPrice || ts > latestPrice.ts) (await repository.updateTokenPrice(mint, priceUsd));
+          publishEvent(priceResource(mint), "price.snapshot", {
+            mint,
+            ts,
+            priceUsd,
+            confidenceUsd,
+            source: "pyth",
+          });
           inserted++;
         }
       }

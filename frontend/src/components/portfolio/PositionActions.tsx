@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { VersionedTransaction } from "@solana/web3.js";
@@ -89,7 +90,7 @@ export function PositionActions({ address }: { address: string }) {
     {(positions.isError || history.isError) && <p role="alert">Position service unavailable. Refresh to try again.</p>}
     {positions.isLoading && <p role="status">Loading positions…</p>}
     {positions.data?.positions.filter(position => position.status !== "CLOSED").map(position => <article key={position.id} className="rounded-xl border border-border p-4 space-y-3">
-      <div className="flex flex-wrap justify-between gap-2"><strong>{position.basketId}</strong><span>{position.status} · ${position.currentValueUsd.toFixed(2)} indicative</span></div>
+      <div className="flex flex-wrap justify-between gap-2"><strong><Link to={`/positions/${position.id}`} className="underline underline-offset-4">{position.basketId}</Link></strong><span>{position.status} · ${position.currentValueUsd.toFixed(2)} indicative</span></div>
       <p className="text-sm text-muted-foreground">{position.legs.map(leg => `${leg.currentAmount.toLocaleString()} ${leg.symbol}`).join(" · ")}</p>
       {position.status === "MODIFIED" && <p className="text-sm">An external transfer changed these holdings. Review your balances before closing.</p>}
       <div className="flex flex-wrap gap-2">
@@ -104,7 +105,13 @@ export function PositionActions({ address }: { address: string }) {
     </label> : null}
     {execution && <article className="rounded-xl border border-border p-4 space-y-3" aria-live="polite">
       <h3 className="font-semibold">{execution.type} · {execution.status}</h3>
-      <p className="text-sm break-all">Execution: {execution.id}</p>
+      <p className="text-sm break-all">
+        Execution:{" "}
+        <Link to={`/executions/${execution.id}`} className="underline underline-offset-4">
+          {execution.id}
+        </Link>{" "}
+        <span className="text-muted-foreground">(durable status page — survives a refresh)</span>
+      </p>
       <p className="text-sm">Indicative value: {execution.totalUsdc.toFixed(2)} USDC · Platform fee: {execution.feeUsdc.toFixed(4)} USDC</p>
       {execution.legs.map(leg => <div key={leg.id} className="flex flex-wrap justify-between gap-2 text-sm">
         <span>{leg.symbol} · {leg.status}{leg.error ? ` · ${leg.error}` : ""}

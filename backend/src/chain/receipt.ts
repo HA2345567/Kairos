@@ -1,11 +1,12 @@
-import type { TokenBalance, VersionedTransactionResponse } from "@solana/web3.js";
+import type { TokenBalance, VersionedMessage, VersionedTransactionResponse } from "@solana/web3.js";
 import type { ExecutionLegReceipt } from "../db/schema";
 import { withFailover } from "./connection";
 
 type ReceiptTransaction = Pick<VersionedTransactionResponse, "slot" | "meta"> & {
-  transaction: Pick<VersionedTransactionResponse["transaction"], "signatures">;
+  transaction: { signatures: string[]; message?: VersionedMessage };
 };
 type ReceiptCommitment = "confirmed" | "finalized";
+const WRAPPED_SOL_MINT = "So11111111111111111111111111111111111111112";
 
 function walletBalance(balances: TokenBalance[], owner: string, mint: string) {
   const rows = balances.filter(row => row.owner === owner && row.mint === mint);
@@ -27,7 +28,8 @@ export function parseLegReceipt(
   assetMint: string,
   usdcMint: string,
   expectedSide?: "buy" | "sell",
-  commitment: "confirmed" | "finalized" = "confirmed"
+  commitment: "confirmed" | "finalized" = "confirmed",
+  fundingAsset: "USDC" | "SOL" = "USDC"
 ): ExecutionLegReceipt {
   if (transaction.transaction.signatures[0] !== signature) throw new Error("RECEIPT_SIGNATURE_MISMATCH");
   const meta = transaction.meta;
@@ -36,12 +38,18 @@ export function parseLegReceipt(
   }
   const before = walletBalance(meta.preTokenBalances, wallet, assetMint);
   const after = walletBalance(meta.postTokenBalances, wallet, assetMint);
-  const usdcBefore = walletBalance(meta.preTokenBalances, wallet, usdcMint);
-  const usdcAfter = walletBalance(meta.postTokenBalances, wallet, usdcMint);
   const assetDelta = after.amount - before.amount;
-  const usdcDelta = usdcAfter.amount - usdcBefore.amount;
-  const side = assetDelta > 0n && usdcDelta < 0n ? "buy"
-    : assetDelta < 0n && usdcDelta > 0n ? "sell" : undefined;
+  const usdcBefore = fundingAsset === "USDC" ? walletBalance(meta.preTokenBalances, wallet, usdcMint) : undefined;
+  const usdcAfter = fundingAsset === "USDC" ? walletBalance(meta.postTokenBalances, wallet, usdcMint) : undefined;
+  const usdcDelta = usdcBefore && usdcAfter ? usdcAfter.amount - usdcBefore.amount : 0n;
+  const accountKeys = transaction.transaction.message?.staticAccountKeys ?? [];
+  const walletIndex = accountKeys.findIndex((key) => key.toBase58() === wallet);
+  const solDelta = walletIndex >= 0 && meta.preBalances[walletIndex] !== undefined && meta.postBalances[walletIndex] !== undefined
+    ? BigInt(meta.postBalances[walletIndex] - meta.preBalances[walletIndex])
+    : 0n;
+  const inputDelta = fundingAsset === "SOL" ? solDelta : usdcDelta;
+  const side = assetDelta > 0n && inputDelta < 0n ? "buy"
+    : fundingAsset === "USDC" && assetDelta < 0n && inputDelta > 0n ? "sell" : undefined;
   const assetDecimals = after.decimals ?? before.decimals;
   if (!side || assetDecimals === undefined) throw new Error("RECEIPT_SWAP_BALANCES_MISSING");
   if (expectedSide && side !== expectedSide) throw new Error("RECEIPT_SWAP_DIRECTION_MISMATCH");
@@ -50,9 +58,9 @@ export function parseLegReceipt(
   }
   return {
     side,
-    inputMint: side === "buy" ? usdcMint : assetMint,
+    inputMint: side === "buy" ? (fundingAsset === "SOL" ? WRAPPED_SOL_MINT : usdcMint) : assetMint,
     outputMint: side === "buy" ? assetMint : usdcMint,
-    actualIn: (side === "buy" ? -usdcDelta : -assetDelta).toString(),
+    actualIn: (side === "buy" ? -inputDelta : -assetDelta).toString(),
     actualOut: (side === "buy" ? assetDelta : usdcDelta).toString(),
     assetBalanceAfter: after.amount.toString(),
     assetDecimals,
@@ -67,7 +75,8 @@ export async function getLegReceipt(
   assetMint: string,
   usdcMint: string,
   side?: "buy" | "sell",
-  commitment: ReceiptCommitment = "finalized"
+  commitment: ReceiptCommitment = "finalized",
+  fundingAsset: "USDC" | "SOL" = "USDC"
 ): Promise<ExecutionLegReceipt> {
   // Null can mean provider indexing lag. Try the fallback, then let the job
   // retry; never replace a missing receipt with the prepared quote.
@@ -76,6 +85,6 @@ export async function getLegReceipt(
       commitment, maxSupportedTransactionVersion: 0,
     });
     if (!transaction) throw new Error("TRANSACTION_RECEIPT_PENDING");
-    return parseLegReceipt(transaction, signature, wallet, assetMint, usdcMint, side, commitment);
+    return parseLegReceipt(transaction, signature, wallet, assetMint, usdcMint, side, commitment, fundingAsset);
   });
 }

@@ -11,6 +11,7 @@ import {
   priceOf,
   resolveUsdcAsset,
 } from "../services/portfolio.service";
+import { positionResource, publishEvent } from "../services/event-stream";
 
 /**
  * Reconciler worker (PFOLIO lane, contracts.md §10; PRD §4.5).
@@ -49,6 +50,9 @@ export interface ReconcileSummary {
   ranAt: string;
   observationCommitment: "finalized";
   observationSource: "reconciler";
+  /** True when the §14.3 chaos switch has the reconciler paused. */
+  paused?: boolean;
+  pausedUntil?: string;
   checked: number;
   modified: Array<{ positionId: string; walletAddress: string; reason: string; diffs: ReconcileLegDiff[] }>;
   absorbed: number;
@@ -74,7 +78,44 @@ function toUiAmount(rawBaseUnits: number, decimals: number): number {
  * One reconciliation pass over every ACTIVE/MODIFIED position. Never throws:
  * per-position failures are captured in the summary.
  */
+/**
+ * §14.3 chaos switch: `KAIROS_CHAOS_PAUSE_RECONCILER_MS` pauses reconciliation
+ * for the requested duration starting at process start (a 5-minute drill). The
+ * pause is reported in the summary so a drill has evidence, and it never masks
+ * an error — it is an explicit, time-boxed state.
+ */
+const chaosPauseStartMs = Date.now();
+
+function chaosPauseMs(): number {
+  if (config.chaos.pauseReconcilerMs !== undefined) return config.chaos.pauseReconcilerMs;
+  // Also read the environment at call time so a drill can be armed without
+  // depending on which module loaded config first (tests rely on this).
+  const raw = Number(process.env.KAIROS_CHAOS_PAUSE_RECONCILER_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 0;
+}
+
+export function reconcilerChaosPaused(now = Date.now()): number {
+  const pauseMs = chaosPauseMs();
+  if (pauseMs <= 0) return 0;
+  const until = chaosPauseStartMs + pauseMs;
+  return until > now ? until : 0;
+}
+
 export async function runReconcilerOnce(): Promise<ReconcileSummary> {
+  const pausedUntil = reconcilerChaosPaused();
+  if (pausedUntil > 0) {
+    return {
+      ranAt: new Date().toISOString(),
+      observationCommitment: "finalized",
+      observationSource: "reconciler",
+      paused: true,
+      pausedUntil: new Date(pausedUntil).toISOString(),
+      checked: 0,
+      modified: [],
+      absorbed: 0,
+      errors: [],
+    };
+  }
   // Simulation mode has no on-chain truth source — comparing stored ledger
   // amounts against a real chain would falsely flag every position MODIFIED.
   if (config.simulateLanding) {
@@ -198,6 +239,18 @@ export async function runReconcilerOnce(): Promise<ReconcileSummary> {
             source: "reconciler",
           });
         }
+        // PRD §10: position.{id} stream, so a client learns about an external
+        // change without polling the whole portfolio.
+        publishEvent(positionResource(pos.id), "position.modified", {
+          positionId: pos.id,
+          status: "MODIFIED",
+          reason,
+          legs: diffs.map((d) => ({
+            mint: d.mint,
+            onChainAmount: d.onChainAmount,
+            wentToZero: d.wentToZero,
+          })),
+        });
         summary.modified.push({
           positionId: pos.id,
           walletAddress: pos.walletAddress,

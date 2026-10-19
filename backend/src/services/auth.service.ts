@@ -1,7 +1,7 @@
 // Auth service (Lane A3 "AUTH") — full rewrite per contracts.md §8.
 //
 // SIWS-style wallet login:
-//   1. generateNonce() persists a 15-min single-use nonce ("kairos-auth-<32hex>")
+//   1. generateNonce() persists a 15-min single-use 32-character hex nonce
 //   2. the client signs a message embedding that nonce with its Ed25519 key
 //   3. verify() consumes the nonce (single-use, race-free via repository),
 //      verifies the detached Ed25519 signature (tweetnacl + bs58), then
@@ -31,11 +31,36 @@ import type { User, Wallet } from "../db/schema";
 
 // ---------- constants ----------
 
-const NONCE_PREFIX = "kairos-auth-";
 const NONCE_TTL_MS = 15 * 60 * 1000; // 15 minutes
-const NONCE_PATTERN = /kairos-auth-[0-9a-f]{32}/;
+// SIWS nonce syntax only permits alphanumeric characters. Keep the nonce on
+// the standard `Nonce:` line and avoid punctuation that wallet parsers reject.
+const NONCE_PATTERN = /^Nonce: ([A-Za-z0-9]+)$/m;
+const LEGACY_NONCE_PATTERN = /kairos-devnet-login:(kairos-auth-[0-9a-f]{32}|[0-9a-f]{32})/;
 const REFRESH_TOKEN_PATTERN = /^[0-9a-f]{48}$/;
-const RESTRICTED_REGIONS = ["KP", "IR", "CU", "SY"];
+const RESTRICTED_REGIONS = config.restrictedRegions;
+
+/** FE-03: httpOnly session cookies are the primary transport; the bearer header
+ *  remains supported for API clients and tests. */
+export const ACCESS_COOKIE = "kairos_session";
+export const REFRESH_COOKIE = "kairos_refresh";
+
+function cookieValue(input: string | AuthRequestLike | undefined, name: string): string | undefined {
+  if (typeof input === "string" || input === undefined) return undefined;
+  const headers = (input as AuthRequestLike).headers ?? {};
+  const rawHeader = headers["cookie"] ?? headers["Cookie"];
+  const header = typeof rawHeader === "string" ? rawHeader : Array.isArray(rawHeader) ? rawHeader[0] : undefined;
+  if (!header) return undefined;
+  for (const part of header.split(";")) {
+    const [key, ...rest] = part.trim().split("=");
+    if (key === name) return rest.join("=");
+  }
+  return undefined;
+}
+
+/** Read a cookie from any request-like object (route handlers use this too). */
+export function readCookie(req: AuthRequestLike, name: string): string | undefined {
+  return cookieValue(req, name);
+}
 
 // ---------- public shapes ----------
 
@@ -86,6 +111,8 @@ export interface AuthServiceApi {
     message: string
   ): Promise<AuthVerifyResult | null>;
   refresh(refreshToken: string): Promise<AuthRefreshResult | null>;
+  /** PRD §4.5 "one-click revoke": drop a refresh token so it cannot rotate. */
+  revokeSession(refreshToken: string): Promise<boolean>;
   signJwt(payload: object, ttlSec: number): string;
   verifyJwt(token: string): object | null;
   requireAuth(authHeader: string | AuthRequestLike | undefined): AuthContext | null;
@@ -174,10 +201,13 @@ async function walletAddressForUser(userId: string): Promise<string> {
 
 // ---------- helpers ----------
 
-/** Pull the full nonce string ("kairos-auth-<32hex>") out of a signed message. */
+/** Pull the alphanumeric SIWS nonce from its canonical line. */
 function extractNonce(message: string): string | null {
-  const match = NONCE_PATTERN.exec(message);
-  return match ? match[0] : null;
+  const siwsMatch = NONCE_PATTERN.exec(message);
+  if (siwsMatch) return siwsMatch[1];
+  // Keep compatibility with older API clients while the browser uses SIWS.
+  const legacyMatch = LEGACY_NONCE_PATTERN.exec(message);
+  return legacyMatch ? legacyMatch[1] : null;
 }
 
 function projectUser(user: User): AuthUserView {
@@ -225,10 +255,10 @@ const textEncoder = new TextEncoder();
 export const authService: AuthServiceApi = {
   /**
    * Issue and persist a single-use login nonce for `walletAddress`.
-   * Format "kairos-auth-<32hex>", 15-minute expiry.
+   * Format: 32-character lowercase hexadecimal SIWS nonce, 15-minute expiry.
    */
   async generateNonce(walletAddress: string): Promise<string> {
-    const nonce = NONCE_PREFIX + randomBytes(16).toString("hex");
+    const nonce = randomBytes(16).toString("hex");
     (await repository.createNonce(walletAddress, nonce, Date.now() + NONCE_TTL_MS));
     return nonce;
   },
@@ -283,6 +313,8 @@ export const authService: AuthServiceApi = {
         createdAt: new Date().toISOString(),
         status: "active",
         region: "global",
+        ageVerified: false,
+        eligibilityStatus: "eligible",
       }));
       wallet = (await repository.saveWallet({
         id: "wal-" + randomUUID().slice(0, 8),
@@ -332,6 +364,21 @@ export const authService: AuthServiceApi = {
     return { token, refreshToken: rotated };
   },
 
+  /**
+   * Revoke one refresh token. Returns false for a malformed or unknown token;
+   * callers must answer 200 either way so the endpoint cannot be used to probe
+   * which token values exist.
+   */
+  async revokeSession(refreshToken: string): Promise<boolean> {
+    if (typeof refreshToken !== "string" || !REFRESH_TOKEN_PATTERN.test(refreshToken)) {
+      return false;
+    }
+    const hash = sha256Hex(refreshToken);
+    if (!(await repository.getRefreshToken(hash))) return false;
+    (await repository.revokeRefreshToken(hash));
+    return true;
+  },
+
   /** Sign a JWT with config.jwtSecret. Adds iat/exp unless the payload overrides. */
   signJwt(payload: object, ttlSec: number): string {
     return signToken(payload, ttlSec);
@@ -349,10 +396,11 @@ export const authService: AuthServiceApi = {
    */
   requireAuth(authHeader: string | AuthRequestLike | undefined): AuthContext | null {
     const header = extractAuthorization(authHeader);
-    if (!header) return null;
-    const match = /^Bearer\s+(.+)$/i.exec(header.trim());
-    if (!match) return null;
-    const payload = verifyToken(match[1].trim());
+    const match = header ? /^Bearer\s+(.+)$/i.exec(header.trim()) : null;
+    // FE-03: fall back to the httpOnly access cookie when no bearer is present.
+    const token = match?.[1]?.trim() ?? cookieValue(authHeader, ACCESS_COOKIE);
+    if (!token) return null;
+    const payload = verifyToken(token);
     if (!payload) return null;
     const sub = payload.sub;
     if (typeof sub !== "string" || sub.length === 0) return null;

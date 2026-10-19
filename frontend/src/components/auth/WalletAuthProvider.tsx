@@ -14,8 +14,22 @@ interface WalletAuthContextValue {
 const WalletAuthContext = createContext<WalletAuthContextValue | null>(null);
 
 function loginMessage(address: string, nonce: string): string {
+  const origin = typeof window === "undefined" ? "http://localhost" : window.location.origin;
   const domain = typeof window === "undefined" ? "localhost" : window.location.host;
-  return `${domain} wants you to sign in with your Solana account:\n${address}\n\nSign in to Kairos.\n\nNonce: ${nonce}\nIssued At: ${new Date().toISOString()}`;
+  // Keep this as plain UTF-8 SIWS text: wallet adapters display/sign the bytes
+  // directly, and HTML entities or page markup must never enter the payload.
+  return [
+    `${domain} wants you to sign in with your Solana account:`,
+    address,
+    "",
+    "Sign in to Kairos.",
+    "",
+    `URI: ${origin}`,
+    "Version: 1",
+    "Chain ID: solana:devnet",
+    `Nonce: ${nonce}`,
+    `Issued At: ${new Date().toISOString()}`,
+  ].join("\n");
 }
 
 export function WalletAuthProvider({ children }: { children: ReactNode }) {
@@ -24,7 +38,12 @@ export function WalletAuthProvider({ children }: { children: ReactNode }) {
   const [authenticating, setAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pendingLogin = useRef<Promise<void> | null>(null);
+  const autoAuthAttemptedFor = useRef<string | null>(null);
   const address = publicKey?.toBase58() ?? null;
+
+  useEffect(() => {
+    autoAuthAttemptedFor.current = null;
+  }, [address]);
 
   useEffect(() => {
     if (!address) {
@@ -33,8 +52,31 @@ export function WalletAuthProvider({ children }: { children: ReactNode }) {
       setError(null);
       return;
     }
-    setAuthenticated(kairosApi.isAuthenticatedFor(address));
     setError(null);
+    const hasAddressSession = kairosApi.isAuthenticatedFor(address);
+    // Never let a prior wallet's authenticated state unlock the new wallet's
+    // protected queries while its cookie session is being checked.
+    setAuthenticated(hasAddressSession);
+    if (hasAddressSession) return;
+    // FE-03: a cookie session survives reloads and tab closes; probe it before
+    // asking the wallet to sign a fresh message.
+    let cancelled = false;
+    void (async () => {
+      try {
+        const session = await kairosApi.getSession();
+        if (!cancelled && session.walletAddress === address) {
+          kairosApi.setSessionWallet(address);
+          setAuthenticated(true);
+          return;
+        }
+      } catch {
+        /* no cookie session; fall through to signed-out */
+      }
+      if (!cancelled) setAuthenticated(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [address]);
 
   const ensureAuthenticated = useCallback(async () => {
@@ -42,6 +84,16 @@ export function WalletAuthProvider({ children }: { children: ReactNode }) {
     if (kairosApi.isAuthenticatedFor(address)) {
       setAuthenticated(true);
       return;
+    }
+    try {
+      const session = await kairosApi.getSession();
+      if (session.walletAddress === address) {
+        kairosApi.setSessionWallet(address);
+        setAuthenticated(true);
+        return;
+      }
+    } catch {
+      /* fall through to refresh/sign */
     }
     if (await kairosApi.refreshAuth() && kairosApi.isAuthenticatedFor(address)) {
       setAuthenticated(true);
@@ -78,8 +130,23 @@ export function WalletAuthProvider({ children }: { children: ReactNode }) {
     return pending;
   }, [address, publicKey, signMessage]);
 
+  // Connecting a wallet in the shared header is the app-wide sign-in intent.
+  // Reuse the cookie session when present; otherwise request one SIWS signature
+  // here instead of leaving protected pages waiting for a page-specific login.
+  useEffect(() => {
+    if (!address || !publicKey || authenticated || authenticating || pendingLogin.current) return;
+    if (autoAuthAttemptedFor.current === address) return;
+    autoAuthAttemptedFor.current = address;
+    void ensureAuthenticated().catch(() => {
+      // The error is rendered by pages that need the protected session and can
+      // offer an explicit retry after a rejected or unavailable wallet prompt.
+    });
+  }, [address, publicKey, authenticated, authenticating, ensureAuthenticated]);
+
   const logout = useCallback(() => {
-    kairosApi.clearAuth();
+    // Revoke server-side first (PRD §4.5 one-click revoke); local state clears
+    // even if the network call fails, because a stale local token is useless.
+    void kairosApi.logout().catch(() => kairosApi.clearAuth());
     setAuthenticated(false);
     setError(null);
   }, []);

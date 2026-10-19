@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SolanaProvider } from "@/components/wallet/SolanaProvider";
 
 import NotFound from "./pages/NotFound.tsx";
+import { usePageViews } from "./hooks/usePageViews";
 
 const Landing = lazy(() => import("./pages/Index.tsx"));
 const Markets = lazy(() => import("./pages/Markets.tsx"));
@@ -15,6 +16,18 @@ const Portfolio = lazy(() => import("./pages/Portfolio.tsx"));
 const AdminPage = lazy(() => import("./pages/Admin.tsx"));
 const Labs = lazy(() => import("./pages/Labs.tsx"));
 const LabsCreate = lazy(() => import("./pages/LabsCreate.tsx"));
+const LabsIdeaDetail = lazy(() => import("./pages/LabsIdeaDetail.tsx"));
+const LeaderboardPage = lazy(() => import("./pages/Leaderboard.tsx"));
+const ExecutionStatusPage = lazy(() => import("./pages/ExecutionStatusPage.tsx"));
+const PositionDetailPage = lazy(() => import("./pages/PositionDetailPage.tsx"));
+const LegalPage = lazy(() => import("./pages/LegalPage.tsx"));
+const DocsPage = lazy(() => import("./pages/DocsPage.tsx"));
+
+/** FE-09: anonymized page views; must live inside the router. */
+function AnalyticsListener() {
+  usePageViews();
+  return null;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: { 
@@ -34,7 +47,15 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Suspense fallback={null}>
+          <AnalyticsListener />
+          <Suspense
+            fallback={
+              <div className="app-loading" role="status" aria-live="polite">
+                <img className="app-loading__logo" src="/kairos-logo-white.png" alt="" />
+                <span className="app-loading__spinner" aria-hidden="true" />
+              </div>
+            }
+          >
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/markets" element={<Markets />} />
@@ -47,12 +68,19 @@ const App = () => (
               <Route path="/create" element={<LabsCreate />} />
               <Route path="/basket/:id" element={<MarketDetail />} />
               <Route path="/positions" element={<Portfolio />} />
+              <Route path="/positions/:id" element={<PositionDetailPage />} />
+              <Route path="/executions/:id" element={<ExecutionStatusPage />} />
+              <Route path="/terms" element={<LegalPage />} />
+              <Route path="/privacy" element={<LegalPage />} />
               <Route path="/ideas" element={<Labs />} />
               <Route path="/ideas/create" element={<LabsCreate />} />
               <Route path="/labs" element={<Labs />} />
               <Route path="/labs/create" element={<LabsCreate />} />
+              <Route path="/labs/:marketId" element={<LabsIdeaDetail />} />
               <Route path="/portfolio" element={<Portfolio />} />
               <Route path="/admin" element={<AdminPage />} />
+              <Route path="/docs" element={<DocsPage />} />
+              <Route path="/ideas/leaderboard" element={<LeaderboardPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
