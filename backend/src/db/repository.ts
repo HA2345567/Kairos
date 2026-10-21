@@ -1587,13 +1587,14 @@ export class Repository {
   // per-call claim token; the claimed rows are then read back by that token. If
   // the process dies mid-claim, rows stay 'running' and can be recovered via
   // requeueJob (or a sweeper requeueing stale 'running' rows).
-  async claimJobs(limit: number, nowMs: number): Promise<JobRow[]> {
+  async claimJobs(limit: number, nowMs: number, executionId?: string): Promise<JobRow[]> {
     const claimToken = randomUUID();
     (await run(
       `UPDATE jobs SET status = 'running', attempts = attempts + 1, claimed_at = ?, lease_until_ms = ?
        WHERE id IN (
          SELECT id FROM jobs
-         WHERE (status = 'queued' AND run_at_ms <= ?) OR (status = 'running' AND lease_until_ms < ?)
+         WHERE ((status = 'queued' AND run_at_ms <= ?) OR (status = 'running' AND lease_until_ms < ?))
+         ${executionId ? "AND execution_id = ?" : ""}
          ORDER BY run_at_ms ASC, rowid ASC
          LIMIT ? FOR UPDATE SKIP LOCKED
        )`,
@@ -1601,6 +1602,7 @@ export class Repository {
       nowMs + 120_000,
       nowMs,
       nowMs,
+      ...(executionId ? [executionId] : []),
       limit
     ));
     return (await all<Row>(

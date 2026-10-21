@@ -164,7 +164,10 @@ export interface PreparePositionResponse {
     id: string;
     preparedTxs: string[];
     status: string;
-    legs?: unknown[];
+    totalUsdc: number;
+    feeUsdc: number;
+    solPriceUsd?: number;
+    legs: Array<Pick<ExecutionLeg, "mint" | "symbol" | "inAmountUsdc" | "expectedOut">>;
   };
 }
 
@@ -328,9 +331,21 @@ export interface BasketMarketAsset {
   transactions24h: number | null;
   sparkline24h: number[] | null;
   sparklineAsOf: string | null;
-  sparklineStatus: "loading" | "ready" | "summary" | "unavailable";
+  sparklineStatus: "loading" | "ready" | "stale" | "summary" | "unavailable";
   status: "live" | "unavailable";
   reason?: string;
+}
+
+export interface MarketReferencePricesResponse {
+  prices: Record<string, {
+    marketMint: string;
+    priceUsd: number | null;
+    change24h: number | null;
+    source: "GeckoTerminal" | "DEX Screener" | null;
+    asOf: string | null;
+    status: "current" | "stale" | "unavailable";
+    reason?: string;
+  }>;
 }
 
 export interface BasketMarketDataResponse {

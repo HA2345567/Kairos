@@ -51,10 +51,8 @@ export class QuoteService {
     );
 
     // 3. Per-leg price source and token eligibility (PRD §4.3).
-    const legs: QuoteLeg[] = [];
-    for (let idx = 0; idx < version.legs.length; idx++) {
-      const leg = version.legs[idx];
-      const token = (await repository.getToken(leg.mint));
+    const legs: QuoteLeg[] = await Promise.all(version.legs.map(async (leg, idx) => {
+      const token = await repository.getToken(leg.mint);
       if (!token || token.denylisted) {
         throw new AppError("TOKEN_HALTED", `Leg ${leg.mint} is not tradable`);
       }
@@ -74,7 +72,7 @@ export class QuoteService {
         );
       }
 
-      const live = (await getQuotePrice(leg.mint));
+      const live = await getQuotePrice(leg.mint, token);
       if (live.stale) {
         const reason = live.ageSec === null
           ? "verified price feed is unavailable"
@@ -88,7 +86,7 @@ export class QuoteService {
       const slippageBps = leg.slippageBps || 50;
       const minTokens = ((Number(expectedTokens) * (10000 - slippageBps)) / 10000).toFixed(decimals);
 
-      legs.push({
+      return {
         mint: leg.mint,
         symbol: token.symbol,
         weightBps: leg.weightBps,
@@ -101,8 +99,8 @@ export class QuoteService {
         priceAsOf: live.ts,
         priceConfidenceUsd: live.confidenceUsd,
         routeHint: leg.venueHint || "Kairos Router",
-      });
-    }
+      };
+    }));
 
     const now = new Date();
     const quote: Quote = {

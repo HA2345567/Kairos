@@ -37,9 +37,11 @@ export function WalletAuthProvider({ children }: { children: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const pendingLogin = useRef<Promise<void> | null>(null);
+  const pendingLogin = useRef<{ address: string; promise: Promise<void> } | null>(null);
   const autoAuthAttemptedFor = useRef<string | null>(null);
+  const currentAddress = useRef<string | null>(null);
   const address = publicKey?.toBase58() ?? null;
+  currentAddress.current = address;
 
   useEffect(() => {
     autoAuthAttemptedFor.current = null;
@@ -85,47 +87,64 @@ export function WalletAuthProvider({ children }: { children: ReactNode }) {
       setAuthenticated(true);
       return;
     }
-    try {
-      const session = await kairosApi.getSession();
-      if (session.walletAddress === address) {
-        kairosApi.setSessionWallet(address);
-        setAuthenticated(true);
-        return;
-      }
-    } catch {
-      /* fall through to refresh/sign */
+    const currentLogin = pendingLogin.current;
+    if (currentLogin) {
+      if (currentLogin.address === address) return currentLogin.promise;
+      await currentLogin.promise.catch(() => undefined);
+      if (currentAddress.current !== address) throw new Error("The connected wallet changed. Retry the action with the active wallet.");
+      return ensureAuthenticated();
     }
-    if (await kairosApi.refreshAuth() && kairosApi.isAuthenticatedFor(address)) {
-      setAuthenticated(true);
-      return;
-    }
-    if (!signMessage) throw new Error("This wallet does not support message signing.");
-    if (pendingLogin.current) return pendingLogin.current;
 
-    const pending = (async () => {
+    const loginAddress = address;
+    const loginPublicKey = publicKey;
+    const loginSigner = signMessage;
+    // Assign the in-flight promise before any await. The header, positions
+    // page, and invest modal can all request the same session at once; they
+    // must share one cookie probe and at most one wallet message signature.
+    const pending = Promise.resolve().then(async () => {
       setAuthenticating(true);
       setError(null);
       try {
-        const { nonce } = await kairosApi.getNonce(address);
-        const message = loginMessage(address, nonce);
-        const signature = await signMessage(new TextEncoder().encode(message));
-        const result = await kairosApi.verify(address, encodeBase58(signature), message);
-        kairosApi.setAuth(result.token, result.refreshToken, address);
+        try {
+          const session = await kairosApi.getSession();
+          if (session.walletAddress === loginAddress) {
+            kairosApi.setSessionWallet(loginAddress);
+            setAuthenticated(true);
+            return;
+          }
+        } catch {
+          /* no cookie session; fall through to refresh/sign */
+        }
+        if (currentAddress.current !== loginAddress) throw new Error("The connected wallet changed. Retry the action with the active wallet.");
+        if (await kairosApi.refreshAuth() && kairosApi.isAuthenticatedFor(loginAddress)) {
+          setAuthenticated(true);
+          return;
+        }
+        if (!loginSigner) throw new Error("This wallet does not support message signing.");
+        const { nonce } = await kairosApi.getNonce(loginAddress);
+        const message = loginMessage(loginAddress, nonce);
+        const signature = await loginSigner(new TextEncoder().encode(message));
+        if (currentAddress.current !== loginAddress || loginPublicKey.toBase58() !== loginAddress) {
+          throw new Error("The connected wallet changed before sign-in finished. Retry with the active wallet.");
+        }
+        const result = await kairosApi.verify(loginAddress, encodeBase58(signature), message);
+        kairosApi.setAuth(result.token, result.refreshToken, loginAddress);
         setAuthenticated(true);
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : "Wallet sign-in failed.";
         setError(message);
-        kairosApi.clearAuth();
+        if (kairosApi.getSessionWallet() === loginAddress) kairosApi.clearAuth();
         setAuthenticated(false);
         throw cause instanceof Error ? cause : new Error(message);
       } finally {
         setAuthenticating(false);
       }
-    })();
-    pendingLogin.current = pending;
+    });
+    const login = { address: loginAddress, promise: pending };
+    pendingLogin.current = login;
     pending.then(
-      () => { pendingLogin.current = null; },
-      () => { pendingLogin.current = null; },
+      () => { if (pendingLogin.current === login) pendingLogin.current = null; },
+      () => { if (pendingLogin.current === login) pendingLogin.current = null; },
     );
     return pending;
   }, [address, publicKey, signMessage]);
@@ -134,7 +153,7 @@ export function WalletAuthProvider({ children }: { children: ReactNode }) {
   // Reuse the cookie session when present; otherwise request one SIWS signature
   // here instead of leaving protected pages waiting for a page-specific login.
   useEffect(() => {
-    if (!address || !publicKey || authenticated || authenticating || pendingLogin.current) return;
+    if (!address || !publicKey || authenticated || authenticating || pendingLogin.current?.address === address) return;
     if (autoAuthAttemptedFor.current === address) return;
     autoAuthAttemptedFor.current = address;
     void ensureAuthenticated().catch(() => {

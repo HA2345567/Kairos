@@ -148,20 +148,20 @@ export default defineConfig(({ mode }) => {
       },
       proxy: {
         "/v1": {
-          target: "http://localhost:3001",
+          target: "http://127.0.0.1:3001",
           changeOrigin: true,
         },
         "/health": {
-          target: "http://localhost:3001",
+          target: "http://127.0.0.1:3001",
           changeOrigin: true,
         },
         "/api": {
-          target: "http://localhost:3001",
+          target: "http://127.0.0.1:3001",
           changeOrigin: true,
           secure: false,
         },
         "/ws": {
-          target: "ws://localhost:3001",
+          target: "ws://127.0.0.1:3001",
           ws: true,
           changeOrigin: true,
         },
@@ -178,17 +178,19 @@ export default defineConfig(({ mode }) => {
         "X-Frame-Options": "DENY",
       },
       proxy: {
-        "/v1": { target: "http://localhost:3001", changeOrigin: true },
-        "/health": { target: "http://localhost:3001", changeOrigin: true },
-        "/api": { target: "http://localhost:3001", changeOrigin: true, secure: false },
-        "/ws": { target: "ws://localhost:3001", ws: true, changeOrigin: true },
+        "/v1": { target: "http://127.0.0.1:3001", changeOrigin: true },
+        "/health": { target: "http://127.0.0.1:3001", changeOrigin: true },
+        "/api": { target: "http://127.0.0.1:3001", changeOrigin: true, secure: false },
+        "/ws": { target: "ws://127.0.0.1:3001", ws: true, changeOrigin: true },
       },
     },
     optimizeDeps: {
       // Keep the explicit set small. Listing every adapter and Radix package
       // forces Vite to bundle the entire UI dependency tree before the server
       // can serve the first page; the scanner discovers the rest on demand.
-      include: ["react-is", "recharts", "react-dom", "@tanstack/react-query"],
+      include: ["react-dom", "@tanstack/react-query"],
+      // Let the first page render while route-specific dependencies are crawled.
+      holdUntilCrawlEnd: false,
     },
     resolve: {
       alias: {

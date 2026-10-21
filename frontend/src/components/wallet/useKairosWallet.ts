@@ -1,23 +1,33 @@
+import { useContext } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { WalletBootstrapContext } from "./SolanaProvider";
 
 export function useKairosWallet() {
-  const { connected, publicKey, disconnect, select, wallets, sendTransaction } = useWallet();
+  const {
+    connected,
+    publicKey,
+    disconnect,
+    sendTransaction,
+    signMessage,
+    signTransaction,
+    signAllTransactions,
+    wallet,
+  } = useWallet();
   const { connection } = useConnection();
   const { setVisible } = useWalletModal();
+  const ensureWalletAdapters = useContext(WalletBootstrapContext);
 
   const connect = async () => {
-    const phantom = wallets.find((w) => w.adapter.name === "Phantom");
-    if (phantom && phantom.readyState === "Installed") {
-      try {
-        select(phantom.adapter.name);
-        await phantom.adapter.connect();
-        return;
-      } catch (err) {
-        console.warn("Direct Phantom connect error:", err);
-      }
+    // One connection path for every page: Wallet Adapter owns the adapter
+    // lifecycle, so do not call window.phantom.connect() or adapter.connect()
+    // alongside it (that can open a second wallet prompt).
+    try {
+      await ensureWalletAdapters();
+      setVisible(true);
+    } catch (error) {
+      console.error("Could not load wallet adapters:", error);
     }
-    setVisible(true);
   };
 
   const address = publicKey?.toBase58() || null;
@@ -32,5 +42,9 @@ export function useKairosWallet() {
     connect,
     disconnect,
     sendTransaction,
+    signMessage,
+    signTransaction,
+    signAllTransactions,
+    wallet,
   };
 }

@@ -18,6 +18,7 @@ import type {
   BasketsResponse,
   BasketBySlugResponse,
   BasketMarketDataResponse,
+  MarketReferencePricesResponse,
   BasketMarketNavHistoryResponse,
   BasketPublishProposal,
   BasketVersion,
@@ -187,11 +188,12 @@ class KairosApiClient {
     return { credentials: 'include' };
   }
 
-  async get<T>(endpoint: string, headers: Record<string, string> = {}): Promise<T> {
+  async get<T>(endpoint: string, headers: Record<string, string> = {}, signal?: AbortSignal): Promise<T> {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...this.fetchOptions,
       method: 'GET',
       headers: this.getHeaders(headers),
+      signal,
     });
     return this.handleResponse<T>(response);
   }
@@ -265,13 +267,13 @@ class KairosApiClient {
     return this.get<TokenRegistryResponse>(API_ENDPOINTS.TOKENS);
   }
 
-  async getBaskets(options?: { category?: string; limit?: number; after?: string }) {
+  async getBaskets(options?: { category?: string; limit?: number; after?: string }, signal?: AbortSignal) {
     const query = new URLSearchParams();
     if (options?.category) query.set("category", options.category);
     if (options?.limit) query.set("limit", String(options.limit));
     if (options?.after) query.set("after", options.after);
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    return this.get<BasketsResponse>(`${API_ENDPOINTS.BASKETS}${suffix}`);
+    return this.get<BasketsResponse>(`${API_ENDPOINTS.BASKETS}${suffix}`, {}, signal);
   }
 
   /**
@@ -293,6 +295,10 @@ class KairosApiClient {
 
   async getBasketMarketData(slug: string): Promise<BasketMarketDataResponse> {
     return this.get<BasketMarketDataResponse>(API_ENDPOINTS.BASKET_MARKET_DATA(slug));
+  }
+
+  async getMarketReferencePrices(mints: string[]): Promise<MarketReferencePricesResponse> {
+    return this.get<MarketReferencePricesResponse>(API_ENDPOINTS.MARKET_PRICES(mints));
   }
 
   async getBasketMarketNavHistory(slug: string, window: string): Promise<BasketMarketNavHistoryResponse> {

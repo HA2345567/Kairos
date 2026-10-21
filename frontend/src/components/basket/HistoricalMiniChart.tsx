@@ -38,13 +38,13 @@ export function HistoricalMiniChart({ slug, source = "catalog", className, compa
     initialDataUpdatedAt: () => readMarketHistoryCache(cacheId)?.savedAt,
     staleTime: 5 * 60_000,
     refetchInterval: (current) => {
-      if (current.state.status === "error") return false;
+      if (current.state.status === "error") return 30_000;
       const data = current.state.data;
       const progress = data?.progress;
       if (!progress) return 10_000;
-      if (progress.loaded >= progress.publicMarkets && !progress.pendingSymbols.length) return false;
+      if (progress.loaded >= progress.publicMarkets && !progress.pendingSymbols.length) return 60_000;
       if (!data?.complete || progress.pendingSymbols.length) return 15_000;
-      return false;
+      return 60_000;
     },
     refetchOnWindowFocus: true,
   });

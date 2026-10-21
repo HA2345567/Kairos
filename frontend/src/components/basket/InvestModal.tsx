@@ -1,7 +1,6 @@
-import { useState, useEffect, useLayoutEffect, useCallback } from "react";
-import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { VersionedTransaction } from "@solana/web3.js";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -10,22 +9,21 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Basket } from "@/lib/baskets-data";
-import {
-  ArrowRight,
-  CheckCircle2,
-  Loader2,
-  ShieldCheck,
-  Wallet,
-  Coins,
-  ExternalLink,
-  ArrowUpRight,
-} from "lucide-react";
+import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
+import CheckCircle2 from "lucide-react/dist/esm/icons/circle-check";
+import Loader2 from "lucide-react/dist/esm/icons/loader-2";
+import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
+import Wallet from "lucide-react/dist/esm/icons/wallet";
+import Coins from "lucide-react/dist/esm/icons/coins";
+import ExternalLink from "lucide-react/dist/esm/icons/external-link";
+import ArrowUpRight from "lucide-react/dist/esm/icons/arrow-up-right";
 import { toast } from "sonner";
 import { Button } from "@/components/arc/button";
 import { kairosApi } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/lib/api-endpoints";
 import type { QuoteLeg } from "@/lib/api-types";
 import { useWalletAuth } from "@/components/auth/WalletAuthProvider";
+import { useKairosWallet } from "@/components/wallet/useKairosWallet";
 
 interface InvestModalProps {
   basket: Basket | null;
@@ -58,9 +56,8 @@ export function InvestModal({
   onRegisterInvest,
 }: InvestModalProps) {
   // Solana Wallet Adapter
-  const { connected, publicKey, signAllTransactions, signTransaction } = useWallet();
-  const { setVisible: setWalletModalVisible } = useWalletModal();
-  const { connection } = useConnection();
+  const { connected, publicKey, signAllTransactions, signTransaction, connection, connect } = useKairosWallet();
+  const queryClient = useQueryClient();
   const { ensureAuthenticated } = useWalletAuth();
   const [attestationRequired, setAttestationRequired] = useState(false);
   const [attesting, setAttesting] = useState(false);
@@ -77,7 +74,9 @@ export function InvestModal({
     }
   }, [open, initialAmount, basket?.slug]);
   const [isInvesting, setIsInvesting] = useState(false);
-  const [step, setStep] = useState<"input" | "quoting" | "preparing" | "signing" | "confirming" | "success">("input");
+  const investRequestInFlight = useRef(false);
+  const [step, setStep] = useState<"input" | "preparing" | "signing" | "confirming" | "success">("input");
+  const [executionProgress, setExecutionProgress] = useState<{ confirmed: number; total: number } | null>(null);
   const [txSignature, setTxSignature] = useState<string>("");
   const [liveQuote, setLiveQuote] = useState<QuoteLeg[] | null>(null);
   const [quoteTotals, setQuoteTotals] = useState<{ platformFeeUsdc: number; netInvestUsdc: number } | null>(null);
@@ -118,7 +117,7 @@ export function InvestModal({
 
   // Connect helper — open standard Wallet Adapter modal
   const handleConnect = () => {
-    setWalletModalVisible(true);
+    void connect();
   };
 
   // 1-Click native Devnet SOL airdrop via the configured backend RPC (Helius primary).
@@ -161,24 +160,22 @@ export function InvestModal({
       toast.error("Enter a positive SOL amount.");
       return;
     }
+    if (investRequestInFlight.current) return;
 
+    investRequestInFlight.current = true;
     setAmountSol(String(amountToInvest));
     setIsInvesting(true);
     onBusyChange?.(true);
     setLiveQuote(null);
     setQuoteTotals(null);
+    setExecutionProgress(null);
 
     try {
       // §13.1 age gate: the backend refuses prepare with ELIGIBILITY_REQUIRED,
       // so surface the attestation before any transaction is built.
       await ensureAuthenticated();
-      setStep("quoting");
-      const [eligibilityResult, quoteResult] = await Promise.allSettled([
-        kairosApi.getEligibility(),
-        kairosApi.getQuote(basket.slug, amountToInvest, "SOL"),
-      ]);
-      if (eligibilityResult.status === "rejected") throw eligibilityResult.reason;
-      const eligibility = eligibilityResult.value;
+      setStep("preparing");
+      const eligibility = await kairosApi.getEligibility();
       if (!eligibility.eligibility.eligible) {
         setIsInvesting(false);
         setStep("input");
@@ -194,22 +191,8 @@ export function InvestModal({
         );
       }
 
-      // Eligibility and the display quote are independent backend reads. Run
-      // them together; prepare still recomputes the authoritative quote before
-      // it builds any wallet-signable transaction.
-      if (quoteResult.status === "rejected") throw quoteResult.reason;
-      const quoteRes = quoteResult.value;
-      const quoteLegs = quoteRes?.quote?.legs;
-      if (!quoteLegs?.length) throw new Error("The quote did not include any investable basket legs.");
-      setLiveQuote(quoteLegs);
-      setSolPriceUsd(quoteRes.funding?.priceUsd ?? null);
-      setQuoteTotals({
-        platformFeeUsdc: quoteRes.quote.platformFeeUsdc,
-        netInvestUsdc: quoteRes.quote.netInvestUsdc,
-      });
-
-      // Step 2: Prepare position with real VersionedTransactions
-      setStep("preparing");
+      // Prepare already computes and validates the authoritative quote. Avoid
+      // a separate /quotes request that repeated every per-asset price lookup.
       const idempotencyKey = `inv-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const prepRes = await kairosApi.preparePosition({
         basket: basket.slug,
@@ -219,9 +202,31 @@ export function InvestModal({
       });
       const preparedTxs = prepRes?.execution?.preparedTxs ?? [];
       const execId = prepRes?.execution?.id ?? "";
-      if (!execId || preparedTxs.length === 0) {
+      const executionLegs = prepRes?.execution?.legs ?? [];
+      if (!execId || preparedTxs.length === 0 || executionLegs.length !== preparedTxs.length) {
         throw new Error("The server did not prepare executable basket transactions.");
       }
+      const preparedQuoteLegs: QuoteLeg[] = executionLegs.map((leg) => {
+        const token = basket.tokens.find((item) => item.mint === leg.mint);
+        const decimals = token?.decimals ?? 6;
+        return {
+          mint: leg.mint,
+          symbol: leg.symbol,
+          weightBps: token?.weightBps ?? 0,
+          inUsdcAmount: leg.inAmountUsdc,
+          expectedOutTokens: (Number(leg.expectedOut) / 10 ** decimals).toFixed(Math.min(decimals, 6)),
+          minOutTokens: "",
+          priceImpactPct: null,
+          routeHint: "Kairos Router",
+        };
+      });
+      setLiveQuote(preparedQuoteLegs);
+      setSolPriceUsd(prepRes.execution.solPriceUsd ?? null);
+      setQuoteTotals({
+        platformFeeUsdc: prepRes.execution.feeUsdc,
+        netInvestUsdc: prepRes.execution.totalUsdc - prepRes.execution.feeUsdc,
+      });
+      setExecutionProgress({ confirmed: 0, total: preparedTxs.length });
 
       let sig = "";
 
@@ -248,15 +253,33 @@ export function InvestModal({
         idempotencyKey,
       });
       setStep("confirming");
+      void queryClient.invalidateQueries({ queryKey: ["executions", activeAddressStr] });
+      void queryClient.invalidateQueries({ queryKey: ["positions", activeAddressStr] });
       const confirmationDeadline = Date.now() + 30_000;
-      let status = await kairosApi.getExecutionStatus(execId);
-      let pollDelayMs = 250;
-      while (!status.terminal && Date.now() < confirmationDeadline) {
+      let status: Awaited<ReturnType<typeof kairosApi.getExecutionStatus>> | null = null;
+      let pollDelayMs = 350;
+      while (Date.now() < confirmationDeadline) {
+        try {
+          status = await kairosApi.getExecutionStatus(execId);
+          setExecutionProgress({
+            confirmed: status.legs.filter((leg) => leg.status === "CONFIRMED").length,
+            total: status.legs.length,
+          });
+          if (status.terminal) break;
+        } catch (pollError) {
+          // A brief status API hiccup must not turn a submitted transaction
+          // into a failed-looking UI state; keep polling within the deadline.
+          console.warn("Execution status check failed; retrying:", pollError);
+        }
         await new Promise((resolve) => setTimeout(resolve, pollDelayMs));
-        status = await kairosApi.getExecutionStatus(execId);
-        pollDelayMs = Math.min(pollDelayMs + 250, 1_000);
+        pollDelayMs = Math.min(Math.round(pollDelayMs * 1.5), 1_200);
       }
-      if (status.status !== "COMPLETED") {
+      if (!status) {
+        throw new Error(`Execution ${execId} was submitted, but status is temporarily unavailable. Check execution history before retrying.`);
+      }
+      if (!status.terminal || status.status !== "COMPLETED") {
+        void queryClient.invalidateQueries({ queryKey: ["executions", activeAddressStr] });
+        void queryClient.invalidateQueries({ queryKey: ["positions", activeAddressStr] });
         const allLegsExpired = status.legs.length > 0 && status.legs.every(
           leg => leg.status === "FAILED" && leg.error === "BLOCKHASH_EXPIRED"
         );
@@ -271,6 +294,8 @@ export function InvestModal({
             : `Execution ${execId} is ${status.status.toLowerCase()}. Check execution history before retrying.`
         );
       }
+      void queryClient.invalidateQueries({ queryKey: ["executions", activeAddressStr] });
+      void queryClient.invalidateQueries({ queryKey: ["positions", activeAddressStr] });
       // Fetch the full record once, after terminal confirmation, for the
       // transaction signature shown in the success view.
       const curExec = await kairosApi.getExecution(execId);
@@ -292,6 +317,7 @@ export function InvestModal({
       toast.error(msg);
       setStep("input");
     } finally {
+      investRequestInFlight.current = false;
       setIsInvesting(false);
       onBusyChange?.(false);
     }
@@ -310,13 +336,12 @@ export function InvestModal({
     setTxSignature("");
     setLiveQuote(null);
     setQuoteTotals(null);
+    setExecutionProgress(null);
     onOpenChange(false);
   };
 
   const stepLabel =
-    step === "quoting"
-      ? "Fetching basket quote..."
-      : step === "preparing"
+    step === "preparing"
       ? "Preparing basket transactions..."
       : step === "signing"
       ? `Waiting for wallet signatures (${liveQuote?.length ?? basket.tokens.length} asset transactions)...`
@@ -348,6 +373,11 @@ export function InvestModal({
             {step === "signing" && (
               <p>
                 Kairos sends the complete transaction batch to your wallet. Phantom may show a separate review for each asset leg; Devnet test tokens can appear as “Unknown” because they have no wallet metadata.
+              </p>
+            )}
+            {step === "confirming" && executionProgress && (
+              <p>
+                Confirmed {executionProgress.confirmed} of {executionProgress.total} Devnet transactions. Your batch is processing in the background.
               </p>
             )}
           </div>

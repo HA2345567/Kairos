@@ -3,7 +3,10 @@
 import * as React from "react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
+import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
+import Pause from "lucide-react/dist/esm/icons/pause";
+import Play from "lucide-react/dist/esm/icons/play";
 
 export interface CarouselImage {
   src: string;

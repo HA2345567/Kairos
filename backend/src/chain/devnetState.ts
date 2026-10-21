@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Keypair } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import { config } from "../config";
 import type { DevnetState } from "../db/schema";
 
@@ -38,13 +38,45 @@ export function devnetStatePath(): string {
   return join(here, "..", "..", "data", "devnet-state.json");
 }
 
-/** Read backend/data/devnet-state.json; null when missing/corrupt. */
+function parseDevnetState(raw: string): DevnetState | null {
+  try {
+    const parsed = JSON.parse(raw) as Partial<DevnetState>;
+    if (
+      parsed.cluster !== "devnet" ||
+      !parsed.usdc || !parsed.treasury || !parsed.relayer ||
+      !Array.isArray(parsed.assets) || parsed.assets.length === 0
+    ) return null;
+    new PublicKey(parsed.usdc.mint);
+    new PublicKey(parsed.usdc.authority);
+    new PublicKey(parsed.treasury.pubkey);
+    new PublicKey(parsed.relayer.pubkey);
+    for (const asset of parsed.assets) {
+      if (!asset || typeof asset.symbol !== "string" || !asset.symbol ||
+          !Number.isInteger(asset.decimals) || !Number.isFinite(asset.priceUsd) ||
+          !["spl", "xstock"].includes(asset.legType ?? "")) return null;
+      new PublicKey(asset.mint);
+    }
+    if (!Number.isInteger(parsed.usdc.decimals) || !parsed.updatedAt) return null;
+    return parsed as DevnetState;
+  } catch {
+    return null;
+  }
+}
+
+/** Read serverless environment state first, then the local JSON file. */
 export function loadDevnetState(): DevnetState | null {
+  const fromEnvironment = process.env.KAIROS_DEVNET_STATE_JSON;
+  if (fromEnvironment) {
+    const parsed = parseDevnetState(fromEnvironment);
+    if (parsed) return parsed;
+    console.warn("[chain] KAIROS_DEVNET_STATE_JSON is invalid; checking the local state file");
+  }
+
   const p = devnetStatePath();
   try {
     if (!existsSync(p)) return null;
-    const parsed = JSON.parse(readFileSync(p, "utf8")) as DevnetState;
-    if (parsed?.cluster !== "devnet" || !parsed?.usdc?.mint || !Array.isArray(parsed?.assets)) {
+    const parsed = parseDevnetState(readFileSync(p, "utf8"));
+    if (!parsed) {
       console.warn(`[chain] ${p} is not a valid DevnetState file; ignoring`);
       return null;
     }

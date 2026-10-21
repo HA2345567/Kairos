@@ -13,6 +13,7 @@ export const API_ENDPOINTS = {
 
   // Catalog
   TOKENS: `${BASE_URL}/v1/tokens`,
+  MARKET_PRICES: (mints: string[]) => `${BASE_URL}/v1/market/prices?mints=${mints.map(encodeURIComponent).join(",")}`,
   BASKETS: `${BASE_URL}/v1/baskets`,
   BASKET_BY_SLUG: (slug: string) => `${BASE_URL}/v1/baskets/${slug}`,
   BASKET_MARKET_DATA: (slug: string) => `${BASE_URL}/v1/baskets/${slug}/market-data`,

@@ -1,30 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import {
-  ArrowRight,
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  Copy,
-  Info,
-  Loader2,
-  MessageCircle,
-  ShieldCheck,
-  Send,
-  Share2,
-  TrendingUp,
-  Wallet,
-  X,
-} from "lucide-react";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import { WalletReadyState } from "@solana/wallet-adapter-base";
+import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
+import ArrowUpRight from "lucide-react/dist/esm/icons/arrow-up-right";
+import Check from "lucide-react/dist/esm/icons/check";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
+import Copy from "lucide-react/dist/esm/icons/copy";
+import Info from "lucide-react/dist/esm/icons/info";
+import Loader2 from "lucide-react/dist/esm/icons/loader-2";
+import MessageCircle from "lucide-react/dist/esm/icons/message-circle";
+import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
+import Send from "lucide-react/dist/esm/icons/send";
+import Share2 from "lucide-react/dist/esm/icons/share-2";
+import TrendingUp from "lucide-react/dist/esm/icons/trending-up";
+import Wallet from "lucide-react/dist/esm/icons/wallet";
+import X from "lucide-react/dist/esm/icons/x";
+import { useConnection } from "@solana/wallet-adapter-react";
 import { toast } from "sonner";
 
 import { Header } from "@/components/layout/Header";
 import { InvestModal } from "@/components/basket/InvestModal";
+import { useKairosWallet } from "@/components/wallet/useKairosWallet";
 import { MarketDetailSkeleton } from "@/components/basket/BasketSkeleton";
 import { TechnicalChart } from "@/components/basket/TechnicalChart";
 import { DonutChart } from "@/components/arc/donut-chart/donut-chart";
@@ -220,13 +217,15 @@ function PerformanceChart({ basket, mobile = false }: { basket: Basket; mobile?:
   );
 }
 
-function MarketSparkline({ values, color, status }: { values: number[] | null | undefined; color: string; status: "loading" | "ready" | "summary" | "unavailable" }) {
-  const points = (values ?? []).filter((value) => Number.isFinite(value));
-  if (points.length < 2) {
-    if (status === "unavailable") return null;
+function MarketSparkline({ values, color, status }: { values: number[] | null | undefined; color: string; status: "loading" | "ready" | "stale" | "summary" | "unavailable" }) {
+  const points = (values ?? []).filter((value) => Number.isFinite(value) && value > 0);
+  // A two-point start/end estimate contains no observed path. Keep it out of
+  // the chart until actual hourly candles arrive.
+  if (points.length < 3 || status === "summary") {
+    if (status === "unavailable") return <div className="market-sparkline-empty" aria-hidden="true" />;
     return (
-      <div className="market-sparkline-placeholder" aria-label={status === "loading" ? "Loading 24 hour price chart" : "24 hour chart unavailable"}>
-        <span>{status === "loading" ? "Loading 24H trend" : "24H trend unavailable"}</span>
+      <div className="market-sparkline-placeholder" aria-label="Waiting for observed hourly price candles">
+        <span>{status === "loading" ? "Hourly trend loading" : "Trend unavailable"}</span>
       </div>
     );
   }
@@ -238,18 +237,32 @@ function MarketSparkline({ values, color, status }: { values: number[] | null | 
     x: (index / (points.length - 1)) * 220,
     y: 36 - ((value - min) / range) * 28,
   }));
-  const line = coords.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" ");
+  const line = coords.reduce((path, point, index) => {
+    if (index === 0) return `M${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+    const previous = coords[index - 1];
+    const beforePrevious = coords[index - 2] ?? previous;
+    const next = coords[index + 1] ?? point;
+    const firstControl = {
+      x: previous.x + (point.x - beforePrevious.x) / 6,
+      y: previous.y + (point.y - beforePrevious.y) / 6,
+    };
+    const secondControl = {
+      x: point.x - (next.x - previous.x) / 6,
+      y: point.y - (next.y - previous.y) / 6,
+    };
+    return `${path} C${firstControl.x.toFixed(2)},${firstControl.y.toFixed(2)} ${secondControl.x.toFixed(2)},${secondControl.y.toFixed(2)} ${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+  }, "");
   const area = `${line} L220,44 L0,44 Z`;
 
   return (
-    <svg className="market-sparkline" viewBox="0 0 220 44" preserveAspectRatio="none" role="img" aria-label={status === "summary" ? "24 hour starting and current price reference; hourly candles are loading" : "24 hour price trend"}>
+    <svg className="market-sparkline" viewBox="0 0 220 44" preserveAspectRatio="none" role="img" aria-label={status === "stale" ? "Cached 24 hour price trend; updating" : "24 hour price trend"}>
       <defs>
         <linearGradient id={`market-gradient-${color.replace("#", "")}`} x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.24" />
           <stop offset="100%" stopColor={color} stopOpacity="0.015" />
         </linearGradient>
       </defs>
-      {status === "summary" && <title>24H start-to-current reference. Replaced by hourly market candles when available.</title>}
+      {status === "stale" && <title>Cached 24H market candles. Refreshing.</title>}
       <path d={area} fill={`url(#market-gradient-${color.replace("#", "")})`} />
       <path d={line} fill="none" stroke={color} strokeWidth="1.8" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
@@ -268,11 +281,12 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
     queryFn: () => kairosApi.getBasketMarketData(basket.slug),
     enabled: Boolean(basket.slug),
     staleTime: 10_000,
-    refetchInterval: 20_000,
+    refetchInterval: (query) => Math.max(30_000, (query.state.data?.refreshAfterSec ?? 30) * 1000),
     refetchOnWindowFocus: true,
   });
   const marketByMint = useMemo(() => new Map((marketData?.assets ?? []).map((asset) => [asset.mint, asset])), [marketData]);
-  const hasLiveData = (marketData?.coverage.available ?? 0) > 0;
+  const marketDataCurrent = Boolean(marketData && Date.now() - Date.parse(marketData.fetchedAt) < Math.max(75_000, (marketData.refreshAfterSec ?? 30) * 2500));
+  const hasLiveData = marketDataCurrent && (marketData?.coverage.available ?? 0) > 0;
 
   async function copy(symbol: string, shortAddress: string, full: string) {
     if (!full) return;
@@ -302,8 +316,8 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h2>Allocation</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Target weights across {tokens.length} basket assets. Market prices reference their mainnet assets; basket execution mints remain environment-specific.
+          <p className="text-xs text-muted-foreground mt-0.5" title="Market references come from corresponding Solana mainnet pools. They do not determine Devnet execution prices or verified NAV.">
+            {tokens.length} assets · indicative mainnet market references
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -312,7 +326,7 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
           ) : hasLiveData && (
             <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-surface-muted/80 border border-border/80 text-foreground backdrop-blur-sm">
               <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              LIVE · {marketData?.coverage.available}/{marketData?.coverage.total}
+              MARKET REF · {marketData?.coverage.available}/{marketData?.coverage.total}
             </div>
           )}
           <div className="flex items-center gap-1.5 text-xs font-mono font-medium px-3 py-1 rounded-full bg-surface-muted/80 border border-border/80 text-foreground w-fit backdrop-blur-sm">
@@ -333,7 +347,7 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
           thickness={28}
           legend={true}
           legendAction="toggle"
-          className="w-full max-w-xl mx-auto"
+          className="market-allocation-chart w-full max-w-xl mx-auto"
         />
       </div>
 
@@ -341,20 +355,17 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
         {tokens.map((h) => {
           const market = marketByMint.get(h.mint);
           const fallbackPrice = h.priceMint ? fallbackPrices[h.priceMint] : undefined;
-          const priceUsd = market?.status === "live" && isNum(market.priceUsd)
-            ? market.priceUsd
-            : fallbackPrice?.priceUsd;
-          const change24h = market?.status === "live" && isNum(market.change24hPct)
-            ? market.change24hPct
-            : fallbackPrice?.change24h ?? null;
-          const isLive = isNum(priceUsd);
+          const useMarket = market?.status === "live" && isNum(market.priceUsd) && (marketDataCurrent || fallbackPrice?.status !== "current");
+          const priceUsd = useMarket ? market?.priceUsd : fallbackPrice?.priceUsd;
+          const change24h = useMarket ? market?.change24hPct : fallbackPrice?.change24h ?? null;
+          const isCurrent = isNum(priceUsd) && (useMarket ? marketDataCurrent : fallbackPrice?.status === "current");
+          const priceSource = useMarket ? "GeckoTerminal" : fallbackPrice?.source;
+          const priceAsOf = useMarket ? marketData?.fetchedAt : fallbackPrice?.asOf;
 
           const shortAddress = h.mint ? `${h.mint.slice(0, 4)}...${h.mint.slice(-4)}` : "Solana";
           const hasChange = isNum(change24h);
           const isUp = hasChange && change24h >= 0;
           const absPct = hasChange ? Math.abs(change24h) : null;
-          const dollarChange = hasChange && isNum(priceUsd) ? Math.abs((priceUsd * change24h) / 100) : null;
-          const formattedDollarChange = dollarChange === null ? null : dollarChange < 0.01 ? dollarChange.toFixed(4) : dollarChange.toFixed(2);
 
           return (
             <article className="holding" key={h.symbol}>
@@ -363,8 +374,8 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
                 <div className="holding-name">
                   <strong className="flex items-center gap-1.5">
                     {h.symbol}
-                    {isLive && (
-                  <span className="size-1.5 rounded-full bg-[#8f8f8f] animate-pulse" title="Live price" />
+                    {isCurrent && (
+                  <span className="size-1.5 rounded-full bg-[#8f8f8f] animate-pulse" title="Current underlying market reference" />
                     )}
                   </strong>
                   <span>{h.name}</span>
@@ -385,16 +396,22 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
                 <div className="holding-price">
                   {fmtPrice(priceUsd)} <Info size={13} />
                 </div>
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground mt-1">
-                  {isLive ? `${market?.dexId ?? (fallbackPrice ? "DexScreener" : "Solana pool")} · live reference` : marketLoading ? "Loading market price" : market?.reason ?? (marketError ? "Market data unavailable" : "No public market feed")}
+                <span className="sr-only holding-price-source" aria-hidden="true">
+                  {isNum(priceUsd) ? `${priceSource} · ${isCurrent ? "current" : "stale"} underlying reference${priceAsOf ? ` · ${new Date(priceAsOf).toLocaleTimeString()}` : ""}` : marketLoading ? "Loading market price" : market?.reason ?? (marketError ? "Market data unavailable" : "No public market feed")}
                 </span>
 
+                <div className="holding-price-meta" title={isNum(priceUsd) ? `${priceSource ?? "Market provider"} underlying market reference${priceAsOf ? ` · updated ${new Date(priceAsOf).toLocaleString()}` : ""}. Not used for Devnet execution.` : market?.reason ?? (marketError ? "Market data unavailable" : "No public market feed")}>
+                  <span className={`market-freshness ${isCurrent ? "is-current" : ""}`} aria-hidden="true" />
+                  <span>{isNum(priceUsd) ? (isCurrent ? "Live reference" : "Cached reference") : marketLoading ? "Fetching price" : "Price unavailable"}</span>
+                  {priceAsOf && <time dateTime={priceAsOf}>{new Date(priceAsOf).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time>}
+                </div>
+
                 <div className={`holding-change ${!hasChange ? "unavailable" : ""}`}>
-                  {hasChange ? <><span>{isUp ? "▲" : "▼"}</span> ${formattedDollarChange} ({absPct!.toFixed(2)}%) <span>24H</span></> : <span>24H change unavailable</span>}
+                  {hasChange ? <><span aria-hidden="true">{isUp ? "▲" : "▼"}</span> {absPct!.toFixed(2)}% <span>24h</span></> : <span>24h change unavailable</span>}
                 </div>
 
                 <div className="holding-bottom">
-                  <span>ALLOCATION</span>
+                  <span>Target allocation</span>
                   <b>{fmtWeight(h.weightBps)}</b>
                 </div>
 
@@ -412,10 +429,11 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
           );
         })}
       </div>
-      <p className="mt-3 text-[10px] text-muted-foreground">
-        24H charts and prices reference corresponding Solana mainnet pools via GeckoTerminal. A start-to-current reference is shown until hourly candles arrive{dataUpdatedAt ? ` · updated ${new Date(dataUpdatedAt).toLocaleTimeString()}` : ""}. These are market references; they do not feed execution quotes or verified NAV history.
+      <p className="hidden">
+        Prices reference corresponding Solana mainnet pools via GeckoTerminal or DEX Screener. A start-to-current reference is shown until hourly candles arrive{dataUpdatedAt ? ` · updated ${new Date(dataUpdatedAt).toLocaleTimeString()}` : ""}. Devnet tokens use these as underlying references; they do not feed execution quotes or verified NAV history.
         {marketError ? " Market data is temporarily unavailable." : ""}
       </p>
+      <p className="mt-3 text-[10px] text-muted-foreground">Indicative mainnet prices refresh about every 30 seconds. They are separate from Devnet execution quotes and verified NAV.{marketError ? " Market data is temporarily unavailable." : ""}</p>
     </div>
   );
 }
@@ -809,26 +827,11 @@ export default function MarketDetailPage() {
   }, [isShareOpen]);
 
   /* ── Wallet ── */
-  const { connected, publicKey, wallets, select } = useWallet();
-  const { setVisible: setWalletModalVisible } = useWalletModal();
+  const { connected, publicKey, connect } = useKairosWallet();
   const { connection } = useConnection();
   const isConnected = connected && !!publicKey;
 
-  const handleConnectWallet = async () => {
-    try {
-      const phantom = wallets?.find((w) => w.adapter.name.toLowerCase() === "phantom");
-      if (phantom && phantom.readyState === WalletReadyState.Installed) {
-        select(phantom.adapter.name);
-        await phantom.adapter.connect();
-        return;
-      }
-    } catch (err: any) {
-      // User closed / rejected the Phantom prompt — don't pop a second modal
-      if (err?.code === 4001 || /reject|cancel|closed/i.test(err?.message ?? "")) return;
-      console.warn("Phantom connect failed, falling back to modal:", err);
-    }
-    setWalletModalVisible(true);
-  };
+  const handleConnectWallet = () => connect();
 
   const handleInvestAction = () => {
     if (!isConnected) void handleConnectWallet();

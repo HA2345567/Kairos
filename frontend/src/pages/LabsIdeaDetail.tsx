@@ -3,19 +3,17 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  ArrowLeft,
-  ArrowDown,
-  ArrowUp,
-  Check,
-  Clock3,
-  Copy,
-  ExternalLink,
-  Info,
-  MessageCircle,
-  PieChart,
-  Share2,
-} from "lucide-react";
+import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
+import ArrowDown from "lucide-react/dist/esm/icons/arrow-down";
+import ArrowUp from "lucide-react/dist/esm/icons/arrow-up";
+import Check from "lucide-react/dist/esm/icons/check";
+import Clock3 from "lucide-react/dist/esm/icons/clock-3";
+import Copy from "lucide-react/dist/esm/icons/copy";
+import ExternalLink from "lucide-react/dist/esm/icons/external-link";
+import Info from "lucide-react/dist/esm/icons/info";
+import MessageCircle from "lucide-react/dist/esm/icons/message-circle";
+import PieChart from "lucide-react/dist/esm/icons/pie-chart";
+import Share2 from "lucide-react/dist/esm/icons/share-2";
 import { PageShell } from "@/components/layout/PageShell";
 import { DonutChart, type DonutChartDatum } from "@/components/arc/donut-chart/donut-chart";
 import { useWalletAuth } from "@/components/auth/WalletAuthProvider";

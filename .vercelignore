@@ -1,0 +1,5 @@
+.codex-build/
+*.inspect.ndjson
+backend/data/
+/test-ledger
+/test-ledger/validator.log

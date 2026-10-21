@@ -117,7 +117,7 @@ export function useMarketBasketNavHistory(slug?: string, window: BasketMarketNav
     // History backfills are deliberately progressive. Check again soon while
     // candles are still arriving instead of leaving the chart stale for 20s.
     refetchInterval: (query) => {
-      if (query.state.status === "error") return false;
+      if (query.state.status === "error") return 30_000;
       const progress = query.state.data?.progress;
       if (!progress) return 10_000;
       if (progress.pendingSymbols.length) return 15_000;

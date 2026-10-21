@@ -5,7 +5,8 @@ import { BasketRow } from "@/components/basket/BasketRow";
 import { BasketCardSkeleton, BasketRowSkeleton } from "@/components/basket/BasketSkeleton";
 import { InvestModal } from "@/components/basket/InvestModal";
 import { Link } from "react-router-dom";
-import { LayoutGrid, Rows3 } from "lucide-react";
+import LayoutGrid from "lucide-react/dist/esm/icons/layout-grid";
+import Rows3 from "lucide-react/dist/esm/icons/rows-3";
 import { cn } from "@/lib/utils";
 import "./cesto.css";
 import { fetchBaskets, type Basket } from "@/lib/baskets-data";
@@ -242,12 +243,6 @@ export default function Markets() {
             Diversified portfolios reflecting themes, strategies, and narratives. Invest in one click, directly to your wallet.
           </p>
         </div>
-
-        {baskets.some((basket) => basket.previewOnly) && (
-          <div className="rounded-xl border border-white/10 bg-[#1C1C1E] px-4 py-3 text-sm text-[#A3A3A3]">
-            Showing the six planned devnet baskets. The market catalog API is unavailable or empty, so these previews are paused and cannot be invested in.
-          </div>
-        )}
 
         {/* Filter Pills & View Mode Bar */}
         <div className="flex items-center justify-between gap-3 pt-1">

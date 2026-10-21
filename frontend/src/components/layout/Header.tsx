@@ -1,12 +1,15 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useState } from "react";
-import { Menu, X, Wallet, ArrowRight, ArrowUpRight } from "lucide-react";
+import Menu from "lucide-react/dist/esm/icons/menu";
+import X from "lucide-react/dist/esm/icons/x";
+import Wallet from "lucide-react/dist/esm/icons/wallet";
+import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
+import ArrowUpRight from "lucide-react/dist/esm/icons/arrow-up-right";
 import { cn } from "@/lib/utils";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { WalletDropdown } from "@/components/wallet/WalletDropdown";
 import { ClusterBanner } from "@/components/system/ClusterBanner";
 import { KairosLogo } from "@/components/common/KairosLogo";
+import { useKairosWallet } from "@/components/wallet/useKairosWallet";
 
 const NAV = [
   { to: "/markets", label: "Baskets" },
@@ -21,24 +24,12 @@ export function Header() {
   const isLanding = location.pathname === "/";
 
   // Solana Wallet Adapter
-  const { connected, publicKey, disconnect, wallet } = useWallet();
-  const { setVisible: setWalletModalVisible } = useWalletModal();
-
+  const { connected, publicKey, disconnect, wallet, connect } = useKairosWallet();
   const isConnected = connected && !!publicKey;
   const rawAddr = publicKey?.toBase58() || null;
   const displayAddr = rawAddr ? `${rawAddr.slice(0, 4)}...${rawAddr.slice(-4)}` : "";
 
-  const handleSignIn = () => {
-    setWalletModalVisible(true);
-  };
-
-  const handleDisconnect = async () => {
-    try {
-      await disconnect();
-    } catch (err) {
-      console.warn("Wallet adapter disconnect error:", err);
-    }
-  };
+  const handleSignIn = () => void connect();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/20">
@@ -111,7 +102,7 @@ export function Header() {
                   address={rawAddr || ""}
                   walletName={wallet?.adapter.name}
                   walletIcon={wallet?.adapter.icon}
-                  onDisconnect={handleDisconnect}
+                  onDisconnect={() => disconnect()}
                 />
               )}
             </>
@@ -203,7 +194,7 @@ export function Header() {
                       </div>
                       <button
                         onClick={() => {
-                          handleDisconnect();
+                      void disconnect();
                           setOpen(false);
                         }}
                         className="text-xs text-rose-600 hover:text-rose-700 font-semibold"

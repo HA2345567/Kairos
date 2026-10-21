@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, Loader2, RefreshCw } from "lucide-react";
+import ExternalLink from "lucide-react/dist/esm/icons/external-link";
+import Loader2 from "lucide-react/dist/esm/icons/loader-2";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import { PageShell } from "@/components/layout/PageShell";
 import { kairosApi } from "@/lib/api-client";
 import { useWalletAuth } from "@/components/auth/WalletAuthProvider";

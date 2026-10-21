@@ -666,6 +666,115 @@ button {
   font-size: 8px;
 }
 
+/* Compact, readable market reference cards. Keep candle paths in their own
+   row so the line can never cross the target allocation label. */
+.holding-data {
+  height: auto;
+  min-height: 168px;
+  padding: 12px 14px 10px;
+  gap: 2px;
+}
+
+.holding-metrics {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.holding-price-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 16px;
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.holding-price-meta time {
+  margin-left: auto;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--muted-foreground), transparent 12%);
+  font-variant-numeric: tabular-nums;
+}
+
+.market-freshness {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: #777;
+}
+
+.market-freshness.is-current {
+  background: #f5f5f5;
+  box-shadow: 0 0 0 2px rgb(245 245 245 / 10%);
+}
+
+.holding-chart {
+  position: relative;
+  width: 100%;
+  height: 40px;
+  flex: none;
+  margin-top: 1px;
+  overflow: hidden;
+  border-radius: 5px;
+}
+
+.market-sparkline,
+.market-sparkline-placeholder {
+  position: relative;
+  inset: auto;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.market-sparkline-placeholder {
+  display: flex;
+  align-items: center;
+  padding: 0 2px;
+  background: linear-gradient(180deg, transparent, rgb(255 255 255 / 2%));
+  font-size: 9px;
+  opacity: 0.72;
+}
+
+.market-sparkline-empty {
+  width: 100%;
+  height: 100%;
+  border-bottom: 1px dashed rgb(255 255 255 / 8%);
+}
+
+.holding-bottom {
+  margin-top: auto;
+  padding-top: 7px;
+  border-top: 1px solid rgb(255 255 255 / 7%);
+}
+
+.holding-bottom span {
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+@media (min-width: 701px) and (max-width: 1050px) {
+  .holdings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .holdings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .holding-data {
+    min-height: 166px;
+  }
+}
+
 .sparkline {
   position: absolute;
   bottom: 0;
@@ -1858,8 +1967,25 @@ button {
     font-size: 20px;
   }
   .allocation-visual {
-    height: 210px;
+    min-height: 0;
+    height: auto;
     gap: 0;
+    padding: 12px 0 8px;
+  }
+  .market-allocation-chart {
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: minmax(0, 1fr) !important;
+    justify-items: center;
+    gap: 14px !important;
+  }
+  .market-allocation-chart > :first-child {
+    width: min(240px, 68vw) !important;
+    max-width: 100%;
+  }
+  .market-allocation-chart > :last-child {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .donut {
     width: 154px;
@@ -1958,13 +2084,16 @@ button {
     width: calc(100% - 32px);
     height: 44px;
     z-index: 29;
-    background: var(--positive);
-    color: #000000;
-    box-shadow: none;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.42);
     font-size: 14px;
     font-weight: 600;
     border-radius: 9px;
     border: none;
+  }
+  .mobile-invest:hover {
+    background: #D4D4D4;
   }
   .help-button {
     right: -10px;

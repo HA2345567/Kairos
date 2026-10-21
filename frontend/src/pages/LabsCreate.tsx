@@ -1,19 +1,17 @@
 import { useState, useMemo, useEffect, useRef, type ChangeEvent, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { PageShell } from "@/components/layout/PageShell";
-import {
-  ChevronLeft,
-  FlaskConical,
-  Plus,
-  Trash2,
-  Send,
-  PieChart as PieIcon,
-  Search,
-  Check,
-  X,
-  Equal,
-  ImagePlus,
-} from "lucide-react";
+import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
+import FlaskConical from "lucide-react/dist/esm/icons/flask-conical";
+import Plus from "lucide-react/dist/esm/icons/plus";
+import Trash2 from "lucide-react/dist/esm/icons/trash-2";
+import Send from "lucide-react/dist/esm/icons/send";
+import PieIcon from "lucide-react/dist/esm/icons/pie-chart";
+import Search from "lucide-react/dist/esm/icons/search";
+import Check from "lucide-react/dist/esm/icons/check";
+import X from "lucide-react/dist/esm/icons/x";
+import Equal from "lucide-react/dist/esm/icons/equal";
+import ImagePlus from "lucide-react/dist/esm/icons/image-plus";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";

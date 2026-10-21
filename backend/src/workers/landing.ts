@@ -25,12 +25,14 @@ const CONFIRM_DEADLINE_MS = 90_000;
 // Devnet slots are much shorter than the old two-second poll interval. Check
 // more often so confirmed legs settle promptly without weakening commitment.
 const CONFIRM_POLL_MS = 750;
-const MAX_CONCURRENT_LEGS = 4;
+// Basket legs are independent transfers; allow a larger bounded batch so a
+// 12-asset execution does not wait through three full confirmation waves.
+const MAX_CONCURRENT_LEGS = 8;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let timer: ReturnType<typeof setInterval> | null = null;
-let draining = false;
+const drainingScopes = new Set<string>();
 
 interface LandJobPayload {
   executionId: string;
@@ -94,7 +96,9 @@ async function confirmedReceipt(execution: Execution, leg: ExecutionLeg, signatu
   if (config.simulateLanding) return undefined;
   const usdc = await resolveUsdcAsset();
   const side = leg.side ?? (execution.type === "open" ? "buy" : execution.type === "close" ? "sell" : undefined);
-  return getLegReceipt(signature, execution.walletAddress, leg.mint, usdc.mint, side, "finalized", execution.fundingAsset ?? "USDC");
+  // The product confirms at Solana's `confirmed` commitment. Waiting for
+  // `finalized` delayed every leg after it was already confirmed and visible.
+  return getLegReceipt(signature, execution.walletAddress, leg.mint, usdc.mint, side, "confirmed", execution.fundingAsset ?? "USDC");
 }
 
 /** No RPC calls inside this transaction: all outcome records commit together. */
@@ -452,9 +456,10 @@ export async function recomputeExecutionStatus(executionId: string): Promise<str
   });
 }
 
-async function processOnce(): Promise<void> {
-  if (draining) return;
-  draining = true;
+async function processOnce(executionId?: string): Promise<void> {
+  const scope = executionId ?? "*";
+  if (drainingScopes.has(scope)) return;
+  drainingScopes.add(scope);
   try {
     // Keep a small number of independent basket legs in flight. Refill a slot
     // as soon as a leg settles so one slow confirmation cannot block later legs.
@@ -462,7 +467,7 @@ async function processOnce(): Promise<void> {
     while (true) {
       const available = MAX_CONCURRENT_LEGS - active.size;
       if (available > 0) {
-        const jobs = await repository.claimJobs(available, Date.now());
+        const jobs = await repository.claimJobs(available, Date.now(), executionId);
         for (const job of jobs) {
           let task!: Promise<void>;
           task = (async () => {
@@ -486,7 +491,7 @@ async function processOnce(): Promise<void> {
       await Promise.race(active);
     }
   } finally {
-    draining = false;
+    drainingScopes.delete(scope);
   }
 }
 

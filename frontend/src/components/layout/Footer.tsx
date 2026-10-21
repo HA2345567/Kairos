@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Check } from "lucide-react";
+import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
+import Check from "lucide-react/dist/esm/icons/check";
 import { toast } from "sonner";
 import { KairosLogo } from "@/components/common/KairosLogo";
 

@@ -66,6 +66,21 @@ async function fixture(status: "PREPARED" | "SUBMITTED" = "SUBMITTED") {
 const jobsFor = (id: string) => all<{ id: string; status: string }>("SELECT id, status FROM jobs WHERE execution_id = ?", id);
 const eventsFor = (id: string) => all("SELECT id FROM outbox WHERE payload::jsonb->>'executionId' = ?", id);
 
+test("a scoped landing drain leaves other executions queued", async () => {
+  const first = await fixture();
+  const second = await fixture();
+  await repository.enqueueJob(first.id, first.payload.legId, "land_leg", first.payload, Date.now() - 1);
+  await repository.enqueueJob(second.id, second.payload.legId, "land_leg", second.payload, Date.now() - 1);
+
+  await processLandingJobsOnce(first.id);
+
+  assert.equal((await repository.getExecution(first.id))?.status, "COMPLETED");
+  assert.equal((await repository.getExecution(second.id))?.status, "SUBMITTED");
+  assert.equal((await jobsFor(second.id))[0]?.status, "queued");
+  await processLandingJobsOnce(second.id);
+  assert.equal((await repository.getExecution(second.id))?.status, "COMPLETED");
+});
+
 test("completed rebalance advances the position to the target version", async () => {
   const { id, mint, walletAddress } = await fixture();
   const execution = (await repository.getExecution(id))!;

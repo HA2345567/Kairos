@@ -1,5 +1,6 @@
 import { repository } from "../db/repository";
 import { config } from "../config";
+import type { Token } from "../db/schema";
 
 /**
  * Devnet quote-price lookup. Impact requires an execution-route quote.
@@ -22,11 +23,12 @@ function effectiveStaleSec(): number {
   return config.chaos.stalePriceSec ?? config.stalePriceSec;
 }
 
-export async function getQuotePrice(mint: string): Promise<QuotePrice> {
-  const token = (await repository.getToken(mint));
+export async function getQuotePrice(mint: string, knownToken?: Token): Promise<QuotePrice> {
+  const [token, latest] = await Promise.all([
+    knownToken ? Promise.resolve(knownToken) : repository.getToken(mint),
+    repository.latestPrice(mint),
+  ]);
   if (!token) throw new Error(`TOKEN_NOT_FOUND:${mint}`);
-
-  const latest = (await repository.latestPrice(mint));
   const now = Date.now();
   if (latest) {
     const ageSec = (now - new Date(latest.ts).getTime()) / 1000;
