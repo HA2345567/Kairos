@@ -1,17 +1,17 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import ArrowUpRight from "lucide-react/dist/esm/icons/arrow-up-right";
 import BookOpen from "lucide-react/dist/esm/icons/book-open";
 import CheckCircle2 from "lucide-react/dist/esm/icons/circle-check";
 import CircleAlert from "lucide-react/dist/esm/icons/circle-alert";
 import Code2 from "lucide-react/dist/esm/icons/code-2";
 import Database from "lucide-react/dist/esm/icons/database";
-import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 import Layers from "lucide-react/dist/esm/icons/layers";
 import LockKeyhole from "lucide-react/dist/esm/icons/lock-keyhole";
-import Server from "lucide-react/dist/esm/icons/server";
+import Search from "lucide-react/dist/esm/icons/search";
+import X from "lucide-react/dist/esm/icons/x";
 import Wallet from "lucide-react/dist/esm/icons/wallet";
-import { Link } from "react-router-dom";
 import { PageShell } from "@/components/layout/PageShell";
+import "./docs-page.css";
 
 const SECTIONS = [
   { id: "overview", label: "Overview" },
@@ -27,6 +27,13 @@ const SECTIONS = [
   { id: "release-status", label: "Release status" },
   { id: "operations", label: "Operations and troubleshooting" },
   { id: "references", label: "References" },
+];
+
+const NAV_GROUPS = [
+  { label: "GETTING STARTED", ids: ["overview", "development"] },
+  { label: "CORE SYSTEM", ids: ["architecture", "execution", "catalog"] },
+  { label: "DATA & API", ids: ["markets", "api", "persistence"] },
+  { label: "SECURITY & OPERATIONS", ids: ["configuration", "security", "release-status", "operations", "references"] },
 ];
 
 const API_GROUPS = [
@@ -52,7 +59,7 @@ const CONFIG_GROUPS = [
 function DocSection({ id, title, eyebrow, children }: { id: string; title: string; eyebrow?: string; children: ReactNode }) {
   return (
     <section id={id} className="scroll-mt-28 border-b border-white/[0.08] py-10 first:pt-0 sm:py-12">
-      {eyebrow && <p className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[#14F195]">{eyebrow}</p>}
+      {eyebrow && <p className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70">{eyebrow}</p>}
       <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{title}</h2>
       <div className="mt-5 space-y-4 text-sm leading-7 text-muted-foreground sm:text-[15px]">{children}</div>
     </section>
@@ -63,8 +70,8 @@ function Callout({ kind = "note", title, children }: { kind?: "note" | "warning"
   const warning = kind === "warning";
   const Icon = warning ? CircleAlert : CheckCircle2;
   return (
-    <aside className={`my-5 flex gap-3 rounded-2xl border p-4 sm:p-5 ${warning ? "border-amber-300/20 bg-amber-300/[0.045]" : "border-[#14F195]/15 bg-[#14F195]/[0.035]"}`}>
-      <Icon className={`mt-0.5 size-4 shrink-0 ${warning ? "text-amber-200" : "text-[#14F195]"}`} aria-hidden="true" />
+    <aside className={`my-5 flex gap-3 rounded-2xl border p-4 sm:p-5 ${warning ? "border-amber-300/20 bg-amber-300/[0.045]" : "border-white/10 bg-white/[0.025]"}`}>
+      <Icon className={`mt-0.5 size-4 shrink-0 ${warning ? "text-amber-200" : "text-white/75"}`} aria-hidden="true" />
       <div>
         <h3 className="font-semibold text-foreground">{title}</h3>
         <div className="mt-1 text-xs leading-6 text-muted-foreground sm:text-sm">{children}</div>
@@ -78,62 +85,100 @@ function CodeBlock({ children }: { children: ReactNode }) {
 }
 
 export default function DocsPage() {
+  const [query, setQuery] = useState("");
+  const [activeSection, setActiveSection] = useState(SECTIONS[0].id);
+  const [activeAnchor, setActiveAnchor] = useState("");
+  const [onPageLinks, setOnPageLinks] = useState<Array<{ id: string; label: string; level: string }>>([]);
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleSections = SECTIONS.filter((section) => {
+    if (!normalizedQuery) return true;
+    const content = typeof document === "undefined"
+      ? ""
+      : document.getElementById(section.id)?.textContent ?? "";
+    return `${section.label} ${content}`.toLowerCase().includes(normalizedQuery);
+  });
+
+  useEffect(() => {
+    const sections = SECTIONS.map(({ id }) => document.getElementById(id)).filter(
+      (section): section is HTMLElement => section !== null,
+    );
+    const headings = Array.from(document.querySelectorAll<HTMLElement>(".docs-article h2, .docs-article h3"));
+    headings.forEach((heading) => {
+      if (!heading.id) {
+        const owner = heading.closest<HTMLElement>("section[id]")?.id ?? "docs";
+        const slug = heading.textContent?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") ?? "section";
+        heading.id = `${owner}-${slug}`;
+      }
+    });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const current = entries
+          .filter((entry) => entry.isIntersecting && entry.target.matches("section[id]"))
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (current) setActiveSection(current.target.id);
+        const currentHeading = entries
+          .filter((entry) => entry.isIntersecting && entry.target.matches("h2, h3"))
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (currentHeading) setActiveAnchor(currentHeading.target.id);
+      },
+      { rootMargin: "-15% 0px -72% 0px", threshold: 0 },
+    );
+    [...sections, ...headings].forEach((element) => observer.observe(element));
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const currentSection = document.getElementById(activeSection);
+    setOnPageLinks(currentSection
+      ? Array.from(currentSection.querySelectorAll<HTMLElement>("h2, h3")).map((heading) => ({ id: heading.id, label: heading.textContent?.trim() ?? "Section", level: heading.tagName.toLowerCase() }))
+      : []);
+  }, [activeSection]);
+
   return (
     <PageShell hideFooter={false} contentTag="div">
-        <main id="top" className="relative isolate min-h-[70vh] overflow-hidden">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[34rem] bg-[radial-gradient(ellipse_at_50%_0%,rgba(20,241,149,0.075),transparent_62%)]" />
-
-        <header className="border-b border-white/[0.07]">
-          <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
-            <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">
-              <BookOpen className="size-3.5 text-[#14F195]" aria-hidden="true" /> Kairos documentation
-              <span className="mx-1 h-3 w-px bg-white/15" />
-              <span className="rounded-full border border-[#14F195]/20 bg-[#14F195]/[0.06] px-2.5 py-1 text-[#14F195]">Solana devnet</span>
-            </div>
-            <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
-              <div>
-                <h1 className="max-w-4xl font-display text-4xl font-semibold leading-[1.04] tracking-[-0.05em] text-foreground sm:text-5xl lg:text-6xl">
-                  Build with the system.<br className="hidden sm:block" /> Understand its boundaries.
-                </h1>
-                <p className="mt-5 max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base">
-                  Product, architecture, local development, API boundaries, transaction safety, and the release limitations of Kairos—all in one maintained guide.
-                </p>
-              </div>
-              <Link to="/" className="inline-flex h-10 items-center gap-2 self-start rounded-full border border-white/10 bg-white/[0.035] px-4 text-xs font-semibold text-white/75 transition hover:border-white/20 hover:bg-white/[0.07] lg:self-end">
-                Back to Kairos <ArrowUpRight className="size-3.5" aria-hidden="true" />
-              </Link>
-            </div>
-            <div className="mt-7 flex flex-wrap gap-2">
-              {[
-                { icon: Layers, label: "React · Vite · TypeScript" },
-                { icon: Server, label: "Bun API and workers" },
-                { icon: Database, label: "PostgreSQL" },
-                { icon: Wallet, label: "Wallet-signed Solana" },
-              ].map(({ icon: Icon, label }) => (
-                <span key={label} className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1.5 text-[11px] font-medium text-white/55">
-                  <Icon className="size-3.5 text-white/35" aria-hidden="true" /> {label}
-                </span>
-              ))}
-            </div>
-          </div>
-        </header>
-
-        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-14 lg:px-8 lg:py-14">
-          <aside className="lg:sticky lg:top-24 lg:h-[calc(100vh-7rem)] lg:self-start">
-            <p className="hidden px-3 pb-3 font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-white/30 lg:block">On this page</p>
-            <nav aria-label="Documentation sections" className="flex gap-1 overflow-x-auto pb-2 lg:block lg:space-y-0.5 lg:overflow-visible lg:pb-0">
-              {SECTIONS.map((section) => (
-                <a key={section.id} href={`#${section.id}`} className="block shrink-0 rounded-lg px-3 py-2 text-xs font-medium text-white/50 transition hover:bg-white/[0.045] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#14F195] lg:py-2.5">
-                  {section.label}
-                </a>
-              ))}
-              <a href="#references" className="mt-4 hidden items-center gap-2 border-t border-white/[0.08] px-3 pt-4 text-xs text-white/40 transition hover:text-white lg:flex">
-                <ExternalLink className="size-3.5" aria-hidden="true" /> Source documents
-              </a>
+        <main id="top" className="docs-page relative min-h-[70vh]">
+        <div className="docs-layout mx-auto grid w-full max-w-[1280px] gap-8 px-6 py-10 lg:grid-cols-[236px_minmax(0,1fr)_176px] lg:gap-10">
+          <aside className="docs-sidebar lg:sticky lg:top-24 lg:self-start">
+            <div className="docs-sidebar-panel">
+              <label className="docs-search">
+                <Search className="size-4 shrink-0 text-white/40" aria-hidden="true" />
+                <span className="sr-only">Search documentation</span>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search documentation"
+                  aria-label="Search documentation"
+                />
+                {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search"><X className="size-3.5" /></button>}
+              </label>
+              <nav aria-label="Documentation sections" className="docs-nav">
+              {NAV_GROUPS.map((group) => {
+                const groupSections = group.ids.map((id) => visibleSections.find((section) => section.id === id)).filter((section): section is typeof SECTIONS[number] => Boolean(section));
+                if (!groupSections.length) return null;
+                return (
+                  <div className="docs-nav-group" key={group.label}>
+                    <p className="docs-nav-heading">{group.label}</p>
+                    {groupSections.map((section) => (
+                      <a key={section.id} href={`#${section.id}`} aria-current={activeSection === section.id ? "location" : undefined} onClick={() => setActiveSection(section.id)} className="docs-nav-link">
+                        {section.label}
+                      </a>
+                    ))}
+                  </div>
+                );
+              })}
+              {visibleSections.length === 0 && <p className="px-3 py-4 text-xs leading-5 text-white/40 lg:hidden">No matching sections.</p>}
             </nav>
+            {visibleSections.length === 0 && <p className="hidden px-3 py-4 text-xs leading-5 text-white/40 lg:block">No matching sections.</p>}
+            </div>
           </aside>
 
-          <article className="min-w-0 max-w-4xl">
+          <article className="docs-article min-w-0 max-w-4xl">
+            <header className="docs-intro">
+              <p className="docs-breadcrumb">DEVELOPERS <span>›</span> DOCUMENTATION <span>›</span> INTRODUCTION</p>
+              <h1>Kairos developer docs</h1>
+              <p>Architecture, APIs, market data, and Solana Devnet operations.</p>
+            </header>
             <DocSection id="overview" title="Overview" eyebrow="01 · Product contract">
               <p>Kairos is a non-custodial thematic basket application for Solana. Investors select a published basket, review a quote and its data provenance, approve transaction(s) in their wallet, and receive constituent SPL tokens in their own token accounts when execution succeeds.</p>
               <p>The browser provides the product UI and wallet boundary. The API validates requests and coordinates execution. PostgreSQL records Kairos workflow state; Solana account and transaction state remains authoritative for token ownership and settlement.</p>
@@ -156,7 +201,7 @@ export default function DocsPage() {
                   { title: "Settlement and providers", icon: Wallet, body: "Solana devnet RPC, Anchor router, SPL token programs, configured swap builder, and optional Pyth Hermes snapshots." },
                 ].map(({ title, icon: Icon, body }) => (
                   <div key={title} className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4 sm:p-5">
-                    <Icon className="size-4 text-[#14F195]" aria-hidden="true" />
+                    <Icon className="size-4 text-white/70" aria-hidden="true" />
                     <h3 className="mt-3 text-sm font-semibold text-foreground">{title}</h3>
                     <p className="mt-1.5 text-xs leading-6 text-muted-foreground">{body}</p>
                   </div>
@@ -165,7 +210,7 @@ export default function DocsPage() {
               <details className="group overflow-hidden rounded-2xl border border-white/[0.08] bg-[#101211]">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs font-semibold text-white/70 marker:hidden sm:px-5">
                   View the full system architecture diagram
-                  <span className="text-[#14F195] transition group-open:rotate-90">›</span>
+                  <span className="text-white/60 transition group-open:rotate-90">›</span>
                 </summary>
                 <div className="border-t border-white/[0.08] p-2 sm:p-4">
                   <img src="/docs/kairos-architecture-diagram.png" alt="Kairos architecture: users, web client, modular API, domain services, PostgreSQL, workers, providers, and Solana devnet" loading="lazy" className="mx-auto h-auto max-h-[1100px] w-full rounded-xl object-contain object-top" />
@@ -184,7 +229,7 @@ export default function DocsPage() {
                   ["Land", "A worker broadcasts the stored signed bytes, checks signature history, confirms each leg, and records receipt-derived outputs and fees."],
                 ].map(([title, body], index) => (
                   <li key={title} className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4 sm:p-5">
-                    <p className="font-mono text-[10px] font-semibold tracking-[0.15em] text-[#14F195]">0{index + 1} / {title.toUpperCase()}</p>
+                    <p className="font-mono text-[10px] font-semibold tracking-[0.15em] text-white/70">0{index + 1} / {title.toUpperCase()}</p>
                     <p className="mt-2 text-xs leading-6 text-muted-foreground">{body}</p>
                   </li>
                 ))}
@@ -196,7 +241,7 @@ export default function DocsPage() {
             </DocSection>
 
             <DocSection id="catalog" title="Catalog and basket lifecycle" eyebrow="04 · Data integrity">
-              <ul className="list-disc space-y-2 pl-5 marker:text-[#14F195]">
+              <ul className="list-disc space-y-2 pl-5 marker:text-white/50">
                 <li>A basket is a named strategy with one or more versioned token allocations.</li>
                 <li>Published versions are append-only; edits produce a new version rather than mutating the historical composition.</li>
                 <li>Allocation weights use integer basis points and must sum to <code>10,000</code> (100%).</li>
@@ -208,7 +253,7 @@ export default function DocsPage() {
 
             <DocSection id="markets" title="Markets, pricing, and performance data" eyebrow="05 · Provenance first">
               <p>Price and history are provider data, not settlement truth. When configured, the backend can ingest Pyth Hermes snapshots for explicitly mapped mint/feed pairs. Registry or seeded devnet values are distinct fallback data and must remain labelled as such.</p>
-              <ul className="list-disc space-y-2 pl-5 marker:text-[#14F195]">
+              <ul className="list-disc space-y-2 pl-5 marker:text-white/50">
                 <li>Execution quotes must use fresh, supported inputs; stale or unavailable market data should block unsafe quote paths.</li>
                 <li>Market and NAV history may be incomplete. The UI should show source and freshness status and must not fabricate missing periods.</li>
                 <li>Backtests and simulated returns are hypothetical, not realized investor returns or a promise of future performance.</li>
@@ -255,8 +300,8 @@ bun run start:backend
 bun run start:frontend`}</CodeBlock>
               <p>Set a valid <code>DATABASE_URL</code>, base58-encoded 64-byte <code>RELAYER_KEYPAIR</code>, and a random <code>JWT_SECRET</code> of at least 32 bytes in <code>backend/.env</code> before starting the API. The frontend Vite proxy forwards API and health paths to the backend in local development.</p>
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4"><p className="text-xs font-semibold text-foreground">Local checks</p><code className="mt-2 block text-xs text-[#14F195]">make test<br />bun run build</code></div>
-                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4"><p className="text-xs font-semibold text-foreground">Health endpoints</p><code className="mt-2 block text-xs text-[#14F195]">GET /health<br />GET /healthz</code></div>
+                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4"><p className="text-xs font-semibold text-foreground">Local checks</p><code className="mt-2 block text-xs text-white/70">make test<br />bun run build</code></div>
+                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4"><p className="text-xs font-semibold text-foreground">Health endpoints</p><code className="mt-2 block text-xs text-white/70">GET /health<br />GET /healthz</code></div>
               </div>
               <p>Offline tests use PGlite and do not prove live RPC, pool, relayer, or router behavior. For the demo seed and devnet setup commands, see the root README and <code>backend/scripts/devnet-setup.ts</code>.</p>
             </DocSection>
@@ -275,7 +320,7 @@ bun run start:frontend`}</CodeBlock>
             </DocSection>
 
             <DocSection id="security" title="Security model" eyebrow="10 · Trust and authority">
-              <ul className="list-disc space-y-2 pl-5 marker:text-[#14F195]">
+              <ul className="list-disc space-y-2 pl-5 marker:text-white/50">
                 <li><strong className="text-foreground">Wallet boundary:</strong> wallet adapters hold user signing keys; the API receives signatures/transaction bytes, not seed phrases.</li>
                 <li><strong className="text-foreground">Transaction validation:</strong> quote expiry, wallet, prepared message, signer, configured program/mint allowlists, and idempotency are checked before execution is queued.</li>
                 <li><strong className="text-foreground">Relayer boundary:</strong> <code>RELAYER_KEYPAIR</code> is a server-side operational secret. Fund it only for the configured role and monitor its balance.</li>
@@ -312,7 +357,7 @@ bun run start:frontend`}</CodeBlock>
                   ["Price chart has gaps", "Check configured PYTH_FEEDS_JSON, feed age limits, provider availability, and the displayed source label. Missing history is an explicit unavailable-data state, not zero return."],
                 ].map(([title, body]) => (
                   <details key={title} className="group rounded-2xl border border-white/[0.08] bg-white/[0.025] px-4 py-3 sm:px-5">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-foreground marker:hidden">{title}<span className="text-[#14F195] transition group-open:rotate-90">›</span></summary>
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-foreground marker:hidden">{title}<span className="text-white/60 transition group-open:rotate-90">›</span></summary>
                     <p className="mt-3 border-t border-white/[0.07] pt-3 text-xs leading-6 text-muted-foreground">{body}</p>
                   </details>
                 ))}
@@ -336,7 +381,7 @@ bun run start:frontend`}</CodeBlock>
                 ))}
               </div>
               <div className="mt-5 flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 text-xs text-white/45">
-                <LockKeyhole className="size-4 shrink-0 text-[#14F195]" aria-hidden="true" />
+                <LockKeyhole className="size-4 shrink-0 text-white/65" aria-hidden="true" />
                 Documentation is maintained with the code. Re-check setup and release status after changing providers, program IDs, fee policy, or wallet integrations.
               </div>
             </DocSection>
@@ -346,6 +391,16 @@ bun run start:frontend`}</CodeBlock>
               <a href="#top" className="inline-flex items-center gap-1.5 transition hover:text-white/70">Back to top <ArrowUpRight className="size-3" aria-hidden="true" /></a>
             </div>
           </article>
+          <aside className="docs-toc" aria-label="On this page">
+            <div className="docs-toc-title"><BookOpen className="size-3.5" aria-hidden="true" /> ON THIS PAGE</div>
+            <nav>
+              {onPageLinks.map((item) => (
+                <a key={item.id} href={`#${item.id}`} aria-current={activeAnchor === item.id ? "location" : undefined} className={item.level === "h3" ? "docs-toc-link is-nested" : "docs-toc-link"}>
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+          </aside>
         </div>
       </main>
     </PageShell>

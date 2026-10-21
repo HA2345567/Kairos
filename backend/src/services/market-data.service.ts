@@ -36,7 +36,7 @@ export const SOLANA_MINTS: Record<string, string> = {
 };
 
 const NO_PUBLIC_MARKET = new Set(["OUSG", "BUIDL"]);
-const CACHE_MS = 60_000;
+const CACHE_MS = 30_000;
 const PROVIDER_URL = "https://api.geckoterminal.com/api/v2/networks/solana/tokens/multi";
 
 type BasketToken = { mint: string; symbol: string; name?: string; weightBps: number };
