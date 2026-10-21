@@ -5,7 +5,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
 import type { HTMLMotionProps, MotionProps, Transition, Variants } from "motion/react";
-import { X } from "lucide-react";
+import X from "lucide-react/dist/esm/icons/x";
 import { motionTokens } from "@/lib/motion-tokens";
 import styles from "./card.module.css";
 

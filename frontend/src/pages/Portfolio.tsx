@@ -1,6 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useQuery } from "@tanstack/react-query";
 import { PageShell } from "@/components/layout/PageShell";
 import { useBaskets, type Basket } from "@/lib/baskets-data";
@@ -9,24 +7,24 @@ import type { Execution } from "@/lib/api-types";
 import { InvestModal } from "@/components/basket/InvestModal";
 import { PositionActions } from "@/components/portfolio/PositionActions";
 import { Link } from "react-router-dom";
-import { BasketCardSkeleton, PortfolioSkeleton } from "@/components/basket/BasketSkeleton";
+import { BasketCardSkeleton } from "@/components/basket/BasketSkeleton";
 import { BasketCard } from "@/components/basket/BasketCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTokenPrices } from "@/hooks/useTokenPrices";
-import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  ExternalLink,
-  Layers,
-  RefreshCw,
-  Wallet,
-  WalletCards,
-} from "lucide-react";
+import ArrowDownLeft from "lucide-react/dist/esm/icons/arrow-down-left";
+import ArrowUpRight from "lucide-react/dist/esm/icons/arrow-up-right";
+import ExternalLink from "lucide-react/dist/esm/icons/external-link";
+import Layers from "lucide-react/dist/esm/icons/layers";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import Wallet from "lucide-react/dist/esm/icons/wallet";
+import WalletCards from "lucide-react/dist/esm/icons/wallet-cards";
 import { cn } from "@/lib/utils";
 import { resolveUsdcMint } from "@/lib/usdc";
 import { useAppConfig } from "@/hooks/useAppConfig";
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { useWalletAuth } from "@/components/auth/WalletAuthProvider";
+import { useKairosWallet } from "@/components/wallet/useKairosWallet";
+import { ConnectWalletButton } from "@/components/wallet/ConnectWalletButton";
 import "./cesto.css";
 
 interface TokenBalance {
@@ -102,9 +100,7 @@ export default function Portfolio() {
   // Keep the empty fallback stable so balance updates do not retrigger the
   // wallet-fetching effect on every render while the catalog is unavailable.
   const { data: catalogBaskets = EMPTY_CATALOG } = useBaskets();
-  const { connected, publicKey } = useWallet();
-  const { setVisible: setWalletModalVisible } = useWalletModal();
-  const { connection } = useConnection();
+  const { connected, publicKey, connection } = useKairosWallet();
   const { authenticated, authenticating, error: authError, ensureAuthenticated } = useWalletAuth();
 
   const isConnected = connected && !!publicKey;
@@ -191,7 +187,8 @@ export default function Portfolio() {
       // FR-16: resolve the configured USDC mint; never a hardcoded constant.
       const usdcMint = resolveUsdcMint(configMint);
       const usdcAmt = usdcMint ? foundBalances[usdcMint] || 0 : 0;
-      const solPrice = livePrices[PRICE_MINTS.SOL]?.priceUsd ?? null;
+      const solReference = livePrices[PRICE_MINTS.SOL];
+      const solPrice = solReference?.status === "current" ? solReference.priceUsd : null;
 
       const knownTokens = new Map(catalogBaskets.flatMap((basket) => basket.tokens).map((token) => [token.mint, token]));
       const heldTokens = Object.entries(foundBalances)
@@ -280,12 +277,7 @@ export default function Portfolio() {
                   Connect the wallet that holds your Devnet assets to load balances, basket positions, and execution history.
                 </p>
               </div>
-              <div className="pt-2">
-                <button type="button" className="explore-button" onClick={() => setWalletModalVisible(true)}>
-                  <span>Connect wallet</span>
-                  <Wallet className="size-4" />
-                </button>
-              </div>
+              <ConnectWalletButton className="mt-2" />
             </div>
           </section>
 
@@ -302,14 +294,6 @@ export default function Portfolio() {
             </div>
           </section>
         </div>
-      </PageShell>
-    );
-  }
-
-  if (loading && tokenBalances.length === 0) {
-    return (
-      <PageShell>
-        <PortfolioSkeleton />
       </PageShell>
     );
   }
@@ -412,8 +396,8 @@ export default function Portfolio() {
             <BigStat
               label="Native SOL Balance"
               value={`${solBalance.toFixed(4)} SOL`}
-              sub={livePrices[PRICE_MINTS.SOL]?.priceUsd == null
-                ? "SOL price unavailable"
+              sub={livePrices[PRICE_MINTS.SOL]?.status !== "current"
+                ? livePrices[PRICE_MINTS.SOL]?.status === "stale" ? "SOL market reference is stale" : "SOL price unavailable"
                 : `Estimated $${(solBalance * livePrices[PRICE_MINTS.SOL].priceUsd).toFixed(2)} USD`}
               loading={loading}
             />

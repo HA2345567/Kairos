@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useEffect } from "react";
-import { ArrowLeft } from "lucide-react";
+import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
 import { PageShell } from "@/components/layout/PageShell";
 
 const NotFound = () => {

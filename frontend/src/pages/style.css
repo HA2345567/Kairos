@@ -1858,8 +1858,25 @@ button {
     font-size: 20px;
   }
   .allocation-visual {
-    height: 210px;
+    min-height: 0;
+    height: auto;
     gap: 0;
+    padding: 12px 0 8px;
+  }
+  .market-allocation-chart {
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: minmax(0, 1fr) !important;
+    justify-items: center;
+    gap: 14px !important;
+  }
+  .market-allocation-chart > :first-child {
+    width: min(240px, 68vw) !important;
+    max-width: 100%;
+  }
+  .market-allocation-chart > :last-child {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .donut {
     width: 154px;
@@ -1958,13 +1975,16 @@ button {
     width: calc(100% - 32px);
     height: 44px;
     z-index: 29;
-    background: var(--positive);
-    color: #000000;
-    box-shadow: none;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.42);
     font-size: 14px;
     font-weight: 600;
     border-radius: 9px;
     border: none;
+  }
+  .mobile-invest:hover {
+    background: #D4D4D4;
   }
   .help-button {
     right: -10px;

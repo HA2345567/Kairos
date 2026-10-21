@@ -162,6 +162,17 @@ async function prepareWithLegs(opts: {
   // unknown. Sell-only work never reaches this gate.
   await assertPrepareHealth(hasBuys);
 
+  // Load the token registry rows together. Quote construction already uses
+  // parallel reads, and prepare should not issue one serialized DB read per
+  // asset before it can build the transaction batch.
+  const tokens = await Promise.all(opts.legs.map((leg) => repository.getToken(leg.mint)));
+  const tokenByMint = new Map<string, NonNullable<(typeof tokens)[number]>>();
+  opts.legs.forEach((leg, index) => {
+    const token = tokens[index];
+    if (!token) throw new AppError("BASKET_NOT_FOUND", `Leg mint ${leg.mint} is not in the token registry`, 422);
+    tokenByMint.set(leg.mint, token);
+  });
+
   let blockhash: string;
   let lastValidBlockHeight: number;
 
@@ -258,9 +269,8 @@ async function prepareWithLegs(opts: {
     );
   }
 
-  const preparedLegResults = await mapWithConcurrency(opts.legs, 4, async (legIn, i) => {
-    const token = (await repository.getToken(legIn.mint));
-    if (!token) throw new AppError("BASKET_NOT_FOUND", `Leg mint ${legIn.mint} is not in the token registry`, 422);
+  const preparedLegResults = await mapWithConcurrency(opts.legs, 8, async (legIn, i) => {
+    const token = tokenByMint.get(legIn.mint)!;
     const decimals = token.decimals;
     const price = token.priceUsd > 0 ? token.priceUsd : 1;
     const inBase = usdToBase(legIn.inUsdcAmount);

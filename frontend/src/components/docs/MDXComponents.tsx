@@ -1,4 +1,8 @@
-import { Info, AlertTriangle, CheckCircle, Lightbulb, Bot } from "lucide-react";
+import Info from "lucide-react/dist/esm/icons/info";
+import AlertTriangle from "lucide-react/dist/esm/icons/alert-triangle";
+import CheckCircle from "lucide-react/dist/esm/icons/check-circle";
+import Lightbulb from "lucide-react/dist/esm/icons/lightbulb";
+import Bot from "lucide-react/dist/esm/icons/bot";
 import { cn } from "@/lib/utils";
 
 export const MDXComponents = {

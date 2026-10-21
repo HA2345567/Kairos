@@ -55,8 +55,7 @@ export function cacheMarketHistoryResult(
     // until the refreshed response has at least as much verified coverage.
     if (cached?.history.length && (
       data.history.length === 0 ||
-      data.progress.coverageWeightBps < cached.progress.coverageWeightBps ||
-      data.history.length < cached.history.length
+      data.progress.coverageWeightBps < cached.progress.coverageWeightBps
     )) {
       return cached;
     }

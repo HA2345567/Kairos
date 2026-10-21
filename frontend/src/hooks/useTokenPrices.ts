@@ -1,79 +1,51 @@
-/**
- * useTokenPrices
- * Fetches real-time USD prices from Jupiter Price API v2 for given mint addresses.
- * Refreshes every 30s. Falls back silently to static values if the API is down.
- *
- * Jupiter Price API v2: https://api.jup.ag/price/v2?ids=<mint,...>&showExtraInfo=true
- * Response shape: { data: { [mint]: { id, type, price, extraInfo?: { last24hChange?: { price: number } } } } }
- */
-
-import { useState, useEffect, useRef, useCallback } from "react";
+/** Shared public-mainnet price references for display. Devnet test mints use
+ * their underlying priceMint, and these values never become execution quotes. */
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { kairosApi } from "@/lib/api-client";
 
 export interface TokenPrice {
   mint: string;
   priceUsd: number;
-  change24h: number | null; // percent, e.g. 3.4 means +3.4%; null when provider has no value
+  change24h: number | null;
+  source: "GeckoTerminal" | "DEX Screener";
+  asOf: string;
+  status: "current" | "stale";
 }
 
 type PriceMap = Record<string, TokenPrice>;
+const REFRESH_INTERVAL_MS = 60_000;
+const cache = new Map<string, { prices: PriceMap; fetchedAt: number }>();
+const requests = new Map<string, Promise<PriceMap>>();
 
-const JUP_PRICE_URL = "https://api.jup.ag/price/v2";
-const REFRESH_INTERVAL_MS = 30_000;
-
-// Cache shared across hook instances so parallel components don't duplicate requests
-let cachedPrices: PriceMap = {};
-let lastFetchedMints = "";
-let lastFetchTime = 0;
-let inFlight: Promise<PriceMap> | null = null;
-
-async function fetchLiveTokenPrices(mints: string[]): Promise<PriceMap> {
-  const out: PriceMap = {};
-  if (mints.length === 0) return out;
-
-  // DexScreener allows batches up to 30 addresses per request
-  const batchSize = 30;
-  const batches: string[][] = [];
-  for (let i = 0; i < mints.length; i += batchSize) {
-    batches.push(mints.slice(i, i + batchSize));
-  }
-
-  await Promise.all(
-    batches.map(async (batch) => {
-      try {
-        const url = `https://api.dexscreener.com/latest/dex/tokens/${batch.join(",")}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
-        if (!res.ok) return;
-
-        const data = await res.json();
-        const pairs = data?.pairs || [];
-
-        // Track highest liquidity pair for each token address
-        const bestPairByMint: Record<string, any> = {};
-        for (const pair of pairs) {
-          const addr = pair.baseToken?.address;
-          if (!addr) continue;
-
-          const currentLiq = pair.liquidity?.usd || 0;
-          if (!bestPairByMint[addr] || currentLiq > (bestPairByMint[addr].liquidity?.usd || 0)) {
-            bestPairByMint[addr] = pair;
-          }
+async function requestPrices(mints: string[]): Promise<PriceMap> {
+  const key = mints.join(",");
+  const pending = requests.get(key);
+  if (pending) return pending;
+  const request = (async () => {
+    const prices: PriceMap = {};
+    const batches = Array.from({ length: Math.ceil(mints.length / 30) }, (_, index) => mints.slice(index * 30, (index + 1) * 30));
+    const responses = await Promise.all(batches.map((batch) => kairosApi.getMarketReferencePrices(batch)));
+    for (const payload of responses) {
+      for (const mint of mints) {
+        const price = payload.prices?.[mint];
+        if (price && Number.isFinite(price.priceUsd) && price.priceUsd! > 0 && price.source && price.asOf && price.status !== "unavailable") {
+          prices[mint] = {
+            mint,
+            priceUsd: price.priceUsd!,
+            change24h: typeof price.change24h === "number" && Number.isFinite(price.change24h) ? price.change24h : null,
+            source: price.source,
+            asOf: price.asOf,
+            status: price.status,
+          };
         }
-
-        for (const mint of batch) {
-          const pair = bestPairByMint[mint];
-          if (pair && pair.priceUsd) {
-            const priceUsd = parseFloat(pair.priceUsd) || 0;
-            const change24h = typeof pair.priceChange?.h24 === "number" ? pair.priceChange.h24 : null;
-            out[mint] = { mint, priceUsd, change24h };
-          }
-        }
-      } catch (err: any) {
-        console.warn("[useTokenPrices] DexScreener batch error:", err?.message);
       }
-    })
-  );
-
-  return out;
+    }
+    cache.set(key, { prices, fetchedAt: Date.now() });
+    return prices;
+  })();
+  requests.set(key, request);
+  try { return await request; }
+  finally { if (requests.get(key) === request) requests.delete(key); }
 }
 
 export function useTokenPrices(mints: string[]): {
@@ -82,58 +54,40 @@ export function useTokenPrices(mints: string[]): {
   error: string | null;
   refetch: () => void;
 } {
-  const [prices, setPrices] = useState<PriceMap>(cachedPrices);
+  const key = [...new Set(mints)].sort().join(",");
+  const requested = useMemo(() => key ? key.split(",") : [], [key]);
+  const latestKey = useRef(key);
+  latestKey.current = key;
+  const [prices, setPrices] = useState<PriceMap>(() => cache.get(key)?.prices ?? {});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const mintsKey = mints.slice().sort().join(",");
-
-  const load = useCallback(async () => {
-    if (mints.length === 0) return;
-
-    const now = Date.now();
-    // Use in-memory cache if same mints & fresh within 30s
-    if (
-      mintsKey === lastFetchedMints &&
-      now - lastFetchTime < REFRESH_INTERVAL_MS &&
-      Object.keys(cachedPrices).length > 0
-    ) {
-      setPrices({ ...cachedPrices });
+  const load = useCallback(async (force = false) => {
+    if (!requested.length) { setPrices({}); return; }
+    const cached = cache.get(key);
+    if (!force && cached && Date.now() - cached.fetchedAt < REFRESH_INTERVAL_MS) {
+      if (latestKey.current === key) setPrices(cached.prices);
       return;
     }
-
-    // Deduplicate concurrent requests
-    if (!inFlight) {
-      inFlight = fetchLiveTokenPrices(mints).finally(() => {
-        inFlight = null;
-      });
-    }
-
+    setLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-      const result = await inFlight!;
-      cachedPrices = { ...cachedPrices, ...result };
-      lastFetchedMints = mintsKey;
-      lastFetchTime = Date.now();
-      setPrices({ ...cachedPrices });
-    } catch (err: any) {
-      console.warn("[useTokenPrices] Jupiter API error:", err?.message);
-      setError(err?.message ?? "Price fetch failed");
-      // Keep showing stale/static values — don't wipe existing prices
+      const next = await requestPrices(requested);
+      if (latestKey.current === key) { setPrices(next); setError(null); }
+    } catch (failure) {
+      if (latestKey.current === key) {
+        setPrices({});
+        setError(failure instanceof Error ? failure.message : "Market prices unavailable");
+      }
     } finally {
-      setLoading(false);
+      if (latestKey.current === key) setLoading(false);
     }
-  }, [mintsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, requested]);
 
   useEffect(() => {
-    load();
-    timerRef.current = setInterval(load, REFRESH_INTERVAL_MS);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    void load();
+    const timer = window.setInterval(() => void load(true), REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
   }, [load]);
 
-  return { prices, loading, error, refetch: load };
+  return { prices, loading, error, refetch: () => void load(true) };
 }

@@ -111,6 +111,25 @@
   transition: opacity 150ms ease;
 }
 
+.kairos-promptbar-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.kairos-promptbar-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
 @media (max-width: 640px) {
   .kairos-promptbar-kbd {
     display: none;

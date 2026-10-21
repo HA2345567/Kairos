@@ -1,30 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import {
-  ArrowRight,
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  Copy,
-  Info,
-  Loader2,
-  MessageCircle,
-  ShieldCheck,
-  Send,
-  Share2,
-  TrendingUp,
-  Wallet,
-  X,
-} from "lucide-react";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import { WalletReadyState } from "@solana/wallet-adapter-base";
+import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
+import ArrowUpRight from "lucide-react/dist/esm/icons/arrow-up-right";
+import Check from "lucide-react/dist/esm/icons/check";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
+import Copy from "lucide-react/dist/esm/icons/copy";
+import Info from "lucide-react/dist/esm/icons/info";
+import Loader2 from "lucide-react/dist/esm/icons/loader-2";
+import MessageCircle from "lucide-react/dist/esm/icons/message-circle";
+import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
+import Send from "lucide-react/dist/esm/icons/send";
+import Share2 from "lucide-react/dist/esm/icons/share-2";
+import TrendingUp from "lucide-react/dist/esm/icons/trending-up";
+import Wallet from "lucide-react/dist/esm/icons/wallet";
+import X from "lucide-react/dist/esm/icons/x";
+import { useConnection } from "@solana/wallet-adapter-react";
 import { toast } from "sonner";
 
 import { Header } from "@/components/layout/Header";
 import { InvestModal } from "@/components/basket/InvestModal";
+import { useKairosWallet } from "@/components/wallet/useKairosWallet";
 import { MarketDetailSkeleton } from "@/components/basket/BasketSkeleton";
 import { TechnicalChart } from "@/components/basket/TechnicalChart";
 import { DonutChart } from "@/components/arc/donut-chart/donut-chart";
@@ -220,7 +217,7 @@ function PerformanceChart({ basket, mobile = false }: { basket: Basket; mobile?:
   );
 }
 
-function MarketSparkline({ values, color, status }: { values: number[] | null | undefined; color: string; status: "loading" | "ready" | "summary" | "unavailable" }) {
+function MarketSparkline({ values, color, status }: { values: number[] | null | undefined; color: string; status: "loading" | "ready" | "stale" | "summary" | "unavailable" }) {
   const points = (values ?? []).filter((value) => Number.isFinite(value));
   if (points.length < 2) {
     if (status === "unavailable") return null;
@@ -242,7 +239,7 @@ function MarketSparkline({ values, color, status }: { values: number[] | null | 
   const area = `${line} L220,44 L0,44 Z`;
 
   return (
-    <svg className="market-sparkline" viewBox="0 0 220 44" preserveAspectRatio="none" role="img" aria-label={status === "summary" ? "24 hour starting and current price reference; hourly candles are loading" : "24 hour price trend"}>
+    <svg className="market-sparkline" viewBox="0 0 220 44" preserveAspectRatio="none" role="img" aria-label={status === "summary" ? "24 hour starting and current price reference; hourly candles are loading" : status === "stale" ? "Cached 24 hour price trend; updating" : "24 hour price trend"}>
       <defs>
         <linearGradient id={`market-gradient-${color.replace("#", "")}`} x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.24" />
@@ -250,6 +247,7 @@ function MarketSparkline({ values, color, status }: { values: number[] | null | 
         </linearGradient>
       </defs>
       {status === "summary" && <title>24H start-to-current reference. Replaced by hourly market candles when available.</title>}
+      {status === "stale" && <title>Cached 24H market candles. Refreshing.</title>}
       <path d={area} fill={`url(#market-gradient-${color.replace("#", "")})`} />
       <path d={line} fill="none" stroke={color} strokeWidth="1.8" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
@@ -272,7 +270,8 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
     refetchOnWindowFocus: true,
   });
   const marketByMint = useMemo(() => new Map((marketData?.assets ?? []).map((asset) => [asset.mint, asset])), [marketData]);
-  const hasLiveData = (marketData?.coverage.available ?? 0) > 0;
+  const marketDataCurrent = Boolean(marketData && Date.now() - Date.parse(marketData.fetchedAt) < 2 * 60_000);
+  const hasLiveData = marketDataCurrent && (marketData?.coverage.available ?? 0) > 0;
 
   async function copy(symbol: string, shortAddress: string, full: string) {
     if (!full) return;
@@ -312,7 +311,7 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
           ) : hasLiveData && (
             <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold px-2.5 py-1 rounded-full bg-surface-muted/80 border border-border/80 text-foreground backdrop-blur-sm">
               <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              LIVE · {marketData?.coverage.available}/{marketData?.coverage.total}
+              MARKET REF · {marketData?.coverage.available}/{marketData?.coverage.total}
             </div>
           )}
           <div className="flex items-center gap-1.5 text-xs font-mono font-medium px-3 py-1 rounded-full bg-surface-muted/80 border border-border/80 text-foreground w-fit backdrop-blur-sm">
@@ -333,7 +332,7 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
           thickness={28}
           legend={true}
           legendAction="toggle"
-          className="w-full max-w-xl mx-auto"
+          className="market-allocation-chart w-full max-w-xl mx-auto"
         />
       </div>
 
@@ -341,13 +340,12 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
         {tokens.map((h) => {
           const market = marketByMint.get(h.mint);
           const fallbackPrice = h.priceMint ? fallbackPrices[h.priceMint] : undefined;
-          const priceUsd = market?.status === "live" && isNum(market.priceUsd)
-            ? market.priceUsd
-            : fallbackPrice?.priceUsd;
-          const change24h = market?.status === "live" && isNum(market.change24hPct)
-            ? market.change24hPct
-            : fallbackPrice?.change24h ?? null;
-          const isLive = isNum(priceUsd);
+          const useMarket = market?.status === "live" && isNum(market.priceUsd) && (marketDataCurrent || fallbackPrice?.status !== "current");
+          const priceUsd = useMarket ? market?.priceUsd : fallbackPrice?.priceUsd;
+          const change24h = useMarket ? market?.change24hPct : fallbackPrice?.change24h ?? null;
+          const isCurrent = isNum(priceUsd) && (useMarket ? marketDataCurrent : fallbackPrice?.status === "current");
+          const priceSource = useMarket ? "GeckoTerminal" : fallbackPrice?.source;
+          const priceAsOf = useMarket ? marketData?.fetchedAt : fallbackPrice?.asOf;
 
           const shortAddress = h.mint ? `${h.mint.slice(0, 4)}...${h.mint.slice(-4)}` : "Solana";
           const hasChange = isNum(change24h);
@@ -363,8 +361,8 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
                 <div className="holding-name">
                   <strong className="flex items-center gap-1.5">
                     {h.symbol}
-                    {isLive && (
-                  <span className="size-1.5 rounded-full bg-[#8f8f8f] animate-pulse" title="Live price" />
+                    {isCurrent && (
+                  <span className="size-1.5 rounded-full bg-[#8f8f8f] animate-pulse" title="Current underlying market reference" />
                     )}
                   </strong>
                   <span>{h.name}</span>
@@ -386,7 +384,7 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
                   {fmtPrice(priceUsd)} <Info size={13} />
                 </div>
                 <span className="text-[10px] uppercase tracking-wide text-muted-foreground mt-1">
-                  {isLive ? `${market?.dexId ?? (fallbackPrice ? "DexScreener" : "Solana pool")} · live reference` : marketLoading ? "Loading market price" : market?.reason ?? (marketError ? "Market data unavailable" : "No public market feed")}
+                  {isNum(priceUsd) ? `${priceSource} · ${isCurrent ? "current" : "stale"} underlying reference${priceAsOf ? ` · ${new Date(priceAsOf).toLocaleTimeString()}` : ""}` : marketLoading ? "Loading market price" : market?.reason ?? (marketError ? "Market data unavailable" : "No public market feed")}
                 </span>
 
                 <div className={`holding-change ${!hasChange ? "unavailable" : ""}`}>
@@ -413,7 +411,7 @@ function Allocation({ tokens, basket }: { tokens: BasketToken[]; basket: Basket 
         })}
       </div>
       <p className="mt-3 text-[10px] text-muted-foreground">
-        24H charts and prices reference corresponding Solana mainnet pools via GeckoTerminal. A start-to-current reference is shown until hourly candles arrive{dataUpdatedAt ? ` · updated ${new Date(dataUpdatedAt).toLocaleTimeString()}` : ""}. These are market references; they do not feed execution quotes or verified NAV history.
+        Prices reference corresponding Solana mainnet pools via GeckoTerminal or DEX Screener. A start-to-current reference is shown until hourly candles arrive{dataUpdatedAt ? ` · updated ${new Date(dataUpdatedAt).toLocaleTimeString()}` : ""}. Devnet tokens use these as underlying references; they do not feed execution quotes or verified NAV history.
         {marketError ? " Market data is temporarily unavailable." : ""}
       </p>
     </div>
@@ -809,26 +807,11 @@ export default function MarketDetailPage() {
   }, [isShareOpen]);
 
   /* ── Wallet ── */
-  const { connected, publicKey, wallets, select } = useWallet();
-  const { setVisible: setWalletModalVisible } = useWalletModal();
+  const { connected, publicKey, connect } = useKairosWallet();
   const { connection } = useConnection();
   const isConnected = connected && !!publicKey;
 
-  const handleConnectWallet = async () => {
-    try {
-      const phantom = wallets?.find((w) => w.adapter.name.toLowerCase() === "phantom");
-      if (phantom && phantom.readyState === WalletReadyState.Installed) {
-        select(phantom.adapter.name);
-        await phantom.adapter.connect();
-        return;
-      }
-    } catch (err: any) {
-      // User closed / rejected the Phantom prompt — don't pop a second modal
-      if (err?.code === 4001 || /reject|cancel|closed/i.test(err?.message ?? "")) return;
-      console.warn("Phantom connect failed, falling back to modal:", err);
-    }
-    setWalletModalVisible(true);
-  };
+  const handleConnectWallet = () => connect();
 
   const handleInvestAction = () => {
     if (!isConnected) void handleConnectWallet();

@@ -11,16 +11,14 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion";
-import {
-  ArrowRight,
-  ShieldCheck,
-  TrendingUp,
-  Layers,
-  Sparkles,
-  Zap,
-  Radio,
-  ExternalLink,
-} from "lucide-react";
+import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
+import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
+import TrendingUp from "lucide-react/dist/esm/icons/trending-up";
+import Layers from "lucide-react/dist/esm/icons/layers";
+import Sparkles from "lucide-react/dist/esm/icons/sparkles";
+import Zap from "lucide-react/dist/esm/icons/zap";
+import Radio from "lucide-react/dist/esm/icons/radio";
+import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 
 const FAQS = [
   {
@@ -65,8 +63,10 @@ export default function Landing() {
         {/* Background Artwork Layer — Pure classical ruins visible ONLY in this hero area */}
         <div className="absolute inset-0 pointer-events-none select-none overflow-hidden z-0">
           <img
-            src="/hero-ruins.png"
+            src="/hero-ruins.webp"
             alt="Kairos Architectural Ruins"
+            fetchPriority="high"
+            decoding="async"
             className="w-full h-full object-cover object-center"
           />
         </div>
@@ -207,6 +207,8 @@ export default function Landing() {
           <img
             src="/footer-hands.jpg"
             alt="Kairos — Human Taste Meets Algorithmic Execution"
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-contain object-center select-none pointer-events-none"
           />
           {/* Subtle atmospheric edge blending */}

@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
+import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
+import LoaderCircle from "lucide-react/dist/esm/icons/loader-circle";
 import { PageShell } from "@/components/layout/PageShell";
 import { kairosApi } from "@/lib/api-client";
 import type { LabsBasket } from "@/lib/api-types";

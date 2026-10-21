@@ -1,6 +1,6 @@
 import { Basket } from "@/lib/baskets-data";
 import { Link } from "react-router-dom";
-import { Sparkles } from "lucide-react";
+import Sparkles from "lucide-react/dist/esm/icons/sparkles";
 import { cn } from "@/lib/utils";
 import { TokenAvatar } from "@/components/common/TokenAvatar";
 import { BasketSparkline } from "@/components/common/BasketSparkline";
@@ -11,7 +11,7 @@ interface BasketRowProps {
   basket: Basket;
   index: number;
   onInvestClick?: (basket: Basket) => void;
-  livePrices?: Record<string, { priceUsd: number; change24h: number | null }>;
+  livePrices?: Record<string, { priceUsd: number; change24h: number | null; status: "current" | "stale" }>;
 }
 
 export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRowProps) {
@@ -32,7 +32,7 @@ export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRo
   const returnString = historicalReturn !== null ? `${historicalReturn >= 0 ? "+" : ""}${historicalReturn.toFixed(2)}%` : null;
   const pricedTokens = basket.tokens
     .map((token) => ({ token, price: livePrices?.[token.priceMint ?? token.mint] }))
-    .filter((item): item is { token: Basket["tokens"][number]; price: { priceUsd: number; change24h: number | null } } => Boolean(item.price && typeof item.price.change24h === "number"));
+    .filter((item): item is { token: Basket["tokens"][number]; price: { priceUsd: number; change24h: number; status: "current" | "stale" } } => Boolean(item.price?.status === "current" && typeof item.price.change24h === "number"));
   const pricedWeight = pricedTokens.reduce((sum, item) => sum + item.token.weightBps, 0);
   const weightedChange24h = pricedWeight > 0
     ? pricedTokens.reduce((sum, item) => sum + item.price.change24h * item.token.weightBps, 0) / pricedWeight
@@ -89,7 +89,7 @@ export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRo
               ))}
             </div>
             {weightedChange24h !== null && (
-              <span className={cn("font-mono text-[10px] font-semibold", weightedChange24h >= 0 ? "text-emerald-400" : "text-rose-400")}>
+              <span title="Current underlying mainnet market reference; not a Devnet execution quote" className={cn("font-mono text-[10px] font-semibold", weightedChange24h >= 0 ? "text-emerald-400" : "text-rose-400")}>
                 24h {weightedChange24h >= 0 ? "+" : ""}{weightedChange24h.toFixed(2)}%
               </span>
             )}

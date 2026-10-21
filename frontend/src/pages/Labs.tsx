@@ -5,22 +5,20 @@ import { useQuery } from "@tanstack/react-query";
 import { kairosApi } from "@/lib/api-client";
 import type { LabsBasket } from "@/lib/api-types";
 import { useWalletAuth } from "@/components/auth/WalletAuthProvider";
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  ArrowUpRight,
-  Boxes,
-  ChevronDown,
-  Clock,
-  Lightbulb,
-  Layers,
-  Medal,
-  Plus,
-  Search,
-  Sparkles,
-  Trophy,
-} from "lucide-react";
+import ArrowDown from "lucide-react/dist/esm/icons/arrow-down";
+import ArrowUp from "lucide-react/dist/esm/icons/arrow-up";
+import ArrowUpDown from "lucide-react/dist/esm/icons/arrow-up-down";
+import ArrowUpRight from "lucide-react/dist/esm/icons/arrow-up-right";
+import Boxes from "lucide-react/dist/esm/icons/boxes";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import Clock from "lucide-react/dist/esm/icons/clock";
+import Lightbulb from "lucide-react/dist/esm/icons/lightbulb";
+import Layers from "lucide-react/dist/esm/icons/layers";
+import Medal from "lucide-react/dist/esm/icons/medal";
+import Plus from "lucide-react/dist/esm/icons/plus";
+import Search from "lucide-react/dist/esm/icons/search";
+import Sparkles from "lucide-react/dist/esm/icons/sparkles";
+import Trophy from "lucide-react/dist/esm/icons/trophy";
 import { PageShell } from "@/components/layout/PageShell";
 import { useBaskets } from "@/lib/baskets-data";
 import {

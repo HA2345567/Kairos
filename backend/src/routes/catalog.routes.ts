@@ -4,6 +4,7 @@ import { backtestService, BacktestWindow } from "../services/backtest.service";
 import { verifyRegistryVersion } from "../chain/registry";
 import { rateLimit } from "../middleware";
 import { getBasketMarketData, getBasketMarketNavHistory, MarketNavWindow } from "../services/market-data.service";
+import { getTokenMarketPrices } from "../services/market-reference-prices.service";
 
 /** /v1/tokens + /v1/baskets/* — registry & catalog reads (PRD §4.2, §6). */
 
@@ -87,6 +88,18 @@ export function registerCatalogRoutes(app: KairosHttpServer): void {
     }
     const { page, nextCursor } = paginate(tokens, limit, after, (token) => token.mint);
     return { tokens: page, nextCursor };
+  });
+
+  /** Allowlisted mainnet market references for Devnet token display. */
+  app.get("/v1/market/prices", async (req, reply) => {
+    if (!readGuard(req, reply)) return;
+    const { mints } = req.query as { mints?: unknown };
+    if (typeof mints !== "string") return reply.status(400).send({ error: "INVALID_MARKET_MINTS" });
+    const requested = [...new Set(mints.split(",").filter(Boolean))];
+    if (!requested.length || requested.length > 30 || requested.some((mint) => !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint))) {
+      return reply.status(400).send({ error: "INVALID_MARKET_MINTS" });
+    }
+    return { prices: await getTokenMarketPrices(requested) };
   });
 
   app.get("/v1/baskets", async (req, reply) => {

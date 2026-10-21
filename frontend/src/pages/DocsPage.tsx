@@ -1,17 +1,15 @@
 import type { ReactNode } from "react";
-import {
-  ArrowUpRight,
-  BookOpen,
-  CheckCircle2,
-  CircleAlert,
-  Code2,
-  Database,
-  ExternalLink,
-  Layers,
-  LockKeyhole,
-  Server,
-  Wallet,
-} from "lucide-react";
+import ArrowUpRight from "lucide-react/dist/esm/icons/arrow-up-right";
+import BookOpen from "lucide-react/dist/esm/icons/book-open";
+import CheckCircle2 from "lucide-react/dist/esm/icons/circle-check";
+import CircleAlert from "lucide-react/dist/esm/icons/circle-alert";
+import Code2 from "lucide-react/dist/esm/icons/code-2";
+import Database from "lucide-react/dist/esm/icons/database";
+import ExternalLink from "lucide-react/dist/esm/icons/external-link";
+import Layers from "lucide-react/dist/esm/icons/layers";
+import LockKeyhole from "lucide-react/dist/esm/icons/lock-keyhole";
+import Server from "lucide-react/dist/esm/icons/server";
+import Wallet from "lucide-react/dist/esm/icons/wallet";
 import { Link } from "react-router-dom";
 import { PageShell } from "@/components/layout/PageShell";
 

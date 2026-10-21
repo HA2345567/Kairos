@@ -9,7 +9,8 @@ import {
   YAxis,
 } from "recharts";
 import { cn } from "@/lib/utils";
-import { Maximize2, Minimize2 } from "lucide-react";
+import Maximize2 from "lucide-react/dist/esm/icons/maximize-2";
+import Minimize2 from "lucide-react/dist/esm/icons/minimize-2";
 
 export type HistoricalPeriod = "1W" | "1M" | "6M" | "1Y" | "3Y";
 

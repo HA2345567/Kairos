@@ -1,4 +1,11 @@
-import { ArrowRight, Check, Layers, ShieldCheck, Sparkles, TrendingUp, Wallet, WalletCards } from "lucide-react";
+import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
+import Check from "lucide-react/dist/esm/icons/check";
+import Layers from "lucide-react/dist/esm/icons/layers";
+import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
+import Sparkles from "lucide-react/dist/esm/icons/sparkles";
+import TrendingUp from "lucide-react/dist/esm/icons/trending-up";
+import Wallet from "lucide-react/dist/esm/icons/wallet";
+import WalletCards from "lucide-react/dist/esm/icons/wallet-cards";
 import { Link } from "react-router-dom";
 
 const STEPS = [

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
+import Loader2 from "lucide-react/dist/esm/icons/loader-2";
 import { toast } from "sonner";
 import { PageShell } from "@/components/layout/PageShell";
 import { kairosApi } from "@/lib/api-client";

@@ -2,9 +2,9 @@
  * separate from oracle snapshots used by execution and NAV calculations. */
 
 import { createHash } from "node:crypto";
-import { one, run } from "../db/postgres";
+import { all, one, run } from "../db/postgres";
 
-const SOLANA_MINTS: Record<string, string> = {
+export const SOLANA_MINTS: Record<string, string> = {
   CLOUD: "CLoUDKc4Ane7HeQcPpE3YHnznRxhMimJ4MyaUqyHFzAu",
   BP: "BPxxfRCXkUVhig4HS1Lh7kZqV6SPJhzfEk4x6fVBjPCy",
   JUP: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
@@ -59,7 +59,7 @@ type MarketAsset = {
   transactions24h: number | null;
   sparkline24h: number[] | null;
   sparklineAsOf: string | null;
-  sparklineStatus: "loading" | "ready" | "summary" | "unavailable";
+  sparklineStatus: "loading" | "ready" | "stale" | "summary" | "unavailable";
   status: "live" | "unavailable";
   reason?: string;
 };
@@ -101,9 +101,60 @@ const sparklineRetryAfter = new Map<string, number>();
 const queuedSparklineMints = new Set<string>();
 const historyRetryAfter = new Map<string, number>();
 const queuedHistoryMints = new Set<string>();
-const providerRequestQueue: Array<{ url: string; resolve: (response: Response) => void; reject: (error: Error) => void }> = [];
+const pendingDailyHistory = new Map<string, Promise<void>>();
+const backgroundTasks = new Set<Promise<unknown>>();
+const providerRequestQueue: Array<{ url: string; priority: boolean; resolve: (response: Response) => void; reject: (error: Error) => void }> = [];
 let providerRequestActive = false;
 let providerRetryAfter = 0;
+let priorityBurst = 0;
+
+function trackBackground<T>(task: Promise<T>): Promise<T> {
+  backgroundTasks.add(task);
+  void task.finally(() => backgroundTasks.delete(task)).catch(() => undefined);
+  return task;
+}
+
+/** Vercel must keep the request alive until public candle cache writes finish. */
+export function pendingMarketDataWork(): Promise<void> {
+  return Promise.allSettled([...backgroundTasks]).then(() => undefined);
+}
+
+async function hydrateCandles(assets: MarketAsset[], timeframe: "hour" | "day"): Promise<void> {
+  const marketMints = [...new Set(assets.map((asset) => asset.marketMint).filter((mint): mint is string => Boolean(mint)))];
+  if (!marketMints.length) return;
+  const rows = await all<{ market_mint: string; pool_address: string; payload_json: string; fetched_at: string }>(
+    `SELECT market_mint, pool_address, payload_json, fetched_at FROM market_reference_candle_cache WHERE timeframe = ? AND market_mint IN (${marketMints.map(() => "?").join(",")})`,
+    timeframe, ...marketMints,
+  );
+  const assetByMint = new Map(assets.map((asset) => [asset.marketMint, asset]));
+  for (const row of rows) {
+    if (assetByMint.get(row.market_mint)?.poolAddress !== row.pool_address) continue;
+    try {
+      const values = JSON.parse(row.payload_json) as unknown;
+      if (!Array.isArray(values) || values.length < 2) continue;
+      const fetchedAt = Date.parse(row.fetched_at);
+      if (!Number.isFinite(fetchedAt)) continue;
+      if (timeframe === "hour") {
+        if (sparklineCache.has(row.market_mint) || !values.every((value) => typeof value === "number" && Number.isFinite(value) && value > 0)) continue;
+        sparklineCache.set(row.market_mint, { values, fetchedAt: row.fetched_at, expiresAt: fetchedAt + 5 * 60_000 });
+      } else {
+        if (historyCache.has(row.market_mint)) continue;
+        const points = values.filter((value): value is PriceCandle => Boolean(value && typeof value === "object" &&
+          Number.isFinite((value as PriceCandle).timestamp) && Number.isFinite((value as PriceCandle).priceUsd) && (value as PriceCandle).priceUsd > 0));
+        if (points.length >= 2) historyCache.set(row.market_mint, { points, expiresAt: fetchedAt + 60 * 60_000 });
+      }
+    } catch { /* A corrupt cache row never becomes a displayed price. */ }
+  }
+}
+
+async function persistCandles(mint: string, timeframe: "hour" | "day", pool: string, values: number[] | PriceCandle[]): Promise<void> {
+  await run(
+    `INSERT INTO market_reference_candle_cache (market_mint, timeframe, pool_address, payload_json, fetched_at)
+     VALUES (?, ?, ?, ?, ?) ON CONFLICT (market_mint, timeframe) DO UPDATE
+     SET pool_address = excluded.pool_address, payload_json = excluded.payload_json, fetched_at = excluded.fetched_at`,
+    mint, timeframe, pool, JSON.stringify(values), new Date().toISOString(),
+  );
+}
 
 function retryDelayMs(response: Response, fallbackMs: number): number {
   const retryAfter = response.headers.get("retry-after");
@@ -117,15 +168,13 @@ function retryDelayMs(response: Response, fallbackMs: number): number {
 }
 
 /** GeckoTerminal's public tier is limited, so serialize both quote and candle requests. */
-function enqueueProviderRequest(url: string, priority = false): Promise<Response> {
+export function enqueueProviderRequest(url: string, priority = false): Promise<Response> {
   return new Promise((resolve, reject) => {
     if (Date.now() < providerRetryAfter) {
       reject(new Error("Market data provider rate limit; retry scheduled."));
       return;
     }
-    const request = { url, resolve, reject };
-    if (priority) providerRequestQueue.unshift(request);
-    else providerRequestQueue.push(request);
+    providerRequestQueue.push({ url, priority, resolve, reject });
     drainProviderRequests();
   });
 }
@@ -133,7 +182,10 @@ function enqueueProviderRequest(url: string, priority = false): Promise<Response
 function drainProviderRequests() {
   if (providerRequestActive || providerRequestQueue.length === 0) return;
   providerRequestActive = true;
-  const request = providerRequestQueue.shift()!;
+  // Give quotes/history priority without starving hourly token charts.
+  const preferred = providerRequestQueue.findIndex((item) => item.priority === (priorityBurst < 2));
+  const [request] = providerRequestQueue.splice(preferred < 0 ? 0 : preferred, 1);
+  priorityBurst = request.priority ? priorityBurst + 1 : 0;
   void fetch(request.url, { headers: { accept: "application/json;version=20230302" }, signal: AbortSignal.timeout(8_000) })
     .then((response) => {
       if (response.status === 429) {
@@ -145,7 +197,7 @@ function drainProviderRequests() {
       setTimeout(() => {
         providerRequestActive = false;
         drainProviderRequests();
-      }, Math.max(6_500, providerRetryAfter - Date.now()));
+      }, Math.max(3_100, providerRetryAfter - Date.now()));
     });
 }
 
@@ -160,7 +212,7 @@ function requestSparkline(asset: MarketAsset) {
   // The basket history chart is the primary historical view and needs the
   // provider's limited request slots first. Use endpoint start/end references
   // for card sparklines until lower-priority hourly candles arrive.
-  void enqueueProviderRequest(url)
+  const task = enqueueProviderRequest(url)
     .then(async (response) => {
       if (!response.ok) {
         if (response.status === 429) sparklineRetryAfter.set(key, Date.now() + retryDelayMs(response, 60_000));
@@ -175,6 +227,7 @@ function requestSparkline(asset: MarketAsset) {
       if (values.length >= 2) {
         sparklineCache.set(key, { values, fetchedAt: new Date().toISOString(), expiresAt: Date.now() + 5 * 60_000 });
         sparklineRetryAfter.delete(key);
+        await persistCandles(key, "hour", asset.poolAddress!, values);
       } else {
         sparklineRetryAfter.set(key, Date.now() + 5 * 60_000);
       }
@@ -184,6 +237,7 @@ function requestSparkline(asset: MarketAsset) {
       if ((sparklineRetryAfter.get(key) ?? 0) <= Date.now()) sparklineRetryAfter.set(key, Date.now() + 60_000);
     })
     .finally(() => queuedSparklineMints.delete(key));
+  trackBackground(task);
 }
 
 function requestDailyHistory(asset: MarketAsset) {
@@ -196,7 +250,7 @@ function requestDailyHistory(asset: MarketAsset) {
   const url = `https://api.geckoterminal.com/api/v2/networks/solana/pools/${encodeURIComponent(asset.poolAddress)}/ohlcv/day?aggregate=1&limit=1000&currency=usd&token=${encodeURIComponent(asset.marketMint)}`;
   // Daily candles power the historical chart; give them the next provider slot
   // ahead of best-effort card sparklines so the page's main chart fills sooner.
-  void enqueueProviderRequest(url, true)
+  const task = enqueueProviderRequest(url, true)
     .then(async (response) => {
       if (!response.ok) {
         if (response.status === 429) historyRetryAfter.set(key, Date.now() + retryDelayMs(response, 60_000));
@@ -210,6 +264,7 @@ function requestDailyHistory(asset: MarketAsset) {
       if (points.length >= 2) {
         historyCache.set(key, { points, expiresAt: Date.now() + 60 * 60_000 });
         historyRetryAfter.delete(key);
+        await persistCandles(key, "day", asset.poolAddress!, points);
       } else {
         historyRetryAfter.set(key, Date.now() + 10 * 60_000);
       }
@@ -218,13 +273,20 @@ function requestDailyHistory(asset: MarketAsset) {
       console.warn("[market-data] daily OHLCV request failed:", (error as Error).message);
       if ((historyRetryAfter.get(key) ?? 0) <= Date.now()) historyRetryAfter.set(key, Date.now() + 60_000);
     })
-    .finally(() => queuedHistoryMints.delete(key));
+    .finally(() => {
+      queuedHistoryMints.delete(key);
+      pendingDailyHistory.delete(key);
+    });
+  pendingDailyHistory.set(key, task);
+  trackBackground(task);
 }
 
 function attachSparklines(response: BasketMarketData): BasketMarketData {
   for (const asset of response.assets) {
     requestSparkline(asset);
-    const sparkline = asset.marketMint ? sparklineCache.get(asset.marketMint) : undefined;
+    const cachedSparkline = asset.marketMint ? sparklineCache.get(asset.marketMint) : undefined;
+    const sparkline = cachedSparkline && Date.now() - Date.parse(cachedSparkline.fetchedAt) <= 15 * 60_000
+      ? cachedSparkline : undefined;
     const changeFactor = asset.change24hPct === null ? null : 1 + asset.change24hPct / 100;
     const endpointReference = asset.priceUsd !== null && changeFactor !== null && changeFactor > 0
       ? [asset.priceUsd / changeFactor, asset.priceUsd]
@@ -233,7 +295,7 @@ function attachSparklines(response: BasketMarketData): BasketMarketData {
     asset.sparklineAsOf = sparkline?.fetchedAt ?? null;
     const retryAfter = asset.marketMint ? sparklineRetryAfter.get(asset.marketMint) ?? 0 : 0;
     asset.sparklineStatus = sparkline?.values.length
-      ? "ready"
+      ? sparkline.expiresAt > Date.now() ? "ready" : "stale"
       : endpointReference
         ? "summary"
       : asset.marketMint && asset.poolAddress && asset.status === "live" && retryAfter <= Date.now()
@@ -255,17 +317,34 @@ export async function getBasketMarketData(tokens: BasketToken[]): Promise<Basket
   const symbols = tokens.map((token) => normalizedSymbol(token.symbol));
   const mintBySymbol = new Map(symbols.map((symbol) => [symbol, SOLANA_MINTS[symbol]]));
   const mints = [...new Set([...mintBySymbol.values()].filter((mint): mint is string => Boolean(mint)))].sort();
-  const key = mints.join(",") + "|" + symbols.sort().join(",");
+  const key = tokens.map((token) => `${token.mint}:${normalizedSymbol(token.symbol)}:${token.weightBps}`).sort().join(",");
+  const withSavedSparklines = async (response: BasketMarketData) => {
+    await hydrateCandles(response.assets, "hour");
+    return attachSparklines(response);
+  };
+  if (!cache.has(key)) {
+    const saved = await one<{ payload_json: string; fetched_at: string }>(
+      "SELECT payload_json, fetched_at FROM basket_market_data_cache WHERE cache_key = ?", key,
+    );
+    if (saved && Date.now() - Date.parse(saved.fetched_at) < 15 * 60_000) {
+      try {
+        const response = JSON.parse(saved.payload_json) as BasketMarketData;
+        if (Array.isArray(response.assets)) cache.set(key, {
+          response, expiresAt: Date.parse(saved.fetched_at) + CACHE_MS,
+        });
+      } catch { /* Ignore corrupt display cache entries. */ }
+    }
+  }
   const cached = cache.get(key);
-  if (cached && cached.expiresAt > Date.now()) return attachSparklines(cached.response);
+  if (cached && cached.expiresAt > Date.now()) return withSavedSparklines(cached.response);
 
   const pending = marketDataRequests.get(key);
-  if (pending) return pending.then(attachSparklines);
+  if (pending) return pending.then(withSavedSparklines);
 
   const request = fetchBasketMarketData(tokens, key, mintBySymbol, mints);
   marketDataRequests.set(key, request);
   try {
-    return await request;
+    return await withSavedSparklines(await request);
   } finally {
     if (marketDataRequests.get(key) === request) marketDataRequests.delete(key);
   }
@@ -362,6 +441,14 @@ async function fetchBasketMarketData(
     }
   }
 
+  if (providerFailed) {
+    const previous = cache.get(key);
+    if (previous && Date.now() - Date.parse(previous.response.fetchedAt) < 15 * 60_000) {
+      // Keep original timestamps: the UI must identify cached/stale prices.
+      previous.expiresAt = Date.now() + 15_000;
+      return previous.response;
+    }
+  }
   const liveAssets = assets.filter((asset) => asset.status === "live");
   const availableWeight = liveAssets.reduce((sum, asset) => sum + asset.weightBps, 0);
   const totalWeight = assets.reduce((sum, asset) => sum + asset.weightBps, 0);
@@ -379,9 +466,17 @@ async function fetchBasketMarketData(
     coveredLegsChange24hPct,
     basketChange24hPct: liveAssets.length === assets.length && availableWeight === totalWeight ? coveredLegsChange24hPct : null,
   };
-  const withSparklines = attachSparklines(result);
-  cache.set(key, { expiresAt: Date.now() + (providerFailed ? 10_000 : CACHE_MS), response: withSparklines });
-  return withSparklines;
+  // Hydration happens in getBasketMarketData before scheduling candle requests.
+  // Scheduling here would refetch candles already available in the shared cache.
+  cache.set(key, { expiresAt: Date.now() + (providerFailed ? 10_000 : CACHE_MS), response: result });
+  if (!providerFailed && liveAssets.length) {
+    await run(
+      `INSERT INTO basket_market_data_cache (cache_key, payload_json, fetched_at) VALUES (?, ?, ?)
+       ON CONFLICT (cache_key) DO UPDATE SET payload_json = excluded.payload_json, fetched_at = excluded.fetched_at`,
+      key, JSON.stringify(result), result.fetchedAt,
+    );
+  }
+  return result;
 }
 
 const MARKET_NAV_WINDOW_DAYS: Record<MarketNavWindow, number> = { "1W": 7, "1M": 30, "6M": 183, "1Y": 365, "3Y": 1095 };
@@ -406,6 +501,7 @@ function lastCandleAtOrBefore(candles: PriceCandle[], timestamp: number): PriceC
 async function buildBasketMarketNavHistory(tokens: BasketToken[], window: MarketNavWindow): Promise<BasketMarketNavHistory> {
   const market = await getBasketMarketData(tokens);
   const publicAssets = market.assets.filter((asset) => asset.status === "live" && asset.priceUsd !== null && asset.poolAddress);
+  await hydrateCandles(publicAssets, "day");
   for (const asset of publicAssets) requestDailyHistory(asset);
 
   const loaded = publicAssets.flatMap((asset) => {
@@ -533,14 +629,22 @@ export async function getBasketMarketNavHistory(
         historyRefreshStartedAt.set(cacheKey, Date.now());
         const refresh = buildBasketMarketNavHistory(tokens, window)
           .then(async (fresh) => {
-            const hasAtLeastAsMuchData = fresh.history.length > 0 &&
-              fresh.progress.coverageWeightBps >= response.progress.coverageWeightBps &&
-              fresh.history.length >= response.history.length;
-            if (hasAtLeastAsMuchData) await persistMarketNavHistory(cacheKey, fresh);
+            const pending = [...pendingDailyHistory.values()];
+            if (pending.length) {
+              await Promise.allSettled(pending);
+              fresh = await buildBasketMarketNavHistory(tokens, window);
+            }
+            // Rolling windows can legitimately contain fewer points tomorrow.
+            // Retain coverage, but do not freeze a chart merely because its
+            // oldest candle has rolled out of the selected window.
+            const hasAtLeastAsMuchCoverage = fresh.history.length > 0 &&
+              fresh.progress.coverageWeightBps >= response.progress.coverageWeightBps;
+            if (hasAtLeastAsMuchCoverage) await persistMarketNavHistory(cacheKey, fresh);
           })
           .catch((error) => console.warn("[market-data] cached history refresh failed:", (error as Error).message))
           .finally(() => historyRefreshes.delete(cacheKey));
         historyRefreshes.set(cacheKey, refresh);
+        trackBackground(refresh);
       }
       return response;
     } catch (error) {
@@ -550,5 +654,19 @@ export async function getBasketMarketNavHistory(
 
   const response = await buildBasketMarketNavHistory(tokens, window);
   await persistMarketNavHistory(cacheKey, response);
+  // A cold serverless function returns progress promptly. Keep it alive until
+  // queued verified candles are stored and the shared basket cache is rebuilt.
+  const pending = [...pendingDailyHistory.values()];
+  if (pending.length && !historyRefreshes.has(cacheKey)) {
+    const refresh = Promise.allSettled(pending)
+      .then(() => buildBasketMarketNavHistory(tokens, window))
+      .then(async (fresh) => {
+        if (fresh.history.length > 0) await persistMarketNavHistory(cacheKey, fresh);
+      })
+      .catch((error) => console.warn("[market-data] initial history backfill failed:", (error as Error).message))
+      .finally(() => historyRefreshes.delete(cacheKey));
+    historyRefreshes.set(cacheKey, refresh);
+    trackBackground(refresh);
+  }
   return response;
 }

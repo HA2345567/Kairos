@@ -4,6 +4,7 @@ import type { BasketCatalogItem } from "./api-types";
 
 export interface BasketToken {
   mint: string;
+  decimals?: number;
   /** Mainnet market reference mint used for public market data providers. */
   priceMint?: string;
   symbol: string;
@@ -224,6 +225,7 @@ export function isPreviewBasket(basket: Basket): boolean {
 export function mapCatalogBasket(item: BasketCatalogItem): Basket {
   const tokens = item.tokens.map((token) => ({
     mint: token.mint,
+    decimals: token.decimals,
     priceMint: PUBLIC_MARKET_MINTS[token.symbol.replace(/^t(?=[A-Z])/, "").toUpperCase()],
     symbol: token.symbol.replace(/^t(?=[A-Z])/, ""),
     name: TOKEN_DISPLAY_NAMES[token.symbol.replace(/^t(?=[A-Z])/, "").toUpperCase()]
@@ -265,7 +267,7 @@ export function mapCatalogBasket(item: BasketCatalogItem): Basket {
 
 export async function fetchBaskets(): Promise<Basket[]> {
   try {
-    const { baskets } = await kairosApi.getBaskets();
+    const { baskets } = await kairosApi.getBaskets(undefined, AbortSignal.timeout(8_000));
     const catalog = baskets
       .map(mapCatalogBasket)
       // Paused markets stay addressable by their detail URL for history and
@@ -306,7 +308,13 @@ export async function fetchBasket(idOrSlug: string): Promise<Basket> {
 }
 
 export function useBaskets() {
-  return useQuery({ queryKey: ["basket-catalog"], queryFn: fetchBaskets, staleTime: 60_000 });
+  return useQuery({
+    queryKey: ["basket-catalog"],
+    queryFn: fetchBaskets,
+    placeholderData: PREVIEW_BASKETS,
+    staleTime: 60_000,
+    refetchInterval: (query) => query.state.data?.some((basket) => basket.previewOnly) ? 15_000 : 60_000,
+  });
 }
 
 export function useBasket(idOrSlug?: string) {

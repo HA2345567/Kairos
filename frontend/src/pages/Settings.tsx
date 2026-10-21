@@ -1,12 +1,16 @@
 import { useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Loader2, LogOut, RefreshCw, Wallet } from "lucide-react";
+import Check from "lucide-react/dist/esm/icons/check";
+import Loader2 from "lucide-react/dist/esm/icons/loader-2";
+import LogOut from "lucide-react/dist/esm/icons/log-out";
+import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
+import Wallet from "lucide-react/dist/esm/icons/wallet";
 import { toast } from "sonner";
 import { PageShell } from "@/components/layout/PageShell";
 import { useWalletAuth } from "@/components/auth/WalletAuthProvider";
 import { kairosApi } from "@/lib/api-client";
+import { useKairosWallet } from "@/components/wallet/useKairosWallet";
 import type { NotificationPreferences } from "@/lib/api-types";
 
 type PreferenceKey = keyof Omit<NotificationPreferences, "walletAddress" | "updatedAt">;
@@ -43,7 +47,7 @@ function SettingSwitch({ checked, disabled, label, onChange }: {
 
 export default function SettingsPage() {
   const wallet = useWallet();
-  const { setVisible } = useWalletModal();
+  const { connect } = useKairosWallet();
   const { authenticated, authenticating, ensureAuthenticated, logout, error: authError } = useWalletAuth();
   const queryClient = useQueryClient();
   const address = wallet.publicKey?.toBase58() ?? "";
@@ -123,7 +127,7 @@ export default function SettingsPage() {
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/50 bg-background p-4">
               <p className="text-sm text-muted-foreground">Connect a wallet to manage account preferences.</p>
-              <button type="button" onClick={() => setVisible(true)} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Connect wallet</button>
+              <button type="button" onClick={() => void connect()} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Connect wallet</button>
             </div>
           )}
         </section>

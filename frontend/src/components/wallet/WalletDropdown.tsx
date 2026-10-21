@@ -1,13 +1,11 @@
 import { useState, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
-import {
-  Check,
-  ChevronDown,
-  Copy,
-  ExternalLink,
-  Layers,
-  LogOut,
-} from "lucide-react";
+import Check from "lucide-react/dist/esm/icons/check";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import Copy from "lucide-react/dist/esm/icons/copy";
+import ExternalLink from "lucide-react/dist/esm/icons/external-link";
+import Layers from "lucide-react/dist/esm/icons/layers";
+import LogOut from "lucide-react/dist/esm/icons/log-out";
 import {
   DropdownMenu,
   DropdownMenuContent,

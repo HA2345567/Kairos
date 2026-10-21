@@ -391,6 +391,31 @@ CREATE TABLE IF NOT EXISTS basket_market_nav_history_cache (
 CREATE INDEX IF NOT EXISTS idx_basket_market_nav_history_updated
   ON basket_market_nav_history_cache(updated_at);
 
+-- Shared public-market references survive serverless cold starts. They never
+-- enter the oracle snapshot table used for execution quotes or NAV.
+CREATE TABLE IF NOT EXISTS market_reference_price_cache (
+  market_mint TEXT PRIMARY KEY,
+  payload_json TEXT NOT NULL,
+  fetched_at TEXT NOT NULL
+);
+
+-- Public OHLCV references are shared across short-lived API instances. These
+-- display-only candles never enter the oracle or execution price tables.
+CREATE TABLE IF NOT EXISTS basket_market_data_cache (
+  cache_key TEXT PRIMARY KEY,
+  payload_json TEXT NOT NULL,
+  fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS market_reference_candle_cache (
+  market_mint TEXT NOT NULL,
+  timeframe TEXT NOT NULL CHECK (timeframe IN ('hour', 'day')),
+  pool_address TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  fetched_at TEXT NOT NULL,
+  PRIMARY KEY (market_mint, timeframe)
+);
+
 CREATE TABLE IF NOT EXISTS rebalance_events (
   rowid BIGSERIAL UNIQUE,
   id          TEXT PRIMARY KEY,

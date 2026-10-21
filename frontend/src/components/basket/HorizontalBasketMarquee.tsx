@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { Basket } from "@/lib/baskets-data";
 import { HistoricalMiniChart } from "@/components/basket/HistoricalMiniChart";
 import "@/components/arc/basket-card.css";
+import { useEffect, useRef, useState } from "react";
 
 export interface HorizontalBasketMarqueeProps {
   baskets: Basket[];
@@ -10,6 +11,23 @@ export interface HorizontalBasketMarqueeProps {
 }
 
 function MarqueeCard({ basket }: { basket: Basket }) {
+  const cardRef = useRef<HTMLAnchorElement>(null);
+  const [nearViewport, setNearViewport] = useState(false);
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card || typeof IntersectionObserver === "undefined") {
+      setNearViewport(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setNearViewport(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "160px" });
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, []);
   const name = basket.name || "Untitled Basket";
   const desc = basket.description || "";
   const image = basket.imageUrl || "/baskets/solana-orb.png";
@@ -22,6 +40,7 @@ function MarqueeCard({ basket }: { basket: Basket }) {
 
   return (
     <Link
+      ref={cardRef}
       to={targetHref}
       className="group relative flex h-[430px] w-[300px] shrink-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#191919] text-foreground no-underline shadow-[0_10px_28px_rgba(0,0,0,0.36)] transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-white/25 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)] sm:h-[450px] sm:w-[340px]"
       draggable={false}
@@ -32,7 +51,8 @@ function MarqueeCard({ basket }: { basket: Basket }) {
           alt={`${name} artwork`}
           draggable={false}
           className="size-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-[1.04]"
-          loading="eager"
+          loading="lazy"
+          decoding="async"
           onError={(e) => {
             e.currentTarget.style.opacity = "0";
           }}
@@ -75,7 +95,11 @@ function MarqueeCard({ basket }: { basket: Basket }) {
             ) : <span className="text-[10px] text-white/35">Basket assets</span>}
             <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.1em] text-white/35">Constituents</span>
           </div>
-          <HistoricalMiniChart slug={basket.slug || basket.id} compact />
+          {basket.previewOnly
+            ? <span className="max-w-24 text-right font-mono text-[9px] leading-tight text-white/45" title="The catalog API is unavailable; verified history cannot be loaded.">History unavailable</span>
+            : nearViewport
+              ? <HistoricalMiniChart slug={basket.slug || basket.id} compact />
+              : <span className="h-5 w-14 shrink-0" aria-hidden="true" />}
         </div>
       </div>
     </Link>
