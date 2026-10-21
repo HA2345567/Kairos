@@ -1,8 +1,8 @@
 /* ========================================================
-   Kairos Cesto Theme Stylesheet (Matte Dark Design System)
+   Kairos theme stylesheet (matte dark design system)
    ======================================================== */
 
-.cesto-page {
+.kairos-page {
   max-width: 1280px;
   margin: 0 auto;
   padding: 48px 32px;
@@ -63,8 +63,8 @@
   letter-spacing: 0.05em;
 }
 
-.cesto-primary,
-.cesto-secondary {
+.kairos-primary,
+.kairos-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -77,24 +77,24 @@
   transition: opacity 0.15s ease, transform 0.1s ease;
 }
 
-.cesto-primary {
+.kairos-primary {
   border: 0;
   background: var(--primary);
   color: var(--primary-foreground);
 }
 
-.cesto-primary:hover {
+.kairos-primary:hover {
   opacity: 0.92;
   transform: translateY(-1px);
 }
 
-.cesto-secondary {
+.kairos-secondary {
   background: var(--surface);
   color: var(--text-primary);
   border: 1px solid var(--border);
 }
 
-.cesto-secondary:hover {
+.kairos-secondary:hover {
   background: var(--surface-hover);
   border-color: var(--border-strong);
 }
@@ -865,7 +865,7 @@
   .labs-page {
     padding: 24px 16px 48px;
   }
-  .cesto-page {
+  .kairos-page {
     padding-left: 16px;
     padding-right: 16px;
   }
@@ -891,7 +891,7 @@
     align-items: flex-start;
     flex-direction: column;
   }
-  .labs-heading .cesto-primary {
+  .labs-heading .kairos-primary {
     align-self: flex-end;
   }
   .labs-sidebar {

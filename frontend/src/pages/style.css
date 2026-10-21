@@ -278,7 +278,7 @@ button {
   height: 17px;
 }
 
-/* Token icons row sits in flow below the hero description (Cesto parity) */
+/* Token icons row sits in flow below the hero description */
 .hero-token-stack {
   display: flex;
   align-items: center;
@@ -310,7 +310,7 @@ button {
 }
 
 /* ========================================================
-   TOP TABS — full-width boxed segmented bar (Cesto product
+   TOP TABS — full-width boxed segmented bar (Kairos product
    page parity): one rounded-xl bordered container, five
    equal-width cells, active cell slightly elevated.
    ======================================================== */
@@ -2147,7 +2147,7 @@ button {
   display: none;
 }
 
-/* Market detail follows Cesto's two-column product-detail composition. */
+/* Kairos market detail two-column product composition. */
 .market-detail-page {
   --detail-accent: #8f8f8f;
   min-height: 100vh;

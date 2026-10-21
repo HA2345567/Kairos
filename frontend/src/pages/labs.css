@@ -1,16 +1,16 @@
 /* ==========================================================================
    Kairos Labs (/labs, /ideas) — community basket-idea feed
-   Layout clone of the Cesto Labs structure (hero + feed + sticky sidebar),
+   Kairos Labs layout (hero + feed + sticky sidebar),
    restyled exclusively with the Kairos design tokens. Page chrome + small
    helpers only; all component styling lives in Tailwind / the arc CSS.
 
-   Metrics matched to the measured Cesto Labs spec (1440×900):
+   Metrics tuned to the Kairos Labs layout (1440×900):
    1280px container · 830px feed + 355px sidebar · 31px column gap ·
    176px banner · 160×108 landscape card thumbnails · ~158-170px cards.
    ========================================================================== */
 
 /* NOTE: every class in this file carries a unique multi-word prefix so no
-   selector can collide with cesto.css (still globally imported by
+   selector can collide with kairos.css (still globally imported by
    Markets.tsx), which styles its own legacy Labs layout under bare
    "labs-" names. Never introduce a bare "labs-<word>" selector here. */
 
