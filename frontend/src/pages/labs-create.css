@@ -1,10 +1,10 @@
 /* ==========================================================================
    Kairos Labs Create (/labs/create, /ideas/create)
-   Precision-matched to the measured Cesto Labs Create spec (1440×900):
+   Tuned to the Kairos Labs Create layout (1440×900):
    1280px container (48px/32px padding) · form ~708px + preview ~473px,
    34px gap · 44px inputs · 176px banner card · 250px/365px preview cards.
    Styled exclusively with Kairos design tokens (var(--*)). Class names are
-   the clean .labs-create-* namespace — no cesto.css collisions.
+   the clean .labs-create-* namespace — no global theme collisions.
    ========================================================================== */
 
 .labs-create-container {

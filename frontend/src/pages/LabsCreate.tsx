@@ -371,7 +371,7 @@ export default function LabsCreate() {
   return (
     <PageShell>
       <div className="labs-create-container">
-        {/* Breadcrumb Navigation: go-back + Labs + current (Cesto pattern) */}
+        {/* Breadcrumb navigation: go back, Labs, and current page */}
         <nav className="labs-create-breadcrumbs" aria-label="Breadcrumb">
           <button
             type="button"
@@ -386,7 +386,7 @@ export default function LabsCreate() {
           <span className="current">Create Basket</span>
         </nav>
 
-        {/* Top Header Bar matching Cesto reference */}
+        {/* Kairos top header bar */}
         <div className="labs-create-header">
           <div className="labs-create-title-group">
             <div className="labs-create-icon-badge">

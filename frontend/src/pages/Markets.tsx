@@ -8,7 +8,7 @@ import { Link } from "react-router-dom";
 import LayoutGrid from "lucide-react/dist/esm/icons/layout-grid";
 import Rows3 from "lucide-react/dist/esm/icons/rows-3";
 import { cn } from "@/lib/utils";
-import "./cesto.css";
+import "./kairos.css";
 import { fetchBaskets, type Basket } from "@/lib/baskets-data";
 
 import { useTokenPrices } from "@/hooks/useTokenPrices";
@@ -233,7 +233,7 @@ export default function Markets() {
       <style>{GRAIN_CSS}</style>
 
       {/* Layout: max 1280px wide, centered, 48px vertical / 32px horizontal padding */}
-      <div className="cesto-page markets-page mx-auto block w-full max-w-[1280px] px-8 py-12 space-y-5 sm:space-y-6">
+      <div className="kairos-page markets-page mx-auto block w-full max-w-[1280px] px-8 py-12 space-y-5 sm:space-y-6">
         {/* Top Header Section */}
         <div className="space-y-2">
           <h1 className="text-3xl sm:text-4xl font-display tracking-tight text-[#E5E5E5]">

@@ -25,7 +25,7 @@ import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { useWalletAuth } from "@/components/auth/WalletAuthProvider";
 import { useKairosWallet } from "@/components/wallet/useKairosWallet";
 import { ConnectWalletButton } from "@/components/wallet/ConnectWalletButton";
-import "./cesto.css";
+import "./kairos.css";
 
 interface TokenBalance {
   symbol: string;
@@ -258,7 +258,7 @@ export default function Portfolio() {
   if (!isConnected) {
     return (
       <PageShell>
-        <div className="cesto-page positions-page space-y-8">
+        <div className="kairos-page positions-page space-y-8">
           <div className="positions-heading">
             <div>
               <h1 className="font-display font-bold text-3xl sm:text-4xl text-foreground tracking-tight">Your Positions</h1>

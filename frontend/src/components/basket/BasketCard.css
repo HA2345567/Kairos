@@ -1,4 +1,4 @@
-/* Cesto Basket Card Aesthetic */
+/* Kairos basket card styling */
 .basket-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -108,7 +108,7 @@
   padding-top: 10px;
 }
 
-/* Token Stack matching Cesto */
+/* Kairos token stack */
 .token-stack {
   display: flex;
   align-items: center;
@@ -144,7 +144,7 @@
   font-family: monospace;
 }
 
-/* Return Block matching Cesto */
+/* Kairos return block */
 .return-block {
   display: flex;
   flex-direction: column;
