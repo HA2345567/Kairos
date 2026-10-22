@@ -68,9 +68,9 @@ export function BasketRow({ basket, index, onInvestClick, livePrices }: BasketRo
         {/* Title + Subline (Constituents & Top Performer) */}
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
-            <span className="font-display font-bold text-foreground text-sm sm:text-base group-hover:text-primary transition-colors truncate">
+            <Link to={`/markets/${basket.slug || basket.id}`} className="font-display font-bold text-foreground text-sm sm:text-base group-hover:text-primary transition-colors truncate no-underline">
               {basket.name}
-            </span>
+            </Link>
           </div>
 
           {/* Subline: Overlapping Tokens + Top Performer Tick */}

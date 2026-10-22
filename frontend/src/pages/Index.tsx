@@ -1,9 +1,8 @@
 import { Link } from "react-router-dom";
 import { PageShell } from "@/components/layout/PageShell";
-import { Button } from "@/components/arc/button";
 import PromptBar from "@/components/landing/PromptBar";
 import { HorizontalBasketMarquee } from "@/components/basket/HorizontalBasketMarquee";
-import { ExecutionFlowSection } from "@/components/landing/ExecutionFlowSection";
+import { LandingMarketShowcase } from "@/components/landing/LandingMarketShowcase";
 import { useBaskets } from "@/lib/baskets-data";
 import {
   Accordion,
@@ -12,44 +11,31 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
-import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
-import TrendingUp from "lucide-react/dist/esm/icons/trending-up";
-import Layers from "lucide-react/dist/esm/icons/layers";
-import Sparkles from "lucide-react/dist/esm/icons/sparkles";
-import Zap from "lucide-react/dist/esm/icons/zap";
-import Radio from "lucide-react/dist/esm/icons/radio";
-import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 
 const FAQS = [
   {
-    question: "What is Kairos and how does it work?",
-    answer:
-      "Kairos is a non-custodial thematic investment router on Solana. Instead of locking your funds in smart contract vaults or relying on centralized exchanges, Kairos executes atomic swaps via Jupiter CPI to deliver native SPL tokens directly into your wallet with 1 click.",
+    question: "What is Kairos?",
+    answer: "Kairos helps you explore themed Solana baskets, review their token allocations, and try a basket investment from one place. The current product is built for Solana Devnet.",
   },
   {
-    question: "Where are my tokens stored after I invest?",
-    answer:
-      "Your tokens land directly in your own self-custodial wallet (Phantom, Solflare, Backpack, etc.). Kairos never holds custody of your assets. You maintain 100% unilateral ownership at all times and can transfer, stake, or trade your tokens independently.",
+    question: "Is Kairos on Solana mainnet?",
+    answer: "No. The current app runs on Solana Devnet. Devnet SOL and test assets have no monetary value, and a successful demo transaction is not a real market investment.",
   },
   {
-    question: "How does 1-click execution work under the hood?",
-    answer:
-      "When you deposit USDC into a basket, Kairos calculates optimal constituent weights, executes swap legs atomically via Jupiter Aggregator CPI with dynamic slippage protection, and sends all tokens directly to your Associated Token Accounts (ATAs) in the same transaction block.",
+    question: "What happens when I invest in a basket?",
+    answer: "Choose a basket and amount, review the quote, then approve the prepared Devnet transactions in your wallet. The current demo sends SOL to the basket treasury for fixed-rate test-asset delivery; it does not route a Jupiter market swap. Your wallet may ask you to approve each asset leg separately.",
   },
   {
-    question: "What are the protocol fees on Kairos?",
-    answer:
-      "On Solana Devnet, Kairos charges 0% protocol fees. In production, Kairos implements an ultra-low, transparent routing fee with zero management fees, zero exit fees, and zero performance carry—unlike traditional crypto funds that charge 2% management and 20% carry.",
+    question: "Does Kairos need my wallet password or recovery phrase?",
+    answer: "No. Connect and approve transactions through your wallet app, such as Phantom. Kairos never needs your password, private key, or recovery phrase. Read each wallet prompt and only approve transactions you intend to make.",
   },
   {
-    question: "Can I sell or rebalance my basket tokens at any time?",
-    answer:
-      "Yes. You can exit your entire basket position back into USDC in 1 click through the Kairos Portfolio, or sell constituent tokens individually on any Solana DEX. There are no lockups, cooldown periods, or withdrawal limits.",
+    question: "Are token prices and the historical chart an investment quote?",
+    answer: "No. Token cards show market reference prices, while the historical basket chart is a modeled backtest based on available history. Neither is a guaranteed return or your execution price. Review the live quote in the invest flow before signing.",
   },
   {
-    question: "What is Kairos Labs?",
-    answer:
-      "Kairos Labs is the decentralized creation and discovery hub where strategists and community members can propose, backtest, and share new thematic baskets. Highly rated community ideas can be verified and deployed to the primary market router.",
+    question: "Where can I check my transaction and fees?",
+    answer: "The invest dialog shows the quoted platform fee before you sign. After submission, follow confirmation progress in the app and open confirmed transactions in the Solana Devnet Explorer. Your connected wallet Positions page also shows available balances and execution history.",
   },
 ];
 
@@ -131,6 +117,7 @@ export default function Landing() {
         </div>
       </section>
 
+      <LandingMarketShowcase baskets={baskets} />
       {/* Section 3: The Thesis / Moat Section */}
       <section className="border-y border-border/40 bg-surface/30">
         <div className="container py-24">
@@ -167,32 +154,37 @@ export default function Landing() {
         </div>
       </section>
 
-      <ExecutionFlowSection />
-
       {/* Section 4: Frequently Asked Questions */}
-      <section className="border-b border-border/40 py-24 bg-surface/20">
-        <div className="container max-w-4xl">
-          <div className="mx-auto text-center mb-16">
-            <div className="badge-pill mb-4">FAQ</div>
-            <h2 className="font-display text-4xl sm:text-5xl tracking-tight text-foreground font-bold">
-              Frequently Asked Questions
+      <section aria-labelledby="faq-heading" className="border-t border-border/60 bg-background">
+        <div className="container grid gap-10 py-16 sm:py-20 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16 lg:py-28 xl:gap-20">
+          <div className="flex flex-col items-start lg:sticky lg:top-28 lg:self-start">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Kairos · FAQ</p>
+            <h2 id="faq-heading" aria-label="Good questions" className="mt-4 max-w-sm font-display text-4xl font-semibold leading-[1.05] tracking-[-0.045em] text-foreground sm:text-5xl">
+              Good questions.
             </h2>
-            <p className="mt-4 text-base sm:text-lg text-muted-foreground max-w-xl mx-auto">
-              Everything you need to know about non-custodial thematic baskets on Solana.
+            <p className="mt-5 max-w-sm text-sm leading-6 text-muted-foreground sm:text-base">
+              Clear answers about Devnet, wallet approvals, and the data you see in Kairos.
             </p>
+            <Link to="/docs" className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-foreground transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background">
+              Read the docs
+              <ArrowRight aria-hidden="true" className="size-4 -rotate-45 transition-transform" />
+            </Link>
           </div>
 
-          <Accordion type="single" collapsible defaultValue="faq-0" className="w-full space-y-3.5">
+          <Accordion type="single" collapsible defaultValue="faq-0" className="w-full border-t border-border/50">
             {FAQS.map((faq, index) => (
               <AccordionItem
-                key={index}
+                key={faq.question}
                 value={`faq-${index}`}
-                className="border border-border/40 bg-surface/40 hover:border-border-strong hover:bg-surface/70 data-[state=open]:border-border-strong data-[state=open]:bg-surface/80 rounded-2xl px-5 sm:px-6 transition-all duration-200"
+                className="border-b border-border/50 transition-colors"
               >
-                <AccordionTrigger className="hover:no-underline font-display text-base sm:text-lg font-semibold text-foreground py-5 text-left gap-4">
-                  <span>{faq.question}</span>
+                <AccordionTrigger className="gap-5 py-5 text-left font-sans text-sm font-medium leading-6 tracking-[-0.01em] text-foreground hover:no-underline sm:py-6 sm:text-base [&>svg]:text-muted-foreground [&>svg]:transition-transform">
+                  <span className="flex min-w-0 items-start gap-4 sm:gap-5">
+                    <span aria-hidden="true" className="mt-0.5 w-6 shrink-0 font-mono text-[11px] tracking-normal text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
+                    <span>{faq.question}</span>
+                  </span>
                 </AccordionTrigger>
-                <AccordionContent className="text-sm sm:text-[15px] leading-relaxed text-muted-foreground pb-5 pt-1">
+                <AccordionContent className="pb-5 pl-10 pr-7 text-sm leading-6 text-muted-foreground sm:pb-6 sm:pl-[2.8rem] sm:pr-10 sm:text-[15px]">
                   {faq.answer}
                 </AccordionContent>
               </AccordionItem>
